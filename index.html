@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Clone Heave Ho - Arte Sólida Completa</title>
+    <title>Clone Heave Ho - Física de Garra Corrigida</title>
     <style>
         body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         canvas { box-shadow: 0 0 20px rgba(0,0,0,0.8); }
@@ -33,7 +33,7 @@ const CAT_PLAYER = 0x0002;
 function preload() {}
 
 function create() {
-    this.add.text(20, 20, "Visual Sólido: Mãos reagem com tons claros ao acionar botões.", { font: "20px Arial", fill: "#ffffff" });
+    this.add.text(20, 20, "Física Suave Ativada: Puxe o analógico para se içar sem disparar.", { font: "20px Arial", fill: "#ffffff" });
 
     const ambienteConfig = { 
         isStatic: true, label: 'ambiente', friction: 0.5,
@@ -164,14 +164,15 @@ function handlePlayerInput(scene, player) {
     const grabR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     const enemyPrefix = player.id === 0 ? "p1_" : "p0_";
 
+    // CORREÇÃO: Força de escalada normalizada e suavizada de 7.0 para 0.045
     if (pad.leftStick) {
         let f = player.leftJoint ? player.body : player.leftHand;
-        let m = player.leftJoint ? 0x07 : 0.018;
+        let m = player.leftJoint ? 0.045 : 0.018;
         scene.matter.body.applyForce(f, f.position, { x: pad.leftStick.x * m, y: pad.leftStick.y * m });
     }
     if (pad.rightStick) {
         let f = player.rightJoint ? player.body : player.rightHand;
-        let m = player.rightJoint ? 0x07 : 0.018;
+        let m = player.rightJoint ? 0.045 : 0.018;
         scene.matter.body.applyForce(f, f.position, { x: pad.rightStick.x * m, y: pad.rightStick.y * m });
     }
 
