@@ -2,12 +2,11 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Clone Heave Ho - Física de Correntes</title>
+    <title>Clone Heave Ho - Física Corrigida</title>
     <style>
         body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         canvas { box-shadow: 0 0 20px rgba(0,0,0,0.8); }
     </style>
-    <!-- Usa o arquivo que salvamos localmente no seu repositório -->
     <script src="phaser.min.js"></script>
 </head>
 <body>
@@ -21,8 +20,8 @@ const config = {
     physics: {
         default: 'matter',
         matter: {
-            gravity: { y: 0.8 },
-            debug: true // Essencial para ver os elos da corrente e os encaixes das garras
+            gravity: { y: 1.2 }, // Gravidade ligeiramente maior para o corpo parecer pesado
+            debug: true 
         }
     },
     input: { gamepad: true },
@@ -35,19 +34,18 @@ let player1, player2;
 function preload() {}
 
 function create() {
-    this.add.text(20, 20, "L2 / R2 para AGARRAR nas superfícies.", { font: "20px Arial", fill: "#ffffff" });
+    this.add.text(20, 20, "L2 / R2 para AGARRAR. Analógico move o corpo APENAS quando agarrado.", { font: "20px Arial", fill: "#ffffff" });
 
-    // Criando o cenário completo: Chão, Teto e Paredes laterais (Todos são estáticos)
-    this.matter.add.rectangle(512, 740, 1024, 50, { isStatic: true, label: 'ambiente' }); // Chão
-    this.matter.add.rectangle(512, 25, 1024, 50, { isStatic: true, label: 'ambiente' });  // Teto
-    this.matter.add.rectangle(25, 384, 50, 768, { isStatic: true, label: 'ambiente' });  // Parede Esquerda
-    this.matter.add.rectangle(999, 384, 50, 768, { isStatic: true, label: 'ambiente' });  // Parede Direita
+    // Criando o cenário completo com a tag 'ambiente'
+    this.matter.add.rectangle(512, 740, 1024, 50, { isStatic: true, label: 'ambiente' }); 
+    this.matter.add.rectangle(512, 25, 1024, 50, { isStatic: true, label: 'ambiente' });  
+    this.matter.add.rectangle(25, 384, 50, 768, { isStatic: true, label: 'ambiente' });  
+    this.matter.add.rectangle(999, 384, 50, 768, { isStatic: true, label: 'ambiente' });  
 
-    // Plataformas flutuantes no meio do cenário
+    // Plataformas
     this.matter.add.rectangle(250, 450, 300, 40, { isStatic: true, label: 'ambiente' }); 
     this.matter.add.rectangle(774, 350, 300, 40, { isStatic: true, label: 'ambiente' }); 
 
-    // Sistema de detecção dos gamepads
     this.input.gamepad.on('down', (pad, button, index) => {
         if (pad.index === 0 && !player1) {
             player1 = createHeaveHoCharacter(this, 250, 300, '#ff4757', pad);
@@ -58,31 +56,28 @@ function create() {
     });
 }
 
-// Função que constrói o braço articulado estilo corrente
-function createChain(scene, bodyA, bodyB, numLinks, length, color) {
+function createChain(scene, bodyA, bodyB, numLinks, length) {
     let lastBody = bodyA;
     const group = scene.matter.world.nextGroup(true);
 
     for (let i = 0; i < numLinks; i++) {
-        // Se for o último elo, ele se conecta diretamente na mão (bodyB)
         const isLast = (i === numLinks - 1);
-        
         let link;
+        
         if (isLast) {
             link = bodyB;
         } else {
-            // Cria um elo físico pequeno e leve para a corrente
-            link = scene.matter.add.rectangle(bodyA.position.x, bodyA.position.y, 8, 12, { 
-                density: 0.0005, 
-                frictionAir: 0.01,
-                collisionFilter: { group: group } // Evita que a própria corrente colida com o boneco
+            // Elos extremamente leves para não puxarem o corpo sozinhos
+            link = scene.matter.add.rectangle(bodyA.position.x, bodyA.position.y, 6, 10, { 
+                density: 0.0001, 
+                frictionAir: 0.05,
+                collisionFilter: { group: group } 
             });
         }
 
-        // Conecta o elo atual com o elo anterior
-        scene.matter.add.constraint(lastBody, link, length, 0.9, {
-            pointA: lastBody === bodyA ? { x: 0, y: 0 } : { x: 0, y: 5 },
-            pointB: isLast ? { x: 0, y: 0 } : { x: 0, y: -5 }
+        scene.matter.add.constraint(lastBody, link, length, 0.8, {
+            pointA: lastBody === bodyA ? { x: 0, y: 0 } : { x: 0, y: 4 },
+            pointB: isLast ? { x: 0, y: 0 } : { x: 0, y: -4 }
         });
 
         lastBody = link;
@@ -90,16 +85,15 @@ function createChain(scene, bodyA, bodyB, numLinks, length, color) {
 }
 
 function createHeaveHoCharacter(scene, x, y, color, gamepad) {
-    // 1. Corpo principal
-    const body = scene.matter.add.circle(x, y, 22, { friction: 0.1, density: 0.01, label: 'body' });
+    // Corpo principal pesado
+    const body = scene.matter.add.circle(x, y, 22, { friction: 0.1, density: 0.02, label: 'body' });
     
-    // 2. Mãos livres de gravidade para não caírem mortas enquanto soltas
-    const leftHand = scene.matter.add.circle(x - 60, y, 14, { ignoreGravity: true, frictionAir: 0.05, label: 'leftHand' });
-    const rightHand = scene.matter.add.circle(x + 60, y, 14, { ignoreGravity: true, frictionAir: 0.05, label: 'rightHand' });
+    // Mãos muito leves e que sofrem efeito da gravidade para não flutuarem como jatos
+    const leftHand = scene.matter.add.circle(x - 60, y, 14, { density: 0.001, frictionAir: 0.08, label: 'leftHand' });
+    const rightHand = scene.matter.add.circle(x + 60, y, 14, { density: 0.001, frictionAir: 0.08, label: 'rightHand' });
 
-    // 3. Constrói os braços em formato de corrente com 4 elos articulados cada
-    createChain(scene, body, leftHand, 4, 15, color);
-    createChain(scene, body, rightHand, 4, 15, color);
+    createChain(scene, body, leftHand, 4, 15);
+    createChain(scene, body, rightHand, 4, 15);
 
     return {
         body: body,
@@ -120,47 +114,47 @@ function handlePlayerInput(scene, player) {
     const pad = player.pad;
     if (!pad) return;
 
-    // Verifica se os gatilhos L2 (botão 6) ou L1 (botão 4) / R2 (botão 7) ou R1 (botão 5) estão pressionados
-    const grabbingLeft = pad.buttons[6].pressed || pad.buttons[4].pressed;
-    const grabbingRight = pad.buttons[7].pressed || pad.buttons[5].pressed;
+    const grabbingLeft = pad.buttons[6].pressed || pad.buttons[4].pressed;  // L2 ou L1
+    const grabbingRight = pad.buttons[7].pressed || pad.buttons[5].pressed; // R2 ou R1
 
-    // 1. CONTROLE DO BRAÇO ESQUERDO (Analógico Esquerdo)
+    // CORREÇÃO 1: MOVIMENTO DA MÃO ESQUERDA
     if (pad.leftStick) {
         const forceX = pad.leftStick.x;
         const forceY = pad.leftStick.y;
 
         if (player.leftJoint) {
-            // MÃO AGARRADA: O analógico empurra/puxa o CORPO PRINCIPAL para se içar
-            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.015, y: forceY * 0.015 });
+            // Se estiver AGARRADO, o analógico empurra o CORPO PRINCIPAL (escalada/impulso)
+            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.03, y: forceY * 0.03 });
         } else {
-            // MÃO LIVRE: O analógico move apenas a mão no ar, sem afetar o corpo
-            scene.matter.body.applyForce(player.leftHand, player.leftHand.position, { x: forceX * 0.004, y: forceY * 0.004 });
+            // Se estiver SOLTO, aplica uma força sutil APENAS na mão (não move o corpo de jeito nenhum)
+            scene.matter.body.applyForce(player.leftHand, player.leftHand.position, { x: forceX * 0.0008, y: forceY * 0.0008 });
         }
     }
 
-    // 2. CONTROLE DO BRAÇO DIREITO (Analógico Direito)
+    // CORREÇÃO 1: MOVIMENTO DA MÃO DIREITA
     if (pad.rightStick) {
         const forceX = pad.rightStick.x;
         const forceY = pad.rightStick.y;
 
         if (player.rightJoint) {
-            // MÃO AGARRADA: O analógico empurra/puxa o CORPO PRINCIPAL para se içar
-            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.015, y: forceY * 0.015 });
+            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.03, y: forceY * 0.03 });
         } else {
-            // MÃO LIVRE: O analógico move apenas a mão no ar, sem afetar o corpo
-            scene.matter.body.applyForce(player.rightHand, player.rightHand.position, { x: forceX * 0.004, y: forceY * 0.004 });
+            scene.matter.body.applyForce(player.rightHand, player.rightHand.position, { x: forceX * 0.0008, y: forceY * 0.0008 });
         }
     }
 
-    // 3. MECÂNICA DE GARRA - MÃO ESQUERDA (Paredes, teto, chão e plataformas)
+    // CORREÇÃO 2: DETECÇÃO DE GARRA AMPLIADA (MÃO ESQUERDA)
     if (grabbingLeft && !player.leftJoint) {
-        // Encontra tudo o que está encostando exatamente no ponto da mão
-        const targets = scene.matter.query.point(scene.matter.world.localWorld.bodies, player.leftHand.position);
-        // Filtra para agarrar apenas objetos estáticos do ambiente (chão, tetos, paredes)
+        // Cria uma pequena área de colisão circular virtual de raio 25 ao redor da mão para facilitar o clique
+        const bodies = scene.matter.world.localWorld.bodies;
+        const targets = scene.matter.query.region(bodies, {
+            min: { x: player.leftHand.position.x - 25, y: player.leftHand.position.y - 25 },
+            max: { x: player.leftHand.position.x + 25, y: player.leftHand.position.y + 25 }
+        });
+        
         const staticTarget = targets.find(b => b.isStatic && b.label === 'ambiente');
         
         if (staticTarget) {
-            // Cria um elo fixo rígido no ponto exato do cenário
             player.leftJoint = scene.matter.add.constraint(player.leftHand, staticTarget, 0, 1, {
                 pointA: { x: 0, y: 0 },
                 pointB: { x: player.leftHand.position.x - staticTarget.position.x, y: player.leftHand.position.y - staticTarget.position.y }
@@ -171,9 +165,14 @@ function handlePlayerInput(scene, player) {
         player.leftJoint = null;
     }
 
-    // 4. MECÂNICA DE GARRA - MÃO DIREITA
+    // CORREÇÃO 2: DETECÇÃO DE GARRA AMPLIADA (MÃO DIREITA)
     if (grabbingRight && !player.rightJoint) {
-        const targets = scene.matter.query.point(scene.matter.world.localWorld.bodies, player.rightHand.position);
+        const bodies = scene.matter.world.localWorld.bodies;
+        const targets = scene.matter.query.region(bodies, {
+            min: { x: player.rightHand.position.x - 25, y: player.rightHand.position.y - 25 },
+            max: { x: player.rightHand.position.x + 25, y: player.rightHand.position.y + 25 }
+        });
+        
         const staticTarget = targets.find(b => b.isStatic && b.label === 'ambiente');
         
         if (staticTarget) {
