@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Clone Heave Ho - Garra Sem Pulo</title>
+    <title>Clone Heave Ho - Garra Firme Definitiva</title>
     <style>
         body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         canvas { box-shadow: 0 0 20px rgba(0,0,0,0.8); }
@@ -37,7 +37,7 @@ const CAT_PLAYER = 0x0002;
 function preload() {}
 
 function create() {
-    this.add.text(20, 20, "Física de Contato Estrita: Mãos travam sem pular para dentro dos blocos.", { font: "20px Arial", fill: "#ffffff" });
+    this.add.text(20, 20, "Garra Corrigida: Comprimento zero impede esticamentos e deformações.", { font: "20px Arial", fill: "#ffffff" });
 
     const ambienteConfig = { 
         isStatic: true, 
@@ -128,14 +128,6 @@ function update() {
     if (player2) handlePlayerInput(this, player2);
 }
 
-// Descobre o ponto de colisão mais próximo da borda para evitar teletransporte
-function calcularPontoFixacao(hand, target) {
-    return {
-        x: hand.position.x - target.position.x,
-        y: hand.position.y - target.position.y
-    };
-}
-
 function isButtonPressed(pad, index) {
     const btn = pad.buttons[index];
     if (!btn) return false;
@@ -173,7 +165,8 @@ function handlePlayerInput(scene, player) {
         }
     }
 
-    const RAIO_DETECCAO = 14;
+    // Raio de 16 pixels dá o encaixe perfeito sem soltar fumaça ou deformaçoes
+    const RAIO_DETECCAO = 16;
 
     // 3. SELETOR DE GARRA - MÃO ESQUERDA
     if (grabbingLeft && !player.leftJoint) {
@@ -186,14 +179,10 @@ function handlePlayerInput(scene, player) {
         const validTarget = targets.find(b => b.label === 'ambiente' || b.label.startsWith(enemyPrefix));
         
         if (validTarget) {
-            const pontoRelativo = calcularPontoFixacao(player.leftHand, validTarget);
-            
-            // CORREÇÃO: Comprimento ajustado dinamicamente para manter a distância exata do contato
-            const dist = Math.sqrt(pontoRelativo.x * pontoRelativo.x + pontoRelativo.y * pontoRelativo.y);
-            
-            player.leftJoint = scene.matter.add.constraint(player.leftHand, validTarget, dist, 1.0, {
+            // CORREÇÃO: length: 0 remove qualquer efeito elástico de distância
+            player.leftJoint = scene.matter.add.constraint(player.leftHand, validTarget, 0, 1.0, {
                 pointA: { x: 0, y: 0 },
-                pointB: pontoRelativo
+                pointB: { x: player.leftHand.position.x - validTarget.position.x, y: player.leftHand.position.y - validTarget.position.y }
             });
         }
     } else if (!grabbingLeft && player.leftJoint) {
@@ -212,12 +201,9 @@ function handlePlayerInput(scene, player) {
         const validTarget = targets.find(b => b.label === 'ambiente' || b.label.startsWith(enemyPrefix));
         
         if (validTarget) {
-            const pontoRelativo = calcularPontoFixacao(player.rightHand, validTarget);
-            const dist = Math.sqrt(pontoRelativo.x * pontoRelativo.x + pontoRelativo.y * pontoRelativo.y);
-            
-            player.rightJoint = scene.matter.add.constraint(player.rightHand, validTarget, dist, 1.0, {
+            player.rightJoint = scene.matter.add.constraint(player.rightHand, validTarget, 0, 1.0, {
                 pointA: { x: 0, y: 0 },
-                pointB: pontoRelativo
+                pointB: { x: player.rightHand.position.x - validTarget.position.x, y: player.rightHand.position.y - validTarget.position.y }
             });
         }
     } else if (!grabbingRight && player.rightJoint) {
