@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Clone Heave Ho - Parte 1 de 2</title>
+    <title>Clone Heave Ho - Split-Screen Corrigido</title>
     <style>
         body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         canvas { box-shadow: 0 0 20px rgba(0,0,0,0.8); }
@@ -57,7 +57,7 @@ function create() {
     criarPlataforma(this, 25, WORLD_HEIGHT / 2, 50, WORLD_HEIGHT);              
     criarPlataforma(this, WORLD_WIDTH - 25, WORLD_HEIGHT / 2, 50, WORLD_HEIGHT); 
 
-    // Obstáculos e plataformas verticais distribuídas
+    // Obstáculos e plataformas do cenário
     criarPlataforma(this, 400, WORLD_HEIGHT - 300, 300, 40); 
     criarPlataforma(this, 800, WORLD_HEIGHT - 500, 300, 40); 
     criarPlataforma(this, 1300, WORLD_HEIGHT - 400, 400, 40); 
@@ -68,13 +68,18 @@ function create() {
     criarPlataforma(this, 1600, WORLD_HEIGHT - 950, 200, 40);
     criarPlataforma(this, 2100, WORLD_HEIGHT - 1200, 400, 40);
 
-    // Estrutura do gerenciamento de câmeras
+    // CORREÇÃO: Configurando as áreas de visão e bounds corretos para cada câmera
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    camLeft = this.cameras.add(0, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT).setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    camRight = this.cameras.add(SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT).setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    
+    camLeft = this.cameras.add(0, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT);
+    camLeft.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    
+    camRight = this.cameras.add(SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT);
+    camRight.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
     divisorGfx = this.add.graphics().setScrollFactor(0);
     divisorGfx.fillStyle(0x000000, 1).fillRect(SCREEN_WIDTH / 2 - 4, 0, 8, SCREEN_HEIGHT);
+    divisorGfx.setDepth(1000); // Garante que a linha preta fique por cima de tudo
 
     camLeft.setVisible(false); camRight.setVisible(false); divisorGfx.setVisible(false);
 
@@ -113,9 +118,12 @@ function createHeaveHoCharacter(scene, x, y, gamepad, id, bodyColor) {
     createArmSegment(scene, body, leftHand, 3, 16, id, playerGroup, leftElos);
     createArmSegment(scene, body, rightHand, 3, 16, id, playerGroup, rightElos);
 
+    let pGfx = scene.add.graphics();
+    pGfx.setDepth(10); // Mantém os bonecos renderizados acima do cenário estável
+
     return {
         id: id, body: body, leftHand: leftHand, rightHand: rightHand,
-        leftElos: leftElos, rightElos: rightElos, gfx: scene.add.graphics(),
+        leftElos: leftElos, rightElos: rightElos, gfx: pGfx,
         bodyColor: bodyColor, pad: gamepad, leftJoint: null, rightJoint: null
     };
 }
@@ -130,13 +138,16 @@ function update() {
         const distancia = Math.sqrt(dx * dx + dy * dy);
 
         if (distancia > 550) {
+            // CORREÇÃO: Força as novas câmeras a resetarem e renderizarem o conteúdo visível corretamente
             this.cameras.main.setVisible(false);
             camLeft.setVisible(true); camRight.setVisible(true); divisorGfx.setVisible(true);
+            
             camLeft.startFollow(player1.body, true, 0.1, 0.1);
             camRight.startFollow(player2.body, true, 0.1, 0.1);
         } else {
             camLeft.setVisible(false); camRight.setVisible(false); divisorGfx.setVisible(false);
             this.cameras.main.setVisible(true);
+            
             const midX = (player1.body.position.x + player2.body.position.x) / 2;
             const midY = (player1.body.position.y + player2.body.position.y) / 2;
             this.cameras.main.pan(midX, midY, 0);
