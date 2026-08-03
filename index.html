@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Clone Heave Ho - Física Precisa Sem Infiltração</title>
+    <title>Clone Heave Ho - Garra Corrigida</title>
     <style>
         body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         canvas { box-shadow: 0 0 20px rgba(0,0,0,0.8); }
@@ -20,7 +20,7 @@ const config = {
     physics: {
         default: 'matter',
         matter: {
-            gravity: { y: 1.4 }, 
+            gravity: { y: 1.5 }, 
             debug: true 
         }
     },
@@ -30,26 +30,35 @@ const config = {
 
 const game = new Phaser.Game(config);
 let player1, player2;
-const MAX_ARM_LENGTH = 80; // Tamanho máximo rígido do braço
+
+// Categorias de colisão nativas
+const CAT_AMBIENTE = 0x0001;
+const CAT_PLAYER = 0x0002;
 
 function preload() {}
 
 function create() {
-    this.add.text(20, 20, "Física Corrigida: Mãos não agarram pelo ar e braços respeitam os blocos.", { font: "20px Arial", fill: "#ffffff" });
+    this.add.text(20, 20, "Versão Clássica Retornada. Garra ajustada para toque real.", { font: "20px Arial", fill: "#ffffff" });
 
-    // Configuração do cenário estático
-    const ambienteConfig = { isStatic: true, label: 'ambiente', friction: 0.6 };
+    const ambienteConfig = { 
+        isStatic: true, 
+        label: 'ambiente', 
+        friction: 0.5,
+        collisionFilter: { 
+            category: CAT_AMBIENTE,
+            mask: CAT_PLAYER 
+        }
+    };
 
+    // Fronteiras do mapa
     this.matter.add.rectangle(512, 740, 1024, 50, ambienteConfig); 
     this.matter.add.rectangle(512, 25, 1024, 50, ambienteConfig);  
     this.matter.add.rectangle(25, 384, 50, 768, ambienteConfig);  
     this.matter.add.rectangle(999, 384, 50, 768, ambienteConfig);  
 
-    // Plataformas (Guardamos em um grupo para o teste de colisão do braço)
-    this.plataformas = [
-        this.matter.add.rectangle(250, 450, 300, 40, ambienteConfig),
-        this.matter.add.rectangle(774, 350, 300, 40, ambienteConfig)
-    ];
+    // Plataformas
+    this.matter.add.rectangle(250, 450, 300, 40, ambienteConfig); 
+    this.matter.add.rectangle(774, 350, 300, 40, ambienteConfig); 
 
     this.input.gamepad.on('down', (pad, button, index) => {
         if (pad.index === 0 && !player1) player1 = createHeaveHoCharacter(this, 250, 300, pad, 0);
@@ -57,18 +66,52 @@ function create() {
     });
 }
 
+function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id, groupIndex) {
+    let lastBody = bodyA;
+
+    for (let i = 0; i < numLinks; i++) {
+        const isLast = (i === numLinks - 1);
+        let link;
+        
+        if (isLast) {
+            link = bodyB;
+        } else {
+            link = scene.matter.add.rectangle(bodyA.position.x, bodyA.position.y, 10, linkLength, { 
+                density: 0.005, 
+                frictionAir: 0.02,
+                label: `p${id}_braco`,
+                collisionFilter: { 
+                    category: CAT_PLAYER,
+                    mask: CAT_AMBIENTE | CAT_PLAYER, 
+                    group: groupIndex 
+                }
+            });
+        }
+
+        scene.matter.add.constraint(lastBody, link, linkLength, 1.0, {
+            pointA: lastBody === bodyA ? { x: 0, y: 0 } : { x: 0, y: linkLength / 2 },
+            pointB: isLast ? { x: 0, y: 0 } : { x: 0, y: -linkLength / 2 }
+        });
+
+        lastBody = link;
+    }
+}
+
 function createHeaveHoCharacter(scene, x, y, gamepad, id) {
-    const group = scene.matter.world.nextGroup(true);
-    const pFilter = { group: group };
+    const playerGroup = scene.matter.world.nextGroup(true);
+    
+    const pFilter = { 
+        category: CAT_PLAYER, 
+        mask: CAT_AMBIENTE | CAT_PLAYER, 
+        group: playerGroup 
+    };
 
-    const body = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.04, label: `p${id}_body`, collisionFilter: pFilter });
-    // Mãos ativas e sólidas
-    const leftHand = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.06, label: `p${id}_leftHand`, collisionFilter: pFilter });
-    const rightHand = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.06, label: `p${id}_rightHand`, collisionFilter: pFilter });
+    const body = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: pFilter });
+    const leftHand = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: pFilter });
+    const rightHand = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: pFilter });
 
-    // Uma mola elástica leve apenas para guiar o braço visualmente, o bloqueio real será feito via código abaixo
-    scene.matter.add.constraint(body, leftHand, MAX_ARM_LENGTH, 0.05);
-    scene.matter.add.constraint(body, rightHand, MAX_ARM_LENGTH, 0.05);
+    createArmSegment(scene, body, leftHand, 3, 16, id, playerGroup);
+    createArmSegment(scene, body, rightHand, 3, 16, id, playerGroup);
 
     return {
         id: id,
@@ -82,56 +125,8 @@ function createHeaveHoCharacter(scene, x, y, gamepad, id) {
 }
 
 function update() {
-    if (player1) { handlePlayerInput(this, player1); trancarBraço(this, player1); }
-    if (player2) { handlePlayerInput(this, player2); trancarBraço(this, player2); }
-}
-
-// CORREÇÃO 1: Evita matematicamente que o braço e a mão entrem ou atravessem as plataformas
-function trancarBraço(scene, player) {
-    const plataformas = scene.plataformas;
-    
-    // Verifica braço esquerdo
-    plataformas.forEach(plat => {
-        const bounds = plat.bounds;
-        const hand = player.leftHand;
-        
-        // Se a mão invadir o retângulo da plataforma, ejeta ela para a borda externa mais próxima imediatamente
-        if (hand.position.x > bounds.min.x && hand.position.x < bounds.max.x &&
-            hand.position.y > bounds.min.y && hand.position.y < bounds.max.y) {
-            
-            const distTop = Math.abs(hand.position.y - bounds.min.y);
-            const distBot = Math.abs(hand.position.y - bounds.max.y);
-            const distLeft = Math.abs(hand.position.x - bounds.min.x);
-            const distRight = Math.abs(hand.position.x - bounds.max.x);
-            const minDist = Math.min(distTop, distBot, distLeft, distRight);
-
-            if (minDist === distTop) scene.matter.body.setPosition(hand, { x: hand.position.x, y: bounds.min.y - 14 });
-            else if (minDist === distBot) scene.matter.body.setPosition(hand, { x: hand.position.x, y: bounds.max.y + 14 });
-            else if (minDist === distLeft) scene.matter.body.setPosition(hand, { x: bounds.min.x - 14, y: hand.position.y });
-            else if (minDist === distRight) scene.matter.body.setPosition(hand, { x: bounds.max.x + 14, y: hand.position.y });
-        }
-    });
-
-    // Repete a verificação exata para o braço direito
-    plataformas.forEach(plat => {
-        const bounds = plat.bounds;
-        const hand = player.rightHand;
-        
-        if (hand.position.x > bounds.min.x && hand.position.x < bounds.max.x &&
-            hand.position.y > bounds.min.y && hand.position.y < bounds.max.y) {
-            
-            const distTop = Math.abs(hand.position.y - bounds.min.y);
-            const distBot = Math.abs(hand.position.y - bounds.max.y);
-            const distLeft = Math.abs(hand.position.x - bounds.min.x);
-            const distRight = Math.abs(hand.position.x - bounds.max.x);
-            const minDist = Math.min(distTop, distBot, distLeft, distRight);
-
-            if (minDist === distTop) scene.matter.body.setPosition(hand, { x: hand.position.x, y: bounds.min.y - 14 });
-            else if (minDist === distBot) scene.matter.body.setPosition(hand, { x: hand.position.x, y: bounds.max.y + 14 });
-            else if (minDist === distLeft) scene.matter.body.setPosition(hand, { x: bounds.min.x - 14, y: hand.position.y });
-            else if (minDist === distRight) scene.matter.body.setPosition(hand, { x: bounds.max.x + 14, y: hand.position.y });
-        }
-    });
+    if (player1) handlePlayerInput(this, player1);
+    if (player2) handlePlayerInput(this, player2);
 }
 
 function isButtonPressed(pad, index) {
@@ -146,38 +141,40 @@ function handlePlayerInput(scene, player) {
 
     const grabbingLeft = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
     const grabbingRight = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
+
     const enemyPrefix = player.id === 0 ? "p1_" : "p0_";
 
-    // 1. CONTROLE ANALÓGICO
+    // 1. MOVIMENTO DA MÃO ESQUERDA
     if (pad.leftStick) {
         const forceX = pad.leftStick.x;
         const forceY = pad.leftStick.y;
         if (player.leftJoint) {
-            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.06, y: forceY * 0.06 });
+            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.07, y: forceY * 0.07 });
         } else {
-            scene.matter.body.applyForce(player.leftHand, player.leftHand.position, { x: forceX * 0.015, y: forceY * 0.015 });
+            scene.matter.body.applyForce(player.leftHand, player.leftHand.position, { x: forceX * 0.018, y: forceY * 0.018 });
         }
     }
 
+    // 2. MOVIMENTO DA MÃO DIREITA
     if (pad.rightStick) {
         const forceX = pad.rightStick.x;
         const forceY = pad.rightStick.y;
         if (player.rightJoint) {
-            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.06, y: forceY * 0.06 });
+            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.07, y: forceY * 0.07 });
         } else {
-            scene.matter.body.applyForce(player.rightHand, player.rightHand.position, { x: forceX * 0.015, y: forceY * 0.015 });
+            scene.matter.body.applyForce(player.rightHand, player.rightHand.position, { x: forceX * 0.018, y: forceY * 0.018 });
         }
     }
 
-    // CORREÇÃO 2: ÁREA DE DETECÇÃO MILIMÉTRICA (Reduzida de 25 para apenas 4 pixels extras de margem)
-    const MARGEM_GARRA = 4;
+    // MODIFICAÇÃO CIRÚRGICA: O raio de detecção agora é de 14 pixels (exatamente o limite da pele da mão)
+    const RAIO_DETECCAO = 14;
 
     // 3. SELETOR DE GARRA - MÃO ESQUERDA
     if (grabbingLeft && !player.leftJoint) {
         const bodies = scene.matter.world.localWorld.bodies;
         const targets = scene.matter.query.region(bodies, {
-            min: { x: player.leftHand.position.x - (14 + MARGEM_GARRA), y: player.leftHand.position.y - (14 + MARGEM_GARRA) },
-            max: { x: player.leftHand.position.x + (14 + MARGEM_GARRA), y: player.leftHand.position.y + (14 + MARGEM_GARRA) }
+            min: { x: player.leftHand.position.x - RAIO_DETECCAO, y: player.leftHand.position.y - RAIO_DETECCAO },
+            max: { x: player.leftHand.position.x + RAIO_DETECCAO, y: player.leftHand.position.y + RAIO_DETECCAO }
         });
         
         const validTarget = targets.find(b => b.label === 'ambiente' || b.label.startsWith(enemyPrefix));
@@ -197,8 +194,8 @@ function handlePlayerInput(scene, player) {
     if (grabbingRight && !player.rightJoint) {
         const bodies = scene.matter.world.localWorld.bodies;
         const targets = scene.matter.query.region(bodies, {
-            min: { x: player.rightHand.position.x - (14 + MARGEM_GARRA), y: player.rightHand.position.y - (14 + MARGEM_GARRA) },
-            max: { x: player.rightHand.position.x + (14 + MARGEM_GARRA), y: player.rightHand.position.y + (14 + MARGEM_GARRA) }
+            min: { x: player.rightHand.position.x - RAIO_DETECCAO, y: player.rightHand.position.y - RAIO_DETECCAO },
+            max: { x: player.rightHand.position.x + RAIO_DETECCAO, y: player.rightHand.position.y + RAIO_DETECCAO }
         });
         
         const validTarget = targets.find(b => b.label === 'ambiente' || b.label.startsWith(enemyPrefix));
@@ -206,7 +203,7 @@ function handlePlayerInput(scene, player) {
         if (validTarget) {
             player.rightJoint = scene.matter.add.constraint(player.rightHand, validTarget, 0, 1.0, {
                 pointA: { x: 0, y: 0 },
-                pointB: { x: player.rightHand.position.x - validTarget.position.x, y: player.rightHand.position.y - validTarget.position.y }
+                pointB: { x: player.rightHand.position.x - validTarget.position.x, y: validTarget.position.y - validTarget.position.y }
             });
         }
     } else if (!grabbingRight && player.rightJoint) {
