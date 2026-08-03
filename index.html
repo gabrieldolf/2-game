@@ -2,217 +2,86 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Clone Heave Ho - Editor com Pré-Configuração</title>
+    <title>Clone Heave Ho - Câmera Dinâmica Integrada</title>
     <style>
-        body { margin: 0; background: #111; display: flex; font-family: Arial, sans-serif; overflow: hidden; height: 100vh; }
-        #sidebar { width: 260px; background: #222; color: #fff; padding: 15px; display: flex; flex-direction: column; gap: 12px; border-right: 2px solid #444; z-index: 10; font-size: 13px; box-sizing: border-box; overflow-y: auto; }
-        #canvas-container { flex-grow: 1; display: flex; justify-content: center; align-items: center; position: relative; }
-        button { background: #444; color: white; border: none; padding: 8px; cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%; }
-        button:hover { background: #555; }
-        button.active { background: #00ff00; color: black; }
-        .section { border-top: 1px solid #444; padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
-        .prop-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-        input[type="number"], select { width: 80px; background: #333; color: white; border: 1px solid #555; padding: 4px; border-radius: 4px; }
-        input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
-        h3 { margin: 0; font-size: 12px; color: #aaa; text-transform: uppercase; }
-        .info-edit { color: #55ff55; font-weight: bold; font-size: 11px; margin-top: 2px; }
+        body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        canvas { box-shadow: 0 0 20px rgba(0,0,0,0.8); }
     </style>
     <script src="phaser.min.js"></script>
 </head>
 <body>
 
-<div id="sidebar">
-    <h2>EDITOR</h2>
-    <div>
-        <h3>Modo de Operação</h3>
-        <button id="btn-create" class="active" onclick="setFerramenta('create')">Criar Novo Objeto</button>
-        <button id="btn-select" style="margin-top:5px;" onclick="setFerramenta('select')">Selecionar e Mover</button>
-    </div>
-    <div class="section">
-        <h3>Configuração do Objeto</h3>
-        <p style="font-size:11px; color:#aaa; margin:0;">Configure abaixo ANTES de clicar na tela para criar, ou altere o objeto selecionado.</p>
-        <div id="status-modo" class="info-edit">Status: Criando novos objetos</div>
-        
-        <div class="prop-row"><label>Forma Geométrica:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Cubo/Retângulo</option><option value="circle">Esfera/Círculo</option></select></div>
-        <div class="prop-row" id="row-w"><label id="label-w">Largura (px):</label><input type="number" id="prop-w" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
-        <div class="prop-row" id="row-h"><label>Altura (px):</label><input type="number" id="prop-h" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
-        <div class="prop-row"><label>Afetado por Gravidade:</label><input type="checkbox" id="prop-gravity" onchange="atualizarObjetoExistente()"></div>
-        <div class="prop-row"><label>Fixo (Estático):</label><input type="checkbox" id="prop-static" checked onchange="atualizarObjetoExistente()"></div>
-        <div class="prop-row"><label>Peso (Massa):</label><input type="number" id="prop-mass" value="1.0" step="0.1" min="0.01" onchange="atualizarObjetoExistente()"></div>
-        <div class="prop-row"><label>Arrasto do Ar:</label><input type="number" id="prop-air" value="0.02" step="0.01" min="0" max="1" onchange="atualizarObjetoExistente()"></div>
-        <div class="prop-row"><label>Elasticidade:</label><input type="number" id="prop-bounce" value="0.1" step="0.05" min="0" max="1" onchange="atualizarObjetoExistente()"></div>
-        <div class="prop-row"><label>Travar Rotação:</label><input type="checkbox" id="prop-rotate" onchange="atualizarObjetoExistente()"></div>
-        
-        <button id="btn-delete" style="background:#ff4757; display:none; margin-top:5px;" onclick="deletarObjetoSelecionado()">Deletar Selecionado</button>
-    </div>
-</div>
-<div id="canvas-container"></div>
-
 <script>
-const SCREEN_WIDTH = 1024, SCREEN_HEIGHT = 768, WORLD_WIDTH = 3000, WORLD_HEIGHT = 2000;
+const SCREEN_WIDTH = 1024;
+const SCREEN_HEIGHT = 768;
+const WORLD_WIDTH = 3000;
+const WORLD_HEIGHT = 2000;
+
 const config = {
-    type: Phaser.AUTO, width: SCREEN_WIDTH, height: SCREEN_HEIGHT, parent: 'canvas-container', backgroundColor: '#4488aa',
-    physics: { default: 'matter', matter: { gravity: { y: 1.5 }, debug: false } },
-    input: { gamepad: true }, scene: { preload: function(){}, create: create, update: update }
+    type: Phaser.AUTO,
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    backgroundColor: '#4488aa',
+    physics: {
+        default: 'matter',
+        matter: { gravity: { y: 1.5 }, debug: false }
+    },
+    input: { gamepad: true },
+    scene: { preload: preload, create: create, update: update }
 };
+
 const game = new Phaser.Game(config);
-let player1, player2, ferramentaAtual = 'create', objetoSelecionado = null, listaObjetosEditaveis = [];
-const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
+let player1, player2;
+const CAT_AMBIENTE = 0x0001;
+const CAT_PLAYER = 0x0002;
+
+function preload() {}
 
 function create() {
     this.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 100, true, true, true, true);
+    
+    const ambienteConfig = { 
+        isStatic: true, label: 'ambiente', friction: 0.5,
+        collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER }
+    };
+
+    const criarPlataforma = (scene, x, y, w, h) => {
+        scene.matter.add.rectangle(x, y, w, h, ambienteConfig);
+        let g = scene.add.graphics();
+        g.fillStyle(0x224466, 1);
+        g.fillRect(x - w/2, y - h/2, w, h);
+    };
+
+    // Fronteiras do mapa estendido
+    criarPlataforma(this, WORLD_WIDTH / 2, WORLD_HEIGHT - 25, WORLD_WIDTH, 50); 
+    criarPlataforma(this, WORLD_WIDTH / 2, 25, WORLD_WIDTH, 50);               
+    criarPlataforma(this, 25, WORLD_HEIGHT / 2, 50, WORLD_HEIGHT);              
+    criarPlataforma(this, WORLD_WIDTH - 25, WORLD_HEIGHT / 2, 50, WORLD_HEIGHT); 
+
+    // Estruturas e plataformas espalhadas pelo cenário gigante
+    criarPlataforma(this, 400, WORLD_HEIGHT - 300, 300, 40); 
+    criarPlataforma(this, 800, WORLD_HEIGHT - 500, 300, 40); 
+    criarPlataforma(this, 1300, WORLD_HEIGHT - 400, 400, 40); 
+    criarPlataforma(this, 1800, WORLD_HEIGHT - 600, 300, 40); 
+    criarPlataforma(this, 2300, WORLD_HEIGHT - 450, 400, 40); 
+    criarPlataforma(this, 600, WORLD_HEIGHT - 900, 250, 40);
+    criarPlataforma(this, 1100, WORLD_HEIGHT - 1100, 350, 40);
+    criarPlataforma(this, 1600, WORLD_HEIGHT - 950, 200, 40);
+    criarPlataforma(this, 2100, WORLD_HEIGHT - 1200, 400, 40);
+
+    // Ajuste da câmera principal estável
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    const ambConf = { isStatic: true, label: 'ambiente', friction: 0.5, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER } };
-    const borda = (s, x, y, w, h) => {
-        s.matter.add.rectangle(x, y, w, h, ambConf);
-        s.add.graphics().fillStyle(0x224466, 1).fillRect(x - w/2, y - h/2, w, h);
-    };
-    borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50);
-    borda(this, WORLD_WIDTH/2, 25, WORLD_WIDTH, 50);
-    borda(this, 25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT);
-    borda(this, WORLD_WIDTH-25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT);
 
-    this.input.on('pointerdown', (p) => {
-        if (ferramentaAtual === 'create') executarCriacaoObjeto(this, p.worldX, p.worldY);
-        else if (ferramentaAtual === 'select') executarSelecaoObjeto(this, p.worldX, p.worldY, p);
-    }, this);
-    this.input.on('pointermove', function(p) {
-        if (ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
-            this.matter.body.setPosition(objetoSelecionado.body, { x: p.worldX, y: p.worldY });
-            this.matter.body.setVelocity(objetoSelecionado.body, { x: 0, y: 0 });
-        }
-    }, this);
-    this.input.gamepad.on('down', (pad) => {
-        if (pad.index === 0 && !player1) player1 = createHeaveHoCharacter(this, 300, WORLD_HEIGHT-150, pad, 0, 0x00ff00);
-        if (pad.index === 1 && !player2) player2 = createHeaveHoCharacter(this, 500, WORLD_HEIGHT-150, pad, 1, 0xffff00);
+    // Texto de interface que acompanha a rolagem da tela
+    let txt = this.add.text(20, 20, "Câmera de Zoom Dinâmico Ativada! Explorem o mapa sem perder o foco.", { font: "20px Arial", fill: "#ffffff" });
+    txt.setScrollFactor(0).setDepth(2000);
+
+    this.input.gamepad.on('down', (pad, button, index) => {
+        if (pad.index === 0 && !player1) player1 = createHeaveHoCharacter(this, 300, WORLD_HEIGHT - 150, pad, 0, 0x00ff00);
+        if (pad.index === 1 && !player2) player2 = createHeaveHoCharacter(this, 500, WORLD_HEIGHT - 150, pad, 1, 0xffff00);
     });
-    atualizarInterfaceForma();
 }
-function setFerramenta(tipo) {
-    ferramentaAtual = tipo;
-    document.getElementById('btn-select').classList.remove('active');
-    document.getElementById('btn-create').classList.remove('active');
-    document.getElementById(tipo === 'select' ? 'btn-select' : 'btn-create').add('active');
-    
-    const statusText = document.getElementById('status-modo');
-    if (tipo === 'create') {
-        desmarcarObjetoDoEditor();
-        statusText.innerText = "Status: Criando novos objetos";
-        statusText.style.color = "#55ff55";
-    } else {
-        statusText.innerText = "Status: Nenhum selecionado";
-        statusText.style.color = "#aaaaaa";
-    }
-}
-function atualizarInterfaceForma() {
-    const shape = document.getElementById('prop-shape').value;
-    const rowH = document.getElementById('row-h');
-    const labelW = document.getElementById('label-w');
-    if (shape === 'circle') {
-        rowH.style.display = 'none'; // Círculo só precisa do Raio, esconde a altura
-        labelW.innerText = "Raio (px):";
-    } else {
-        rowH.style.display = 'flex';
-        labelW.innerText = "Largura (px):";
-    }
-}
-function extrairCamposPainel() {
-    return {
-        shape: document.getElementById('prop-shape').value,
-        w: parseFloat(document.getElementById('prop-w').value) || 50,
-        h: parseFloat(document.getElementById('prop-h').value) || 50,
-        gravity: document.getElementById('prop-gravity').checked,
-        isStatic: document.getElementById('prop-static').checked,
-        mass: parseFloat(document.getElementById('prop-mass').value) || 1,
-        air: parseFloat(document.getElementById('prop-air').value) || 0.02,
-        bounce: parseFloat(document.getElementById('prop-bounce').value) || 0,
-        fixedRotation: document.getElementById('prop-rotate').checked
-    };
-}
-function executarCriacaoObjeto(scene, x, y) {
-    const c = extrairCamposPainel();
-    let conf = {
-        isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass,
-        frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE }
-    };
-    let body = (c.shape === 'box') ? scene.matter.add.rectangle(x, y, c.w, c.h, conf) : scene.matter.add.circle(x, y, c.w, conf);
-    scene.matter.body.setInertia(body, c.fixedRotation ? Infinity : body.inertia);
 
-    let obj = {
-        body: body, gfx: scene.add.graphics(), shape: c.shape, w: c.w, h: c.h,
-        gravity: c.gravity, isStatic: c.isStatic, mass: c.mass, air: c.air, bounce: c.bounce, fixedRotation: c.fixedRotation
-    };
-    listaObjetosEditaveis.push(obj);
-}
-function executarSelecaoObjeto(scene, x, y, pointer) {
-    const clicked = scene.matter.query.point(scene.matter.world.localWorld.bodies, { x: x, y: y });
-    const target = clicked.find(b => b.label === 'ambiente' && b.position.y < WORLD_HEIGHT-50 && b.position.x > 50 && b.position.x < WORLD_WIDTH-50);
-    if (target) {
-        let encontrado = listaObjetosEditaveis.find(o => o.body === target);
-        if (encontrado) selecionarObjetoDoEditor(encontrado);
-    } else if (!pointer.leftButtonDown()) {
-        desmarcarObjetoDoEditor();
-    }
-}
-function selecionarObjetoDoEditor(obj) {
-    objetoSelecionado = obj;
-    document.getElementById('btn-delete').style.display = 'block';
-    const statusText = document.getElementById('status-modo');
-    statusText.innerText = "Status: Editando selecionado";
-    statusText.style.color = "#ffea00";
-
-    document.getElementById('prop-shape').value = obj.shape;
-    document.getElementById('prop-w').value = obj.w;
-    document.getElementById('prop-h').value = obj.h;
-    document.getElementById('prop-gravity').checked = obj.gravity;
-    document.getElementById('prop-static').checked = obj.isStatic;
-    document.getElementById('prop-mass').value = obj.body.mass.toFixed(1);
-    document.getElementById('prop-air').value = obj.body.frictionAir;
-    document.getElementById('prop-bounce').value = obj.body.restitution;
-    document.getElementById('prop-rotate').checked = obj.fixedRotation;
-    atualizarInterfaceForma();
-}
-function desmarcarObjetoDoEditor() {
-    objetoSelecionado = null;
-    document.getElementById('btn-delete').style.display = 'none';
-    if (ferramentaAtual === 'select') {
-        const statusText = document.getElementById('status-modo');
-        statusText.innerText = "Status: Nenhum selecionado";
-        statusText.style.color = "#aaaaaa";
-    }
-}
-function atualizarObjetoExistente() {
-    if (ferramentaAtual !== 'select' || !objetoSelecionado) return;
-    let obj = objetoSelecionado, scene = game.scene.scenes;
-    const c = extrairCamposPainel();
-    
-    obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity;
-    obj.isStatic = c.isStatic; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce; obj.fixedRotation = c.fixedRotation;
-
-    const px = obj.body.position.x, py = obj.body.position.y;
-    scene.matter.world.remove(obj.body);
-    let conf = {
-        isStatic: obj.isStatic, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass,
-        frictionAir: obj.air, restitution: obj.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE }
-    };
-    obj.body = (obj.shape === 'box') ? scene.matter.add.rectangle(px, py, obj.w, obj.h, conf) : scene.matter.add.circle(px, py, obj.w, conf);
-    scene.matter.body.setInertia(obj.body, obj.fixedRotation ? Infinity : obj.body.inertia);
-}
-function deletarObjetoSelecionado() {
-    if (!objetoSelecionado) return;
-    game.scene.scenes.matter.world.remove(objetoSelecionado.body);
-    objetoSelecionado.gfx.clear();
-    listaObjetosEditaveis = listaObjetosEditaveis.filter(o => o !== objetoSelecionado);
-    desmarcarObjetoDoEditor();
-}
-function desenharObjetoEditor(obj) {
-    let g = obj.gfx; g.clear();
-    g.x = obj.body.position.x; g.y = obj.body.position.y; g.rotation = obj.body.angle;
-    g.fillStyle((obj === objetoSelecionado) ? 0xffea00 : 0xe67e22, 1);
-    g.lineStyle(2, 0xffffff, 0.6);
-    if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
-    else { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
-}
 function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id, groupIndex, listaElos) {
     let lastBody = bodyA;
     for (let i = 0; i < numLinks; i++) {
@@ -222,6 +91,7 @@ function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id, groupIn
             collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: groupIndex }
         });
         if (!isLast) listaElos.push(link);
+
         scene.matter.add.constraint(lastBody, link, linkLength, 1.0, {
             pointA: lastBody === bodyA ? { x: 0, y: 0 } : { x: 0, y: linkLength / 2 },
             pointB: isLast ? { x: 0, y: 0 } : { x: 0, y: -linkLength / 2 }
@@ -232,70 +102,124 @@ function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id, groupIn
 function createHeaveHoCharacter(scene, x, y, gamepad, id, bodyColor) {
     const playerGroup = scene.matter.world.nextGroup(true);
     const pFilter = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: playerGroup };
+
     const body = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: pFilter });
     const leftHand = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: pFilter });
     const rightHand = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: pFilter });
+
     let leftElos = [], rightElos = [];
     createArmSegment(scene, body, leftHand, 3, 16, id, playerGroup, leftElos);
     createArmSegment(scene, body, rightHand, 3, 16, id, playerGroup, rightElos);
+
+    let pGfx = scene.add.graphics();
+    pGfx.setDepth(10);
+
     return {
-        id: id, body: body, leftHand: leftHand, rightHand: rightHand, leftElos: leftElos, rightElos: rightElos,
-        gfx: scene.add.graphics().setDepth(10), bodyColor: bodyColor, pad: gamepad, leftJoint: null, rightJoint: null
+        id: id, body: body, leftHand: leftHand, rightHand: rightHand,
+        leftElos: leftElos, rightElos: rightElos, gfx: pGfx,
+        bodyColor: bodyColor, pad: gamepad, leftJoint: null, rightJoint: null
     };
 }
+
 function update() {
     if (player1) { handlePlayerInput(this, player1); desenharJogador(player1); }
     if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
-    listaObjetosEditaveis.forEach(obj => obj && desenharObjetoEditor(obj));
+
+    // CORREÇÃO DEFINITIVA DA TELA AZUL: Controle Unificado Inteligente de Câmera Única
     if (player1 && player2) {
-        const midX = (player1.body.position.x + player2.body.position.x) / 2, midY = (player1.body.position.y + player2.body.position.y) / 2;
-        let zoom = Math.min(SCREEN_WIDTH / (Math.abs(player1.body.position.x - player2.body.position.x) + 250), SCREEN_HEIGHT / (Math.abs(player1.body.position.y - player2.body.position.y) + 250));
-        zoom = Phaser.Math.Clamp(zoom, 0.45, 1.0);
+        // Encontra a posição média central exata entre os dois personagens
+        const midX = (player1.body.position.x + player2.body.position.x) / 2;
+        const midY = (player1.body.position.y + player2.body.position.y) / 2;
+
+        // Mede o distanciamento horizontal e vertical absoluto entre eles
+        const dx = Math.abs(player1.body.position.x - player2.body.position.x);
+        const dy = Math.abs(player1.body.position.y - player2.body.position.y);
+
+        // Calcula qual nível de zoom é necessário para manter ambos dentro das margens da tela
+        const zoomX = SCREEN_WIDTH / (dx + 250); // 250 pixels de margem segura nas pontas
+        const zoomY = SCREEN_HEIGHT / (dy + 250);
+        
+        // Escolhe o menor zoom para garantir que ninguém fique cortado para fora da visão
+        let zoomAlvo = Math.min(zoomX, zoomY);
+        
+        // Estabelece limites saudáveis de proximidade: não aproxima mais que 1.0x e não afasta menos que 0.45x
+        if (zoomAlvo > 1.0) zoomAlvo = 1.0;
+        if (zoomAlvo < 0.45) zoomAlvo = 0.45;
+
+        // Desloca o foco e o zoom de forma suave (Efeito amortecido lerp) para não dar trancos
         this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (midX - SCREEN_WIDTH / 2), 0.08);
         this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (midY - SCREEN_HEIGHT / 2), 0.08);
-        this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, zoom, 0.05));
-    } else if (player1) { this.cameras.main.centerOn(player1.body.position.x, player1.body.position.y); }
+        this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, zoomAlvo, 0.05));
+
+    } else if (player1) {
+        // Se houver apenas um jogador ativo, a câmera apenas trava e segue o corpo dele em tamanho real
+        this.cameras.main.centerOn(player1.body.position.x, player1.body.position.y);
+        this.cameras.main.setZoom(1.0);
+    }
 }
-function isButtonPressed(pad, index) { const btn = pad.buttons[index]; return btn ? (btn.pressed || btn.value > 0.1) : false; }
+
+function isButtonPressed(pad, index) {
+    const btn = pad.buttons[index];
+    return btn ? (btn.pressed || btn.value > 0.1) : false;
+}
+
 function desenharJogador(player) {
-    const g = player.gfx; g.clear(); const pad = player.pad;
-    const l = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), r = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
+    const g = player.gfx; g.clear();
+    const pad = player.pad;
+    const grabL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
+    const grabR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
+
     g.lineStyle(12, 0x000000, 1);
-    const fil = (elos, mao) => {
+    const filamento = (elos, mao) => {
         g.beginPath(); g.moveTo(player.body.position.x, player.body.position.y);
-        elos.forEach(e => g.lineTo(e.position.x, e.position.y)); g.lineTo(mao.position.x, mao.position.y); g.strokePath();
+        elos.forEach(e => g.lineTo(e.position.x, e.position.y));
+        g.lineTo(mao.position.x, mao.position.y); g.strokePath();
     };
-    fil(player.leftElos, player.leftHand); fil(player.rightElos, player.rightHand);
-    g.fillStyle(player.bodyColor, 1).fillCircle(player.body.position.x, player.body.position.y, 22);
-    g.fillStyle(l ? 0xff8888 : 0xff0000, 1).fillCircle(player.leftHand.position.x, player.leftHand.position.y, 14);
-    g.fillStyle(r ? 0x8888ff : 0x0000ff, 1).fillCircle(player.rightHand.position.x, player.rightHand.position.y, 14);
+    filamento(player.leftElos, player.leftHand);
+    filamento(player.rightElos, player.rightHand);
+
+    g.fillStyle(player.bodyColor, 1); g.fillCircle(player.body.position.x, player.body.position.y, 22);
+    g.fillStyle(grabL ? 0xff8888 : 0xff0000, 1); g.fillCircle(player.leftHand.position.x, player.leftHand.position.y, 14);
+    g.fillStyle(grabR ? 0x8888ff : 0x0000ff, 1); g.fillCircle(player.rightHand.position.x, player.rightHand.position.y, 14);
 }
+
 function processarGarra(scene, player, hand, jointKey, isGrabbing, enemyPrefix) {
     if (isGrabbing && !player[jointKey]) {
-        const targets = scene.matter.query.region(scene.matter.world.localWorld.bodies, {
-            min: { x: hand.position.x - 16, y: hand.position.y - 16 }, max: { x: hand.position.x + 16, y: hand.position.y + 16 }
+        const bodies = scene.matter.world.localWorld.bodies;
+        const targets = scene.matter.query.region(bodies, {
+            min: { x: hand.position.x - 16, y: hand.position.y - 16 },
+            max: { x: hand.position.x + 16, y: hand.position.y + 16 }
         });
-        const valid = targets.find(b => b.label === 'ambiente' || b.label.startsWith(enemyPrefix));
-        if (valid) {
-            player[jointKey] = scene.matter.add.constraint(hand, valid, 0, 1.0, {
-                pointA: { x: 0, y: 0 }, pointB: { x: hand.position.x - valid.position.x, y: hand.position.y - valid.position.y }
+        const validTarget = targets.find(b => b.label === 'ambiente' || b.label.startsWith(enemyPrefix));
+        if (validTarget) {
+            player[jointKey] = scene.matter.add.constraint(hand, validTarget, 0, 1.0, {
+                pointA: { x: 0, y: 0 },
+                pointB: { x: hand.position.x - validTarget.position.x, y: hand.position.y - validTarget.position.y }
             });
         }
-    } else if (!isGrabbing && player[jointKey]) { scene.matter.world.remove(player[jointKey]); player[jointKey] = null; }
+    } else if (!isGrabbing && player[jointKey]) {
+        scene.matter.world.remove(player[jointKey]); player[jointKey] = null;
+    }
 }
+
 function handlePlayerInput(scene, player) {
     const pad = player.pad; if (!pad) return;
-    const l = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), r = isButtonPressed(pad, 7) || isButtonPressed(pad, 5), enemy = player.id === 0 ? "p1_" : "p0_";
+    const grabL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
+    const grabR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
+    const enemyPrefix = player.id === 0 ? "p1_" : "p0_";
+
     if (pad.leftStick) {
-        let f = player.leftJoint ? player.body : player.leftHand, m = player.leftJoint ? 0.045 : 0.018;
+        let f = player.leftJoint ? player.body : player.leftHand;
+        let m = player.leftJoint ? 0.045 : 0.018;
         scene.matter.body.applyForce(f, f.position, { x: pad.leftStick.x * m, y: pad.leftStick.y * m });
     }
     if (pad.rightStick) {
-        let f = player.rightJoint ? player.body : player.rightHand, m = player.rightJoint ? 0.045 : 0.018;
+        let f = player.rightJoint ? player.body : player.rightHand;
+        let m = player.rightJoint ? 0.045 : 0.018;
         scene.matter.body.applyForce(f, f.position, { x: pad.rightStick.x * m, y: pad.rightStick.y * m });
     }
-    processarGarra(scene, player, player.leftHand, 'leftJoint', l, enemy);
-    processarGarra(scene, player, player.rightHand, 'rightJoint', r, enemy);
+    processarGarra(scene, player, player.leftHand, 'leftJoint', grabL, enemyPrefix);
+    processarGarra(scene, player, player.rightHand, 'rightJoint', grabR, enemyPrefix);
 }
 </script>
 </body>
