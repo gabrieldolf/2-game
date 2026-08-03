@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Clone Heave Ho - Física Corrigida</title>
+    <title>Clone Heave Ho - Física Rígida e Colisão</title>
     <style>
         body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         canvas { box-shadow: 0 0 20px rgba(0,0,0,0.8); }
@@ -20,7 +20,7 @@ const config = {
     physics: {
         default: 'matter',
         matter: {
-            gravity: { y: 1.2 }, // Gravidade ligeiramente maior para o corpo parecer pesado
+            gravity: { y: 1.5 }, // Gravidade firme para o peso do corpo
             debug: true 
         }
     },
@@ -34,31 +34,32 @@ let player1, player2;
 function preload() {}
 
 function create() {
-    this.add.text(20, 20, "L2 / R2 para AGARRAR. Analógico move o corpo APENAS quando agarrado.", { font: "20px Arial", fill: "#ffffff" });
+    this.add.text(20, 20, "Física Rígida Ativada: Braços não esticam e não atravessam paredes.", { font: "20px Arial", fill: "#ffffff" });
 
-    // Criando o cenário completo com a tag 'ambiente'
-    this.matter.add.rectangle(512, 740, 1024, 50, { isStatic: true, label: 'ambiente' }); 
-    this.matter.add.rectangle(512, 25, 1024, 50, { isStatic: true, label: 'ambiente' });  
-    this.matter.add.rectangle(25, 384, 50, 768, { isStatic: true, label: 'ambiente' });  
-    this.matter.add.rectangle(999, 384, 50, 768, { isStatic: true, label: 'ambiente' });  
+    // Criando o cenário completo (isStatic e label ambiente)
+    this.matter.add.rectangle(512, 740, 1024, 50, { isStatic: true, label: 'ambiente', friction: 0.5 }); 
+    this.matter.add.rectangle(512, 25, 1024, 50, { isStatic: true, label: 'ambiente', friction: 0.5 });  
+    this.matter.add.rectangle(25, 384, 50, 768, { isStatic: true, label: 'ambiente', friction: 0.5 });  
+    this.matter.add.rectangle(999, 384, 50, 768, { isStatic: true, label: 'ambiente', friction: 0.5 });  
 
-    // Plataformas
-    this.matter.add.rectangle(250, 450, 300, 40, { isStatic: true, label: 'ambiente' }); 
-    this.matter.add.rectangle(774, 350, 300, 40, { isStatic: true, label: 'ambiente' }); 
+    // Plataformas do meio do cenário
+    this.matter.add.rectangle(250, 450, 300, 40, { isStatic: true, label: 'ambiente', friction: 0.5 }); 
+    this.matter.add.rectangle(774, 350, 300, 40, { isStatic: true, label: 'ambiente', friction: 0.5 }); 
 
     this.input.gamepad.on('down', (pad, button, index) => {
         if (pad.index === 0 && !player1) {
-            player1 = createHeaveHoCharacter(this, 250, 300, '#ff4757', pad);
+            player1 = createHeaveHoCharacter(this, 250, 300, pad);
         }
         if (pad.index === 1 && !player2) {
-            player2 = createHeaveHoCharacter(this, 750, 200, '#1e90ff', pad);
+            player2 = createHeaveHoCharacter(this, 750, 200, pad);
         }
     });
 }
 
-function createChain(scene, bodyA, bodyB, numLinks, length) {
+function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength) {
     let lastBody = bodyA;
-    const group = scene.matter.world.nextGroup(true);
+    // Permite que os segmentos colidam com o cenário, mas ignora a colisão entre o próprio corpo e braços
+    const group = scene.matter.world.nextGroup(true); 
 
     for (let i = 0; i < numLinks; i++) {
         const isLast = (i === numLinks - 1);
@@ -67,33 +68,36 @@ function createChain(scene, bodyA, bodyB, numLinks, length) {
         if (isLast) {
             link = bodyB;
         } else {
-            // Elos extremamente leves para não puxarem o corpo sozinhos
-            link = scene.matter.add.rectangle(bodyA.position.x, bodyA.position.y, 6, 10, { 
-                density: 0.0001, 
-                frictionAir: 0.05,
-                collisionFilter: { group: group } 
+            // Segmentos com propriedades físicas reais para colidir com o cenário
+            link = scene.matter.add.rectangle(bodyA.position.x, bodyA.position.y, 10, linkLength, { 
+                density: 0.005, 
+                frictionAir: 0.02,
+                label: 'braco',
+                collisionFilter: { group: group }
             });
         }
 
-        scene.matter.add.constraint(lastBody, link, length, 0.8, {
-            pointA: lastBody === bodyA ? { x: 0, y: 0 } : { x: 0, y: 4 },
-            pointB: isLast ? { x: 0, y: 0 } : { x: 0, y: -4 }
+        // Stiffness 1.0 garante rigidez absoluta (braço de ferro, sem elasticidade)
+        scene.matter.add.constraint(lastBody, link, linkLength, 1.0, {
+            pointA: lastBody === bodyA ? { x: 0, y: 0 } : { x: 0, y: linkLength / 2 },
+            pointB: isLast ? { x: 0, y: 0 } : { x: 0, y: -linkLength / 2 }
         });
 
         lastBody = link;
     }
 }
 
-function createHeaveHoCharacter(scene, x, y, color, gamepad) {
-    // Corpo principal pesado
-    const body = scene.matter.add.circle(x, y, 22, { friction: 0.1, density: 0.02, label: 'body' });
+function createHeaveHoCharacter(scene, x, y, gamepad) {
+    // Corpo principal estável
+    const body = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: 'body' });
     
-    // Mãos muito leves e que sofrem efeito da gravidade para não flutuarem como jatos
-    const leftHand = scene.matter.add.circle(x - 60, y, 14, { density: 0.001, frictionAir: 0.08, label: 'leftHand' });
-    const rightHand = scene.matter.add.circle(x + 60, y, 14, { density: 0.001, frictionAir: 0.08, label: 'rightHand' });
+    // Mãos com detecção de colisão real e física pesada para não atravessar estruturas
+    const leftHand = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.05, label: 'leftHand' });
+    const rightHand = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.05, label: 'rightHand' });
 
-    createChain(scene, body, leftHand, 4, 15);
-    createChain(scene, body, rightHand, 4, 15);
+    // Criando braços articulados rígidos (3 elos de 16 pixels fixos)
+    createArmSegment(scene, body, leftHand, 3, 16);
+    createArmSegment(scene, body, rightHand, 3, 16);
 
     return {
         body: body,
@@ -117,45 +121,46 @@ function handlePlayerInput(scene, player) {
     const grabbingLeft = pad.buttons[6].pressed || pad.buttons[4].pressed;  // L2 ou L1
     const grabbingRight = pad.buttons[7].pressed || pad.buttons[5].pressed; // R2 ou R1
 
-    // CORREÇÃO 1: MOVIMENTO DA MÃO ESQUERDA
+    // 1. MOVIMENTO DA MÃO/CORPO ESQUERDO
     if (pad.leftStick) {
         const forceX = pad.leftStick.x;
         const forceY = pad.leftStick.y;
 
         if (player.leftJoint) {
-            // Se estiver AGARRADO, o analógico empurra o CORPO PRINCIPAL (escalada/impulso)
-            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.03, y: forceY * 0.03 });
+            // AGARRADO: Força puxa o corpo para escalar
+            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.07, y: forceY * 0.07 });
         } else {
-            // Se estiver SOLTO, aplica uma força sutil APENAS na mão (não move o corpo de jeito nenhum)
-            scene.matter.body.applyForce(player.leftHand, player.leftHand.position, { x: forceX * 0.0008, y: forceY * 0.0008 });
+            // SOLTO: Move apenas a mão. A rigidez mecânica impede que ela vá além do braço.
+            scene.matter.body.applyForce(player.leftHand, player.leftHand.position, { x: forceX * 0.005, y: forceY * 0.005 });
         }
     }
 
-    // CORREÇÃO 1: MOVIMENTO DA MÃO DIREITA
+    // 2. MOVIMENTO DA MÃO/CORPO DIREITO
     if (pad.rightStick) {
         const forceX = pad.rightStick.x;
         const forceY = pad.rightStick.y;
 
         if (player.rightJoint) {
-            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.03, y: forceY * 0.03 });
+            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.07, y: forceY * 0.07 });
         } else {
-            scene.matter.body.applyForce(player.rightHand, player.rightHand.position, { x: forceX * 0.0008, y: forceY * 0.0008 });
+            scene.matter.body.applyForce(player.rightHand, player.rightHand.position, { x: forceX * 0.005, y: forceY * 0.005 });
         }
     }
 
-    // CORREÇÃO 2: DETECÇÃO DE GARRA AMPLIADA (MÃO ESQUERDA)
+    // 3. SELETOR DE GARRA - MÃO ESQUERDA
     if (grabbingLeft && !player.leftJoint) {
-        // Cria uma pequena área de colisão circular virtual de raio 25 ao redor da mão para facilitar o clique
         const bodies = scene.matter.world.localWorld.bodies;
+        // Sensor de proximidade sutil para encaixe realista
         const targets = scene.matter.query.region(bodies, {
-            min: { x: player.leftHand.position.x - 25, y: player.leftHand.position.y - 25 },
-            max: { x: player.leftHand.position.x + 25, y: player.leftHand.position.y + 25 }
+            min: { x: player.leftHand.position.x - 20, y: player.leftHand.position.y - 20 },
+            max: { x: player.leftHand.position.x + 20, y: player.leftHand.position.y + 20 }
         });
         
         const staticTarget = targets.find(b => b.isStatic && b.label === 'ambiente');
         
         if (staticTarget) {
-            player.leftJoint = scene.matter.add.constraint(player.leftHand, staticTarget, 0, 1, {
+            // Trava o ponto exato com rigidez absoluta (stiffness: 1)
+            player.leftJoint = scene.matter.add.constraint(player.leftHand, staticTarget, 0, 1.0, {
                 pointA: { x: 0, y: 0 },
                 pointB: { x: player.leftHand.position.x - staticTarget.position.x, y: player.leftHand.position.y - staticTarget.position.y }
             });
@@ -165,18 +170,18 @@ function handlePlayerInput(scene, player) {
         player.leftJoint = null;
     }
 
-    // CORREÇÃO 2: DETECÇÃO DE GARRA AMPLIADA (MÃO DIREITA)
+    // 4. SELETOR DE GARRA - MÃO DIREITA
     if (grabbingRight && !player.rightJoint) {
         const bodies = scene.matter.world.localWorld.bodies;
         const targets = scene.matter.query.region(bodies, {
-            min: { x: player.rightHand.position.x - 25, y: player.rightHand.position.y - 25 },
-            max: { x: player.rightHand.position.x + 25, y: player.rightHand.position.y + 25 }
+            min: { x: player.rightHand.position.x - 20, y: player.rightHand.position.y - 20 },
+            max: { x: player.rightHand.position.x + 20, y: player.rightHand.position.y + 20 }
         });
         
         const staticTarget = targets.find(b => b.isStatic && b.label === 'ambiente');
         
         if (staticTarget) {
-            player.rightJoint = scene.matter.add.constraint(player.rightHand, staticTarget, 0, 1, {
+            player.rightJoint = scene.matter.add.constraint(player.rightHand, staticTarget, 0, 1.0, {
                 pointA: { x: 0, y: 0 },
                 pointB: { x: player.rightHand.position.x - staticTarget.position.x, y: player.rightHand.position.y - staticTarget.position.y }
             });
