@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Clone Heave Ho - Multiplayer Local</title>
+    <style>
+        body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        canvas { box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+    </style>
+    <!-- Importando o Phaser 3 com o motor de física Matter.js incluso -->
+    <script src="https://jsdelivr.net"></script>
+</head>
+<body>
+
+<script>
+// Configuração básica do jogo e ativação do motor Matter.js
+const config = {
+    type: Phaser.AUTO,
+    width: 1024,
+    height: 768,
+    backgroundColor: '#4488aa',
+    physics: {
+        default: 'matter',
+        matter: {
+            gravity: { y: 1 },
+            debug: true // Mostra as linhas de física para nos ajudar a testar
+        }
+    },
+    input: {
+        gamepad: true // Ativa explicitamente o suporte a controles de PC
+    },
+    scene: {
+        preload: preload,
+        create: create,
+        update: update
+    }
+};
+
+const game = new Phaser.Game(config);
+let player1, player2;
+let gamepads = [];
+
+function preload() {
+    // Como somos leigos em arte por enquanto, vamos gerar formas geométricas direto no Create
+}
+
+function create() {
+    // Mensagem de instrução na tela
+    this.add.text(20, 20, "Conecte os Gamepads e aperte qualquer botão.", { font: "20px Arial", fill: "#ffffff" });
+
+    // Criando o chão e paredes físicas (estáticas) onde os jogadores vão se agarrar
+    this.matter.add.rectangle(512, 700, 800, 50, { isStatic: true }); // Chão principal
+    this.matter.add.rectangle(200, 450, 200, 40, { isStatic: true }); // Plataforma flutuante esquerdo
+    this.matter.add.rectangle(800, 300, 200, 40, { isStatic: true }); // Plataforma flutuante direito
+
+    // Detectando os controles quando um botão for pressionado
+    this.input.gamepad.on('down', (pad, button, index) => {
+        console.log(`Gamepad conectado no índice: ${pad.index}`);
+        
+        // Se for o primeiro controle e o jogador 1 não existir, cria o P1
+        if (pad.index === 0 && !player1) {
+            player1 = createHeaveHoCharacter(this, 300, 300, '#ff4757', pad);
+        }
+        // Se for o segundo controle e o jogador 2 não existir, cria o P2
+        if (pad.index === 1 && !player2) {
+            player2 = createHeaveHoCharacter(this, 400, 300, '#1e90ff', pad);
+        }
+    });
+}
+
+// Função inteligente que constrói o corpo estilo Heave Ho (Cabeça + Mão Esquerda + Mão Direita)
+function createHeaveHoCharacter(scene, x, y, color, gamepad) {
+    // 1. Cria o corpo principal (Cabeça/Tronco)
+    const body = scene.matter.add.circle(x, y, 25, { friction: 0.1, restitution: 0.1 });
+    
+    // 2. Cria as mãos
+    const leftHand = scene.matter.add.circle(x - 50, y, 12, { frictionAir: 0.05 });
+    const rightHand = scene.matter.add.circle(x + 50, y, 12, { frictionAir: 0.05 });
+
+    // 3. Une as mãos ao corpo usando "molas/juntas" (Constraints) elásticas igual ao Heave Ho
+    scene.matter.add.constraint(body, leftHand, 50, 0.2, { length: 50 });
+    scene.matter.add.constraint(body, rightHand, 50, 0.2, { length: 50 });
+
+    // Retorna um objeto organizado com todas as partes e o controle associado
+    return {
+        body: body,
+        leftHand: leftHand,
+        rightHand: rightHand,
+        pad: gamepad,
+        color: color,
+        leftJoint: null,
+        rightJoint: null
+    };
+}
+
+function update() {
+    // A lógica de movimentação por analógico e garras entrará aqui no próximo bloco
+    if (player1) handlePlayerInput(this, player1);
+    if (player2) handlePlayerInput(this, player2);
+}
+
+function handlePlayerInput(scene, player) {
+    const pad = player.pad;
+    if (!pad) return;
+
+    // Lógica do Analógico Esquerdo para mover a Mão Esquerda
+    if (pad.leftStick) {
+        const axisX = pad.leftStick.x;
+        const axisY = pad.leftStick.y;
+        // Aplica força na mão baseado na inclinação do analógico do controle
+        scene.matter.body.applyForce(player.leftHand, player.leftHand.position, { x: axisX * 0.002, y: axisY * 0.002 });
+    }
+
+    // Lógica do Analógico Direito para mover a Mão Direita
+    if (pad.rightStick) {
+        const axisX = pad.rightStick.x;
+        const axisY = pad.rightStick.y;
+        scene.matter.body.applyForce(player.rightHand, player.rightHand.position, { x: axisX * 0.002, y: axisY * 0.002 });
+    }
+}
+</script>
+</body>
+</html>
