@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Clone Heave Ho - Garra Multi-Hardware</title>
+    <title>Clone Heave Ho - Colisão Impenetrável</title>
     <style>
         body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         canvas { box-shadow: 0 0 20px rgba(0,0,0,0.8); }
@@ -31,29 +31,33 @@ const config = {
 const game = new Phaser.Game(config);
 let player1, player2;
 
-// Categorias de Colisão Nativa do Matter
+// Categorias de colisão para organizar o mundo físico
 const CAT_AMBIENTE = 0x0001;
 const CAT_PLAYER = 0x0002;
-const CAT_BRACO = 0x0004;
 
 function preload() {}
 
 function create() {
-    this.add.text(20, 20, "Detecção de Gatilho Universal Ativada. Aperte L2 ou R2 firmemente.", { font: "20px Arial", fill: "#ffffff" });
+    this.add.text(20, 20, "Colisões Sólidas Ativadas. L2 / R2 para AGARRAR.", { font: "20px Arial", fill: "#ffffff" });
 
-    // Cenário estático com categoria de colisão própria
+    // CORREÇÃO: O ambiente agora aceita colisões de tudo o que estiver na categoria CAT_PLAYER
     const ambienteConfig = { 
         isStatic: true, 
         label: 'ambiente', 
         friction: 0.5,
-        collisionFilter: { category: CAT_AMBIENTE } 
+        collisionFilter: { 
+            category: CAT_AMBIENTE,
+            mask: CAT_PLAYER // Bloqueia fisicamente os jogadores, mãos e braços
+        }
     };
 
+    // Fronteiras do mapa
     this.matter.add.rectangle(512, 740, 1024, 50, ambienteConfig); 
     this.matter.add.rectangle(512, 25, 1024, 50, ambienteConfig);  
     this.matter.add.rectangle(25, 384, 50, 768, ambienteConfig);  
     this.matter.add.rectangle(999, 384, 50, 768, ambienteConfig);  
 
+    // Plataformas
     this.matter.add.rectangle(250, 450, 300, 40, ambienteConfig); 
     this.matter.add.rectangle(774, 350, 300, 40, ambienteConfig); 
 
@@ -63,7 +67,7 @@ function create() {
     });
 }
 
-function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id) {
+function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id, groupIndex) {
     let lastBody = bodyA;
 
     for (let i = 0; i < numLinks; i++) {
@@ -77,10 +81,10 @@ function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id) {
                 density: 0.005, 
                 frictionAir: 0.02,
                 label: `p${id}_braco`,
-                // COLLISION FILTER: Colide apenas com a categoria do PLAYER (não colide com ambiente)
                 collisionFilter: { 
-                    category: CAT_BRACO,
-                    mask: CAT_PLAYER
+                    category: CAT_PLAYER,
+                    mask: CAT_AMBIENTE | CAT_PLAYER, // Braco colide com cenário e com outro player
+                    group: groupIndex // Evita colidir com o próprio corpo/mão do mesmo jogador
                 }
             });
         }
@@ -95,15 +99,21 @@ function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id) {
 }
 
 function createHeaveHoCharacter(scene, x, y, gamepad, id) {
-    // Jogador colide com Ambiente E com Bracos do outro
-    const playerFilter = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_BRACO | CAT_PLAYER };
+    // Cria um grupo exclusivo negativo para este jogador (ex: p0 não colide internamente consigo mesmo)
+    const playerGroup = scene.matter.world.nextGroup(true);
+    
+    const pFilter = { 
+        category: CAT_PLAYER, 
+        mask: CAT_AMBIENTE | CAT_PLAYER, // Colide com o cenário e com o outro jogador
+        group: playerGroup 
+    };
 
-    const body = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: playerFilter });
-    const leftHand = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: playerFilter });
-    const rightHand = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: playerFilter });
+    const body = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: pFilter });
+    const leftHand = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: pFilter });
+    const rightHand = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: pFilter });
 
-    createArmSegment(scene, body, leftHand, 3, 16, id);
-    createArmSegment(scene, body, rightHand, 3, 16, id);
+    createArmSegment(scene, body, leftHand, 3, 16, id, playerGroup);
+    createArmSegment(scene, body, rightHand, 3, 16, id, playerGroup);
 
     return {
         id: id,
@@ -124,7 +134,6 @@ function update() {
 function isButtonPressed(pad, index) {
     const btn = pad.buttons[index];
     if (!btn) return false;
-    // CORREÇÃO HARDWARE: Se o botão for lido como analógico, 'value > 0.1' detecta o clique perfeitamente
     return btn.pressed || btn.value > 0.1;
 }
 
@@ -132,7 +141,6 @@ function handlePlayerInput(scene, player) {
     const pad = player.pad;
     if (!pad) return;
 
-    // Mapeamentos robustos: Gatilhos Traseiros (6 e 7) ou Botões Superiores (4 e 5)
     const grabbingLeft = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
     const grabbingRight = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
 
