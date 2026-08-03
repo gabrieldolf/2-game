@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Clone Heave Ho - Garra Firme Definitiva</title>
+    <title>Clone Heave Ho - Arte Sólida Completa</title>
     <style>
         body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         canvas { box-shadow: 0 0 20px rgba(0,0,0,0.8); }
@@ -19,10 +19,7 @@ const config = {
     backgroundColor: '#4488aa',
     physics: {
         default: 'matter',
-        matter: {
-            gravity: { y: 1.5 }, 
-            debug: true 
-        }
+        matter: { gravity: { y: 1.5 }, debug: false }
     },
     input: { gamepad: true },
     scene: { preload: preload, create: create, update: update }
@@ -30,186 +27,156 @@ const config = {
 
 const game = new Phaser.Game(config);
 let player1, player2;
-
 const CAT_AMBIENTE = 0x0001;
 const CAT_PLAYER = 0x0002;
 
 function preload() {}
 
 function create() {
-    this.add.text(20, 20, "Garra Corrigida: Comprimento zero impede esticamentos e deformações.", { font: "20px Arial", fill: "#ffffff" });
+    this.add.text(20, 20, "Visual Sólido: Mãos reagem com tons claros ao acionar botões.", { font: "20px Arial", fill: "#ffffff" });
 
     const ambienteConfig = { 
-        isStatic: true, 
-        label: 'ambiente', 
-        friction: 0.5,
-        collisionFilter: { 
-            category: CAT_AMBIENTE,
-            mask: CAT_PLAYER 
-        }
+        isStatic: true, label: 'ambiente', friction: 0.5,
+        collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER }
     };
 
-    // Fronteiras do mapa
-    this.matter.add.rectangle(512, 740, 1024, 50, ambienteConfig); 
-    this.matter.add.rectangle(512, 25, 1024, 50, ambienteConfig);  
-    this.matter.add.rectangle(25, 384, 50, 768, ambienteConfig);  
-    this.matter.add.rectangle(999, 384, 50, 768, ambienteConfig);  
+    const criarPlataforma = (scene, x, y, w, h) => {
+        scene.matter.add.rectangle(x, y, w, h, ambienteConfig);
+        let g = scene.add.graphics();
+        g.fillStyle(0x224466, 1);
+        g.fillRect(x - w/2, y - h/2, w, h);
+    };
 
-    // Plataformas
-    this.matter.add.rectangle(250, 450, 300, 40, ambienteConfig); 
-    this.matter.add.rectangle(774, 350, 300, 40, ambienteConfig); 
+    // Fronteiras e plataformas estáticas do cenário
+    criarPlataforma(this, 512, 740, 1024, 50); 
+    criarPlataforma(this, 512, 25, 1024, 50);  
+    criarPlataforma(this, 25, 384, 50, 768);  
+    criarPlataforma(this, 999, 384, 50, 768);  
+    criarPlataforma(this, 250, 450, 300, 40); 
+    criarPlataforma(this, 774, 350, 300, 40); 
 
     this.input.gamepad.on('down', (pad, button, index) => {
-        if (pad.index === 0 && !player1) player1 = createHeaveHoCharacter(this, 250, 300, pad, 0);
-        if (pad.index === 1 && !player2) player2 = createHeaveHoCharacter(this, 750, 200, pad, 1);
+        if (pad.index === 0 && !player1) player1 = createHeaveHoCharacter(this, 250, 300, pad, 0, 0x00ff00);
+        if (pad.index === 1 && !player2) player2 = createHeaveHoCharacter(this, 750, 200, pad, 1, 0xffff00);
     });
 }
 
-function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id, groupIndex) {
+function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id, groupIndex, listaElos) {
     let lastBody = bodyA;
-
     for (let i = 0; i < numLinks; i++) {
         const isLast = (i === numLinks - 1);
-        let link;
-        
-        if (isLast) {
-            link = bodyB;
-        } else {
-            link = scene.matter.add.rectangle(bodyA.position.x, bodyA.position.y, 10, linkLength, { 
-                density: 0.005, 
-                frictionAir: 0.02,
-                label: `p${id}_braco`,
-                collisionFilter: { 
-                    category: CAT_PLAYER,
-                    mask: CAT_AMBIENTE | CAT_PLAYER, 
-                    group: groupIndex 
-                }
-            });
-        }
+        let link = isLast ? bodyB : scene.matter.add.rectangle(bodyA.position.x, bodyA.position.y, 10, linkLength, { 
+            density: 0.005, frictionAir: 0.02, label: `p${id}_braco`,
+            collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: groupIndex }
+        });
+        if (!isLast) listaElos.push(link);
 
         scene.matter.add.constraint(lastBody, link, linkLength, 1.0, {
             pointA: lastBody === bodyA ? { x: 0, y: 0 } : { x: 0, y: linkLength / 2 },
             pointB: isLast ? { x: 0, y: 0 } : { x: 0, y: -linkLength / 2 }
         });
-
         lastBody = link;
     }
 }
 
-function createHeaveHoCharacter(scene, x, y, gamepad, id) {
+function createHeaveHoCharacter(scene, x, y, gamepad, id, bodyColor) {
     const playerGroup = scene.matter.world.nextGroup(true);
-    
-    const pFilter = { 
-        category: CAT_PLAYER, 
-        mask: CAT_AMBIENTE | CAT_PLAYER, 
-        group: playerGroup 
-    };
+    const pFilter = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: playerGroup };
 
     const body = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: pFilter });
     const leftHand = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: pFilter });
     const rightHand = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: pFilter });
 
-    createArmSegment(scene, body, leftHand, 3, 16, id, playerGroup);
-    createArmSegment(scene, body, rightHand, 3, 16, id, playerGroup);
+    let leftElos = [], rightElos = [];
+    createArmSegment(scene, body, leftHand, 3, 16, id, playerGroup, leftElos);
+    createArmSegment(scene, body, rightHand, 3, 16, id, playerGroup, rightElos);
 
     return {
-        id: id,
-        body: body,
-        leftHand: leftHand,
-        rightHand: rightHand,
-        pad: gamepad,
-        leftJoint: null,
-        rightJoint: null
+        id: id, body: body, leftHand: leftHand, rightHand: rightHand,
+        leftElos: leftElos, rightElos: rightElos, gfx: scene.add.graphics(),
+        bodyColor: bodyColor, pad: gamepad, leftJoint: null, rightJoint: null
     };
 }
 
 function update() {
-    if (player1) handlePlayerInput(this, player1);
-    if (player2) handlePlayerInput(this, player2);
+    if (player1) { handlePlayerInput(this, player1); desenharJogador(player1); }
+    if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
 }
 
 function isButtonPressed(pad, index) {
     const btn = pad.buttons[index];
-    if (!btn) return false;
-    return btn.pressed || btn.value > 0.1;
+    return btn ? (btn.pressed || btn.value > 0.1) : false;
+}
+
+function desenharJogador(player) {
+    const g = player.gfx;
+    g.clear();
+    const pad = player.pad;
+    const grabbingLeft = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
+    const grabbingRight = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
+
+    // Renderização das linhas pretas sólidas para os braços
+    g.lineStyle(12, 0x000000, 1);
+    const desenharFilamento = (elos, mao) => {
+        g.beginPath(); g.moveTo(player.body.position.x, player.body.position.y);
+        elos.forEach(e => g.lineTo(e.position.x, e.position.y));
+        g.lineTo(mao.position.x, mao.position.y); g.strokePath();
+    };
+    desenharFilamento(player.leftElos, player.leftHand);
+    desenharFilamento(player.rightElos, player.rightHand);
+
+    // Desenho dos preenchimentos circulares coloridos
+    g.fillStyle(player.bodyColor, 1);
+    g.fillCircle(player.body.position.x, player.body.position.y, 22);
+
+    g.fillStyle(grabbingLeft ? 0xff8888 : 0xff0000, 1);
+    g.fillCircle(player.leftHand.position.x, player.leftHand.position.y, 14);
+
+    g.fillStyle(grabbingRight ? 0x8888ff : 0x0000ff, 1);
+    g.fillCircle(player.rightHand.position.x, player.rightHand.position.y, 14);
+}
+
+function processarGarra(scene, player, hand, jointKey, isGrabbing, enemyPrefix) {
+    if (isGrabbing && !player[jointKey]) {
+        const bodies = scene.matter.world.localWorld.bodies;
+        const targets = scene.matter.query.region(bodies, {
+            min: { x: hand.position.x - 16, y: hand.position.y - 16 },
+            max: { x: hand.position.x + 16, y: hand.position.y + 16 }
+        });
+        const validTarget = targets.find(b => b.label === 'ambiente' || b.label.startsWith(enemyPrefix));
+        if (validTarget) {
+            player[jointKey] = scene.matter.add.constraint(hand, validTarget, 0, 1.0, {
+                pointA: { x: 0, y: 0 },
+                pointB: { x: hand.position.x - validTarget.position.x, y: hand.position.y - validTarget.position.y }
+            });
+        }
+    } else if (!isGrabbing && player[jointKey]) {
+        scene.matter.world.remove(player[jointKey]);
+        player[jointKey] = null;
+    }
 }
 
 function handlePlayerInput(scene, player) {
     const pad = player.pad;
     if (!pad) return;
 
-    const grabbingLeft = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
-    const grabbingRight = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
-
+    const grabL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
+    const grabR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     const enemyPrefix = player.id === 0 ? "p1_" : "p0_";
 
-    // 1. MOVIMENTO DA MÃO ESQUERDA
     if (pad.leftStick) {
-        const forceX = pad.leftStick.x;
-        const forceY = pad.leftStick.y;
-        if (player.leftJoint) {
-            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.07, y: forceY * 0.07 });
-        } else {
-            scene.matter.body.applyForce(player.leftHand, player.leftHand.position, { x: forceX * 0.018, y: forceY * 0.018 });
-        }
+        let f = player.leftJoint ? player.body : player.leftHand;
+        let m = player.leftJoint ? 0x07 : 0.018;
+        scene.matter.body.applyForce(f, f.position, { x: pad.leftStick.x * m, y: pad.leftStick.y * m });
     }
-
-    // 2. MOVIMENTO DA MÃO DIREITA
     if (pad.rightStick) {
-        const forceX = pad.rightStick.x;
-        const forceY = pad.rightStick.y;
-        if (player.rightJoint) {
-            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.07, y: forceY * 0.07 });
-        } else {
-            scene.matter.body.applyForce(player.rightHand, player.rightHand.position, { x: forceX * 0.018, y: forceY * 0.018 });
-        }
+        let f = player.rightJoint ? player.body : player.rightHand;
+        let m = player.rightJoint ? 0x07 : 0.018;
+        scene.matter.body.applyForce(f, f.position, { x: pad.rightStick.x * m, y: pad.rightStick.y * m });
     }
 
-    // Raio de 16 pixels dá o encaixe perfeito sem soltar fumaça ou deformaçoes
-    const RAIO_DETECCAO = 16;
-
-    // 3. SELETOR DE GARRA - MÃO ESQUERDA
-    if (grabbingLeft && !player.leftJoint) {
-        const bodies = scene.matter.world.localWorld.bodies;
-        const targets = scene.matter.query.region(bodies, {
-            min: { x: player.leftHand.position.x - RAIO_DETECCAO, y: player.leftHand.position.y - RAIO_DETECCAO },
-            max: { x: player.leftHand.position.x + RAIO_DETECCAO, y: player.leftHand.position.y + RAIO_DETECCAO }
-        });
-        
-        const validTarget = targets.find(b => b.label === 'ambiente' || b.label.startsWith(enemyPrefix));
-        
-        if (validTarget) {
-            // CORREÇÃO: length: 0 remove qualquer efeito elástico de distância
-            player.leftJoint = scene.matter.add.constraint(player.leftHand, validTarget, 0, 1.0, {
-                pointA: { x: 0, y: 0 },
-                pointB: { x: player.leftHand.position.x - validTarget.position.x, y: player.leftHand.position.y - validTarget.position.y }
-            });
-        }
-    } else if (!grabbingLeft && player.leftJoint) {
-        scene.matter.world.remove(player.leftJoint);
-        player.leftJoint = null;
-    }
-
-    // 4. SELETOR DE GARRA - MÃO DIREITA
-    if (grabbingRight && !player.rightJoint) {
-        const bodies = scene.matter.world.localWorld.bodies;
-        const targets = scene.matter.query.region(bodies, {
-            min: { x: player.rightHand.position.x - RAIO_DETECCAO, y: player.rightHand.position.y - RAIO_DETECCAO },
-            max: { x: player.rightHand.position.x + RAIO_DETECCAO, y: player.rightHand.position.y + RAIO_DETECCAO }
-        });
-        
-        const validTarget = targets.find(b => b.label === 'ambiente' || b.label.startsWith(enemyPrefix));
-        
-        if (validTarget) {
-            player.rightJoint = scene.matter.add.constraint(player.rightHand, validTarget, 0, 1.0, {
-                pointA: { x: 0, y: 0 },
-                pointB: { x: player.rightHand.position.x - validTarget.position.x, y: player.rightHand.position.y - validTarget.position.y }
-            });
-        }
-    } else if (!grabbingRight && player.rightJoint) {
-        scene.matter.world.remove(player.rightJoint);
-        player.rightJoint = null;
-    }
+    processarGarra(scene, player, player.leftHand, 'leftJoint', grabL, enemyPrefix);
+    processarGarra(scene, player, player.rightHand, 'rightJoint', grabR, enemyPrefix);
 }
 </script>
 </body>
