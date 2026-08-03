@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Clone Heave Ho - Física de Garra Corrigida</title>
+    <title>Clone Heave Ho - Parte 1 de 2</title>
     <style>
         body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         canvas { box-shadow: 0 0 20px rgba(0,0,0,0.8); }
@@ -12,10 +12,15 @@
 <body>
 
 <script>
+const SCREEN_WIDTH = 1024;
+const SCREEN_HEIGHT = 768;
+const WORLD_WIDTH = 3000;
+const WORLD_HEIGHT = 2000;
+
 const config = {
     type: Phaser.AUTO,
-    width: 1024,
-    height: 768,
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
     backgroundColor: '#4488aa',
     physics: {
         default: 'matter',
@@ -26,15 +31,14 @@ const config = {
 };
 
 const game = new Phaser.Game(config);
-let player1, player2;
+let player1, player2, camLeft, camRight, divisorGfx;
 const CAT_AMBIENTE = 0x0001;
 const CAT_PLAYER = 0x0002;
 
 function preload() {}
 
 function create() {
-    this.add.text(20, 20, "Física Suave Ativada: Puxe o analógico para se içar sem disparar.", { font: "20px Arial", fill: "#ffffff" });
-
+    this.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 100, true, true, true, true);
     const ambienteConfig = { 
         isStatic: true, label: 'ambiente', friction: 0.5,
         collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER }
@@ -47,17 +51,36 @@ function create() {
         g.fillRect(x - w/2, y - h/2, w, h);
     };
 
-    // Fronteiras e plataformas estáticas do cenário
-    criarPlataforma(this, 512, 740, 1024, 50); 
-    criarPlataforma(this, 512, 25, 1024, 50);  
-    criarPlataforma(this, 25, 384, 50, 768);  
-    criarPlataforma(this, 999, 384, 50, 768);  
-    criarPlataforma(this, 250, 450, 300, 40); 
-    criarPlataforma(this, 774, 350, 300, 40); 
+    // Fronteiras do mapa estendido
+    criarPlataforma(this, WORLD_WIDTH / 2, WORLD_HEIGHT - 25, WORLD_WIDTH, 50); 
+    criarPlataforma(this, WORLD_WIDTH / 2, 25, WORLD_WIDTH, 50);               
+    criarPlataforma(this, 25, WORLD_HEIGHT / 2, 50, WORLD_HEIGHT);              
+    criarPlataforma(this, WORLD_WIDTH - 25, WORLD_HEIGHT / 2, 50, WORLD_HEIGHT); 
+
+    // Obstáculos e plataformas verticais distribuídas
+    criarPlataforma(this, 400, WORLD_HEIGHT - 300, 300, 40); 
+    criarPlataforma(this, 800, WORLD_HEIGHT - 500, 300, 40); 
+    criarPlataforma(this, 1300, WORLD_HEIGHT - 400, 400, 40); 
+    criarPlataforma(this, 1800, WORLD_HEIGHT - 600, 300, 40); 
+    criarPlataforma(this, 2300, WORLD_HEIGHT - 450, 400, 40); 
+    criarPlataforma(this, 600, WORLD_HEIGHT - 900, 250, 40);
+    criarPlataforma(this, 1100, WORLD_HEIGHT - 1100, 350, 40);
+    criarPlataforma(this, 1600, WORLD_HEIGHT - 950, 200, 40);
+    criarPlataforma(this, 2100, WORLD_HEIGHT - 1200, 400, 40);
+
+    // Estrutura do gerenciamento de câmeras
+    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    camLeft = this.cameras.add(0, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT).setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    camRight = this.cameras.add(SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT).setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+
+    divisorGfx = this.add.graphics().setScrollFactor(0);
+    divisorGfx.fillStyle(0x000000, 1).fillRect(SCREEN_WIDTH / 2 - 4, 0, 8, SCREEN_HEIGHT);
+
+    camLeft.setVisible(false); camRight.setVisible(false); divisorGfx.setVisible(false);
 
     this.input.gamepad.on('down', (pad, button, index) => {
-        if (pad.index === 0 && !player1) player1 = createHeaveHoCharacter(this, 250, 300, pad, 0, 0x00ff00);
-        if (pad.index === 1 && !player2) player2 = createHeaveHoCharacter(this, 750, 200, pad, 1, 0xffff00);
+        if (pad.index === 0 && !player1) player1 = createHeaveHoCharacter(this, 300, WORLD_HEIGHT - 150, pad, 0, 0x00ff00);
+        if (pad.index === 1 && !player2) player2 = createHeaveHoCharacter(this, 500, WORLD_HEIGHT - 150, pad, 1, 0xffff00);
     });
 }
 
@@ -78,7 +101,6 @@ function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id, groupIn
         lastBody = link;
     }
 }
-
 function createHeaveHoCharacter(scene, x, y, gamepad, id, bodyColor) {
     const playerGroup = scene.matter.world.nextGroup(true);
     const pFilter = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: playerGroup };
@@ -101,6 +123,27 @@ function createHeaveHoCharacter(scene, x, y, gamepad, id, bodyColor) {
 function update() {
     if (player1) { handlePlayerInput(this, player1); desenharJogador(player1); }
     if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
+
+    if (player1 && player2) {
+        const dx = player1.body.position.x - player2.body.position.x;
+        const dy = player1.body.position.y - player2.body.position.y;
+        const distancia = Math.sqrt(dx * dx + dy * dy);
+
+        if (distancia > 550) {
+            this.cameras.main.setVisible(false);
+            camLeft.setVisible(true); camRight.setVisible(true); divisorGfx.setVisible(true);
+            camLeft.startFollow(player1.body, true, 0.1, 0.1);
+            camRight.startFollow(player2.body, true, 0.1, 0.1);
+        } else {
+            camLeft.setVisible(false); camRight.setVisible(false); divisorGfx.setVisible(false);
+            this.cameras.main.setVisible(true);
+            const midX = (player1.body.position.x + player2.body.position.x) / 2;
+            const midY = (player1.body.position.y + player2.body.position.y) / 2;
+            this.cameras.main.pan(midX, midY, 0);
+        }
+    } else if (player1) {
+        this.cameras.main.startFollow(player1.body, true, 0.1, 0.1);
+    }
 }
 
 function isButtonPressed(pad, index) {
@@ -109,31 +152,23 @@ function isButtonPressed(pad, index) {
 }
 
 function desenharJogador(player) {
-    const g = player.gfx;
-    g.clear();
+    const g = player.gfx; g.clear();
     const pad = player.pad;
-    const grabbingLeft = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
-    const grabbingRight = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
+    const grabL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
+    const grabR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
 
-    // Renderização das linhas pretas sólidas para os braços
     g.lineStyle(12, 0x000000, 1);
-    const desenharFilamento = (elos, mao) => {
+    const filamento = (elos, mao) => {
         g.beginPath(); g.moveTo(player.body.position.x, player.body.position.y);
         elos.forEach(e => g.lineTo(e.position.x, e.position.y));
         g.lineTo(mao.position.x, mao.position.y); g.strokePath();
     };
-    desenharFilamento(player.leftElos, player.leftHand);
-    desenharFilamento(player.rightElos, player.rightHand);
+    filamento(player.leftElos, player.leftHand);
+    filamento(player.rightElos, player.rightHand);
 
-    // Desenho dos preenchimentos circulares coloridos
-    g.fillStyle(player.bodyColor, 1);
-    g.fillCircle(player.body.position.x, player.body.position.y, 22);
-
-    g.fillStyle(grabbingLeft ? 0xff8888 : 0xff0000, 1);
-    g.fillCircle(player.leftHand.position.x, player.leftHand.position.y, 14);
-
-    g.fillStyle(grabbingRight ? 0x8888ff : 0x0000ff, 1);
-    g.fillCircle(player.rightHand.position.x, player.rightHand.position.y, 14);
+    g.fillStyle(player.bodyColor, 1); g.fillCircle(player.body.position.x, player.body.position.y, 22);
+    g.fillStyle(grabL ? 0xff8888 : 0xff0000, 1); g.fillCircle(player.leftHand.position.x, player.leftHand.position.y, 14);
+    g.fillStyle(grabR ? 0x8888ff : 0x0000ff, 1); g.fillCircle(player.rightHand.position.x, player.rightHand.position.y, 14);
 }
 
 function processarGarra(scene, player, hand, jointKey, isGrabbing, enemyPrefix) {
@@ -151,20 +186,16 @@ function processarGarra(scene, player, hand, jointKey, isGrabbing, enemyPrefix) 
             });
         }
     } else if (!isGrabbing && player[jointKey]) {
-        scene.matter.world.remove(player[jointKey]);
-        player[jointKey] = null;
+        scene.matter.world.remove(player[jointKey]); player[jointKey] = null;
     }
 }
 
 function handlePlayerInput(scene, player) {
-    const pad = player.pad;
-    if (!pad) return;
-
+    const pad = player.pad; if (!pad) return;
     const grabL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
     const grabR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     const enemyPrefix = player.id === 0 ? "p1_" : "p0_";
 
-    // CORREÇÃO: Força de escalada normalizada e suavizada de 7.0 para 0.045
     if (pad.leftStick) {
         let f = player.leftJoint ? player.body : player.leftHand;
         let m = player.leftJoint ? 0.045 : 0.018;
@@ -175,7 +206,6 @@ function handlePlayerInput(scene, player) {
         let m = player.rightJoint ? 0.045 : 0.018;
         scene.matter.body.applyForce(f, f.position, { x: pad.rightStick.x * m, y: pad.rightStick.y * m });
     }
-
     processarGarra(scene, player, player.leftHand, 'leftJoint', grabL, enemyPrefix);
     processarGarra(scene, player, player.rightHand, 'rightJoint', grabR, enemyPrefix);
 }
