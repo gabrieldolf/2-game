@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Clone Heave Ho - Física Ultra Estável</title>
+    <title>Clone Heave Ho - Corrente Pesada Ágil</title>
     <style>
         body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
         canvas { box-shadow: 0 0 20px rgba(0,0,0,0.8); }
@@ -20,8 +20,8 @@ const config = {
     physics: {
         default: 'matter',
         matter: {
-            gravity: { y: 1.5 },
-            debug: true // Mostra o círculo verde do corpo e as garras perfeitamente
+            gravity: { y: 1.5 }, 
+            debug: true 
         }
     },
     input: { gamepad: true },
@@ -30,21 +30,21 @@ const config = {
 
 const game = new Phaser.Game(config);
 let player1, player2;
-const MAX_ARM_LENGTH = 85; // Comprimento máximo natural do braço em pixels
 
 function preload() {}
 
 function create() {
-    this.add.text(20, 20, "Física de Cabo de Aço: Sem tremores. L2/R2 para AGARRAR.", { font: "20px Arial", fill: "#ffffff" });
+    this.add.text(20, 20, "Versão Corrente Retornada: Força das mãos ampliada para maior agilidade.", { font: "20px Arial", fill: "#ffffff" });
 
-    // Fronteiras e plataformas do ambiente
-    this.matter.add.rectangle(512, 740, 1024, 50, { isStatic: true, label: 'ambiente' }); 
-    this.matter.add.rectangle(512, 25, 1024, 50, { isStatic: true, label: 'ambiente' });  
-    this.matter.add.rectangle(25, 384, 50, 768, { isStatic: true, label: 'ambiente' });  
-    this.matter.add.rectangle(999, 384, 50, 768, { isStatic: true, label: 'ambiente' });  
+    // Estruturas fixas do ambiente completo
+    this.matter.add.rectangle(512, 740, 1024, 50, { isStatic: true, label: 'ambiente', friction: 0.5 }); 
+    this.matter.add.rectangle(512, 25, 1024, 50, { isStatic: true, label: 'ambiente', friction: 0.5 });  
+    this.matter.add.rectangle(25, 384, 50, 768, { isStatic: true, label: 'ambiente', friction: 0.5 });  
+    this.matter.add.rectangle(999, 384, 50, 768, { isStatic: true, label: 'ambiente', friction: 0.5 });  
 
-    this.matter.add.rectangle(250, 450, 300, 40, { isStatic: true, label: 'ambiente' }); 
-    this.matter.add.rectangle(774, 350, 300, 40, { isStatic: true, label: 'ambiente' }); 
+    // Plataformas centrais
+    this.matter.add.rectangle(250, 450, 300, 40, { isStatic: true, label: 'ambiente', friction: 0.5 }); 
+    this.matter.add.rectangle(774, 350, 300, 40, { isStatic: true, label: 'ambiente', friction: 0.5 }); 
 
     this.input.gamepad.on('down', (pad, button, index) => {
         if (pad.index === 0 && !player1) {
@@ -56,31 +56,46 @@ function create() {
     });
 }
 
+function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength) {
+    let lastBody = bodyA;
+    const group = scene.matter.world.nextGroup(true); 
+
+    for (let i = 0; i < numLinks; i++) {
+        const isLast = (i === numLinks - 1);
+        let link;
+        
+        if (isLast) {
+            link = bodyB;
+        } else {
+            // Mantemos a densidade e massa da versão pesada que você gostou
+            link = scene.matter.add.rectangle(bodyA.position.x, bodyA.position.y, 10, linkLength, { 
+                density: 0.005, 
+                frictionAir: 0.02,
+                label: 'braco',
+                collisionFilter: { group: group }
+            });
+        }
+
+        // Rigidez absoluta travada para manter a corrente firme
+        scene.matter.add.constraint(lastBody, link, linkLength, 1.0, {
+            pointA: lastBody === bodyA ? { x: 0, y: 0 } : { x: 0, y: linkLength / 2 },
+            pointB: isLast ? { x: 0, y: 0 } : { x: 0, y: -linkLength / 2 }
+        });
+
+        lastBody = link;
+    }
+}
+
 function createHeaveHoCharacter(scene, x, y, gamepad) {
-    // Corpo principal estável e equilibrado
-    const body = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.02, label: 'body' });
+    // Corpo principal com a massa anterior estável
+    const body = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: 'body' });
     
-    // Filtro para evitar que a mão colida com o próprio corpo do jogador
-    const group = scene.matter.world.nextGroup(true);
+    // MODIFICAÇÃO: Reduzido frictionAir das mãos de 0.05 para 0.01 para destravar a agilidade no ar
+    const leftHand = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: 'leftHand' });
+    const rightHand = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: 'rightHand' });
 
-    // Mãos ágeis e leves com colisão contra o cenário ativada
-    const leftHand = scene.matter.add.circle(x - 60, y, 14, { 
-        density: 0.001, 
-        frictionAir: 0.1, 
-        label: 'leftHand',
-        collisionFilter: { group: group }
-    });
-    
-    const rightHand = scene.matter.add.circle(x + 60, y, 14, { 
-        density: 0.001, 
-        frictionAir: 0.1, 
-        label: 'rightHand',
-        collisionFilter: { group: group }
-    });
-
-    // Uma única junta invisível super macia por braço (limita a distância máxima de forma natural)
-    scene.matter.add.constraint(body, leftHand, MAX_ARM_LENGTH, 0.1);
-    scene.matter.add.constraint(body, rightHand, MAX_ARM_LENGTH, 0.1);
+    createArmSegment(scene, body, leftHand, 3, 16);
+    createArmSegment(scene, body, rightHand, 3, 16);
 
     return {
         body: body,
@@ -97,67 +112,45 @@ function update() {
     if (player2) handlePlayerInput(this, player2);
 }
 
-function constrainArm(body, hand) {
-    // Cálculo vetorial manual e limpo para impedir que a mão estique além do braço
-    const dx = hand.position.x - body.position.x;
-    const dy = hand.position.y - body.position.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance > MAX_ARM_LENGTH) {
-        const angle = Math.atan2(dy, dx);
-        // Reposiciona a mão estritamente no limite geométrico do braço
-        game.scene.scenes[0].matter.body.setPosition(hand, {
-            x: body.position.x + Math.cos(angle) * MAX_ARM_LENGTH,
-            y: body.position.y + Math.sin(angle) * MAX_ARM_LENGTH
-        });
-        // Zera a velocidade extra para travar o movimento no limite de forma sólida
-        game.scene.scenes[0].matter.body.setVelocity(hand, { x: body.velocity.x, y: body.velocity.y });
-    }
-}
-
 function handlePlayerInput(scene, player) {
     const pad = player.pad;
     if (!pad) return;
 
-    const grabbingLeft = pad.buttons[6].pressed || pad.buttons[4].pressed;  // L2 ou L1
-    const grabbingRight = pad.buttons[7].pressed || pad.buttons[5].pressed; // R2 ou R1
+    const grabbingLeft = pad.buttons.pressed || pad.buttons.pressed;  // L2 ou L1
+    const grabbingRight = pad.buttons.pressed || pad.buttons.pressed; // R2 ou R1
 
-    // 1. MOVIMENTO DO BRAÇO ESQUERDO
+    // 1. MOVIMENTO DA MÃO ESQUERDA
     if (pad.leftStick) {
         const forceX = pad.leftStick.x;
         const forceY = pad.leftStick.y;
 
         if (player.leftJoint) {
-            // Se fixado, puxa o corpo de forma robusta
-            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.05, y: forceY * 0.05 });
+            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.07, y: forceY * 0.07 });
         } else {
-            // Se livre no ar, empurra a mão de forma leve
-            scene.matter.body.applyForce(player.leftHand, player.leftHand.position, { x: forceX * 0.003, y: forceY * 0.003 });
+            // MODIFICAÇÃO: Força de empurrão livre aumentada de 0.005 para 0.018 (Mais que o triplo de agilidade)
+            scene.matter.body.applyForce(player.leftHand, player.leftHand.position, { x: forceX * 0.018, y: forceY * 0.018 });
         }
     }
 
-    // 2. MOVIMENTO DO BRAÇO DIREITO
+    // 2. MOVIMENTO DA MÃO DIREITA
     if (pad.rightStick) {
         const forceX = pad.rightStick.x;
         const forceY = pad.rightStick.y;
 
         if (player.rightJoint) {
-            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.05, y: forceY * 0.05 });
+            scene.matter.body.applyForce(player.body, player.body.position, { x: forceX * 0.07, y: forceY * 0.07 });
         } else {
-            scene.matter.body.applyForce(player.rightHand, player.rightHand.position, { x: forceX * 0.003, y: forceY * 0.003 });
+            // MODIFICAÇÃO: Força aumentada de 0.005 para 0.018 para vencer o peso dos elos na hora
+            scene.matter.body.applyForce(player.rightHand, player.rightHand.position, { x: forceX * 0.018, y: forceY * 0.018 });
         }
     }
-
-    // Aplica a barreira geométrica rígida que impede o braço de esticar
-    constrainArm(player.body, player.leftHand);
-    constrainArm(player.body, player.rightHand);
 
     // 3. SELETOR DE GARRA - MÃO ESQUERDA
     if (grabbingLeft && !player.leftJoint) {
         const bodies = scene.matter.world.localWorld.bodies;
         const targets = scene.matter.query.region(bodies, {
-            min: { x: player.leftHand.position.x - 22, y: player.leftHand.position.y - 22 },
-            max: { x: player.leftHand.position.x + 22, y: player.leftHand.position.y + 22 }
+            min: { x: player.leftHand.position.x - 20, y: player.leftHand.position.y - 20 },
+            max: { x: player.leftHand.position.x + 20, y: player.leftHand.position.y + 20 }
         });
         
         const staticTarget = targets.find(b => b.isStatic && b.label === 'ambiente');
@@ -177,8 +170,8 @@ function handlePlayerInput(scene, player) {
     if (grabbingRight && !player.rightJoint) {
         const bodies = scene.matter.world.localWorld.bodies;
         const targets = scene.matter.query.region(bodies, {
-            min: { x: player.rightHand.position.x - 22, y: player.rightHand.position.y - 22 },
-            max: { x: player.rightHand.position.x + 22, y: player.rightHand.position.y + 22 }
+            min: { x: player.rightHand.position.x - 20, y: player.rightHand.position.y - 20 },
+            max: { x: player.rightHand.position.x + 20, y: player.rightHand.position.y + 20 }
         });
         
         const staticTarget = targets.find(b => b.isStatic && b.label === 'ambiente');
