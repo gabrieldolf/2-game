@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Clone Heave Ho - Editor Físico Avançado</title>
+    <title>Clone Heave Ho - Editor Corrigido</title>
     <style>
         body { margin: 0; background: #111; display: flex; font-family: Arial, sans-serif; overflow: hidden; height: 100vh; }
         #sidebar { width: 260px; background: #222; color: #fff; padding: 15px; display: flex; flex-direction: column; gap: 12px; border-right: 2px solid #444; z-index: 10; font-size: 13px; box-sizing: border-box; overflow-y: auto; }
@@ -192,13 +192,11 @@ function executarCriacaoObjeto(scene, x, y) {
     scene.matter.body.setInertia(body, c.fixedRotation ? Infinity : body.inertia);
 
     let obj = {
-        body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: h = c.h,
+        body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h,
         gravity: c.gravity, isStatic: c.isStatic, mass: c.mass, air: c.air, bounce: c.bounce, fixedRotation: c.fixedRotation
     };
     listaObjetosEditaveis.push(obj);
 }
-
-// CORREÇÃO: Função renomeada de 'ejecutarSelecaoObjeto' para 'executarSelecaoObjeto' em português
 function executarSelecaoObjeto(scene, x, y, pointer) {
     const clicked = scene.matter.world.localWorld.bodies;
     const target = clicked.find(b => b.label === 'ambiente' && !b.isStaticBorder);
@@ -228,7 +226,7 @@ function selecionarObjetoDoEditor(obj) {
 function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; }
 function atualizarObjetoExistente() {
     if (ferramentaAtual !== 'select' || !objetoSelecionado) return;
-    let obj = objetoSelecionado, scene = game.scene.scenes;
+    let obj = objetoSelecionado, scene = game.scene.scenes[0]; // CORREÇÃO: Indexa explicitamente a cena ativa na posição 0
     const c = extrairCamposPainel();
     
     obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity;
@@ -244,9 +242,11 @@ function atualizarObjetoExistente() {
     obj.body = (obj.shape === 'box') ? scene.matter.add.rectangle(px, py, obj.w, obj.h, conf) : scene.matter.add.circle(px, py, obj.w, conf);
     scene.matter.body.setInertia(obj.body, obj.fixedRotation ? Infinity : obj.body.inertia);
 }
+
+// CORREÇÃO DEFINITIVA: Indexa a primeira cena estável da lista global para remover o erro do 'world'
 function deletarObjetoSelecionado() {
     if (!objetoSelecionado) return;
-    let scene = game.scene.scenes;
+    let scene = game.scene.scenes[0]; 
     scene.matter.world.remove(objetoSelecionado.body);
     objetoSelecionado.gfx.clear();
     listaObjetosEditaveis = listaObjetosEditaveis.filter(o => o !== objetoSelecionado);
@@ -315,7 +315,7 @@ function update() {
         const MAX_VELOCITY = 12;
         let v = obj.body.velocity;
         if (Math.abs(v.x) > MAX_VELOCITY || Math.abs(v.y) > MAX_VELOCITY) {
-            game.scene.scenes.matter.body.setVelocity(obj.body, {
+            game.scene.scenes[0].matter.body.setVelocity(obj.body, {
                 x: Phaser.Math.Clamp(v.x, -MAX_VELOCITY, MAX_VELOCITY),
                 y: Phaser.Math.Clamp(v.y, -MAX_VELOCITY, MAX_VELOCITY)
             });
