@@ -192,12 +192,14 @@ function executarCriacaoObjeto(scene, x, y) {
     scene.matter.body.setInertia(body, c.fixedRotation ? Infinity : body.inertia);
 
     let obj = {
-        body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h,
+        body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: h = c.h,
         gravity: c.gravity, isStatic: c.isStatic, mass: c.mass, air: c.air, bounce: c.bounce, fixedRotation: c.fixedRotation
     };
     listaObjetosEditaveis.push(obj);
 }
-function ejecutarSelecaoObjeto(scene, x, y, pointer) {
+
+// CORREÇÃO: Função renomeada de 'ejecutarSelecaoObjeto' para 'executarSelecaoObjeto' em português
+function executarSelecaoObjeto(scene, x, y, pointer) {
     const clicked = scene.matter.world.localWorld.bodies;
     const target = clicked.find(b => b.label === 'ambiente' && !b.isStaticBorder);
     if (target) {
@@ -251,7 +253,7 @@ function deletarObjetoSelecionado() {
     desmarcarObjetoDoEditor();
 }
 function desenharObjetoEditor(obj) {
-    if (!obj || !obj.body) return; // Proteção visual
+    if (!obj || !obj.body) return;
     let g = obj.gfx; g.clear();
     g.x = obj.body.position.x; g.y = obj.body.position.y; g.rotation = obj.body.angle;
     g.fillStyle((obj === objetoSelecionado) ? 0xffea00 : 0xe67e22, 1);
@@ -307,9 +309,7 @@ function update() {
     if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
     
     listaObjetosEditaveis.forEach(obj => {
-        // CORREÇÃO DEFINITIVA: Bloqueia rigidamente a leitura se o frame apagar ou resetar o objeto durante colisões
         if (!obj || !obj.body) return;
-        
         desenharObjetoEditor(obj);
         
         const MAX_VELOCITY = 12;
