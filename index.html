@@ -242,11 +242,12 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('prop-rotate').checked = obj.fixedRotation;
     atualizarInterfaceForma();
 }
+// CORREÇÃO MÃO INFILTRADA: Zera as seleções ao fechar painéis para evitar sobreposições de render
 function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; }
 function atualizarObjetoExistente() {
     if (ferramentaAtual !== 'select' || !objetoSelecionado) return;
     let obj = objetoSelecionado;
-    let scene = game.scene.getScene('default'); // CORREÇÃO INTERNA: Busca estável via API nativa
+    let scene = game.scene.getScene('default'); 
     const c = extrairCamposPainel();
     
     obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity;
@@ -262,8 +263,6 @@ function atualizarObjetoExistente() {
     obj.body = (obj.shape === 'box') ? scene.matter.add.rectangle(px, py, obj.w, obj.h, conf) : scene.matter.add.circle(px, py, obj.w, conf);
     scene.matter.body.setInertia(obj.body, obj.fixedRotation ? Infinity : obj.body.inertia);
 }
-
-// CORREÇÃO DEFINITIVA DE DELEÇÃO: Captura a instância da cena de forma segura sem depender de arrays dinâmicos vazios
 function deletarObjetoSelecionado() {
     if (!objetoSelecionado) return;
     let scene = game.scene.getScene('default'); 
@@ -283,35 +282,6 @@ function desenharObjetoEditor(obj) {
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
 }
-function executarRespawnIndividual(scene, playerNum) {
-    if (playerNum === 0 && player1) {
-        scene.matter.world.remove(player1.body); scene.matter.world.remove(player1.leftHand); scene.matter.world.remove(player1.rightHand);
-        player1.gfx.clear();
-        player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, player1.pad, 0, 0x00ff00);
-    }
-    if (playerNum === 1 && player2) {
-        scene.matter.world.remove(player2.body); scene.matter.world.remove(player2.leftHand); scene.matter.world.remove(player2.rightHand);
-        player2.gfx.clear();
-        player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, player2.pad, 1, 0xffff00);
-    }
-}
-
-function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id, groupIndex, listaElos) {
-    let lastBody = bodyA;
-    for (let i = 0; i < numLinks; i++) {
-        const isLast = (i === numLinks - 1);
-        let link = isLast ? bodyB : scene.matter.add.rectangle(bodyA.position.x, bodyA.position.y, 10, linkLength, { 
-            density: 0.005, frictionAir: 0.02, label: `p${id}_braco`,
-            collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: groupIndex }
-        });
-        if (!isLast) listaElos.push(link);
-        scene.matter.add.constraint(lastBody, link, linkLength, 1.0, {
-            pointA: lastBody === bodyA ? { x: 0, y: 0 } : { x: 0, y: linkLength / 2 },
-            pointB: isLast ? { x: 0, y: 0 } : { x: 0, y: -linkLength / 2 }
-        });
-        lastBody = link;
-    }
-}
 function createHeaveHoCharacter(scene, x, y, gamepad, id, bodyColor) {
     const playerGroup = scene.matter.world.nextGroup(true);
     const pFilter = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: playerGroup };
@@ -330,10 +300,8 @@ function update() {
     if (player1) { handlePlayerInput(this, player1); desenharJogador(player1); }
     if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
     
-    // CORREÇÃO DEFINITIVA DO LOOP: Checa se o objeto e todas as propriedades da física existem antes de rodar
     listaObjetosEditaveis.forEach(obj => {
         if (!obj || !obj.body || !obj.body.position || !obj.body.velocity) return;
-        
         desenharObjetoEditor(obj);
         
         const MAX_VELOCITY = 12;
