@@ -242,7 +242,6 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('prop-rotate').checked = obj.fixedRotation;
     atualizarInterfaceForma();
 }
-// CORREÇÃO MÃO INFILTRADA: Zera as seleções ao fechar painéis para evitar sobreposições de render
 function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; }
 function atualizarObjetoExistente() {
     if (ferramentaAtual !== 'select' || !objetoSelecionado) return;
@@ -282,6 +281,58 @@ function desenharObjetoEditor(obj) {
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
 }
+// CORREÇÃO: Função declarada ANTES de ser chamada pelo gerador Heave Ho (Garante ordem linear)
+function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id, groupIndex, listaElos) {
+    let lastBody = bodyA;
+    for (let i = 0; i < numLinks; i++) {
+        const isLast = (i === numLinks - 1);
+        let link = isLast ? bodyB : scene.matter.add.rectangle(bodyA.position.x, bodyA.position.y, 10, linkLength, { 
+            density: 0.005, frictionAir: 0.02, label: `p${id}_braco`,
+            collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: groupIndex }
+        });
+        if (!isLast) listaElos.push(link);
+        scene.matter.add.constraint(lastBody, link, linkLength, 1.0, {
+            pointA: lastBody === bodyA ? { x: 0, y: 0 } : { x: 0, y: linkLength / 2 },
+            pointB: isLast ? { x: 0, y: 0 } : { x: 0, y: -linkLength / 2 }
+        });
+        lastBody = link;
+    }
+}
+
+function executarRespawnIndividual(scene, playerNum) {
+    const restricoesNoMundo = scene.matter.world.localWorld.constraints;
+    const prefixoBuscado = `p${playerNum}_`;
+
+    if (playerNum === 0 && player1) {
+        for (let i = restricoesNoMundo.length - 1; i >= 0; i--) {
+            let c = restricoesNoMundo[i];
+            if (c && ((c.bodyA && c.bodyA.label && c.bodyA.label.includes(prefixoBuscado)) || 
+                     (c.bodyB && c.bodyB.label && c.bodyB.label.includes(prefixoBuscado)))) {
+                scene.matter.world.remove(c);
+            }
+        }
+        scene.matter.world.remove(player1.body); scene.matter.world.remove(player1.leftHand); scene.matter.world.remove(player1.rightHand);
+        player1.leftElos.forEach(elo => scene.matter.world.remove(elo));
+        player1.rightElos.forEach(elo => scene.matter.world.remove(elo));
+        player1.gfx.clear();
+        player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, player1.pad, 0, 0x00ff00);
+    }
+    if (playerNum === 1 && player2) {
+        for (let i = restricoesNoMundo.length - 1; i >= 0; i--) {
+            let c = restricoesNoMundo[i];
+            if (c && ((c.bodyA && c.bodyA.label && c.bodyA.label.includes(prefixoBuscado)) || 
+                     (c.bodyB && c.bodyB.label && c.bodyB.label.includes(prefixoBuscado)))) {
+                scene.matter.world.remove(c);
+            }
+        }
+        scene.matter.world.remove(player2.body); scene.matter.world.remove(player2.leftHand); scene.matter.world.remove(player2.rightHand);
+        player2.leftElos.forEach(elo => scene.matter.world.remove(elo));
+        player2.rightElos.forEach(elo => scene.matter.world.remove(elo));
+        player2.gfx.clear();
+        player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, player2.pad, 1, 0xffff00);
+    }
+}
+
 function createHeaveHoCharacter(scene, x, y, gamepad, id, bodyColor) {
     const playerGroup = scene.matter.world.nextGroup(true);
     const pFilter = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: playerGroup };
