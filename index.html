@@ -175,7 +175,7 @@ function extrairCamposPainel() {
         fixedRotation: document.getElementById('prop-rotate').checked
     };
 }
-function executarCriacaoObjeto(scene, x, y) {
+function ejecutarCriacaoObjeto(scene, x, y) {
     let alvoX = x, alvoY = y;
     const c = extrairCamposPainel();
 
@@ -281,58 +281,6 @@ function desenharObjetoEditor(obj) {
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
 }
-// CORREÇÃO: Função declarada ANTES de ser chamada pelo gerador Heave Ho (Garante ordem linear)
-function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id, groupIndex, listaElos) {
-    let lastBody = bodyA;
-    for (let i = 0; i < numLinks; i++) {
-        const isLast = (i === numLinks - 1);
-        let link = isLast ? bodyB : scene.matter.add.rectangle(bodyA.position.x, bodyA.position.y, 10, linkLength, { 
-            density: 0.005, frictionAir: 0.02, label: `p${id}_braco`,
-            collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: groupIndex }
-        });
-        if (!isLast) listaElos.push(link);
-        scene.matter.add.constraint(lastBody, link, linkLength, 1.0, {
-            pointA: lastBody === bodyA ? { x: 0, y: 0 } : { x: 0, y: linkLength / 2 },
-            pointB: isLast ? { x: 0, y: 0 } : { x: 0, y: -linkLength / 2 }
-        });
-        lastBody = link;
-    }
-}
-
-function executarRespawnIndividual(scene, playerNum) {
-    const restricoesNoMundo = scene.matter.world.localWorld.constraints;
-    const prefixoBuscado = `p${playerNum}_`;
-
-    if (playerNum === 0 && player1) {
-        for (let i = restricoesNoMundo.length - 1; i >= 0; i--) {
-            let c = restricoesNoMundo[i];
-            if (c && ((c.bodyA && c.bodyA.label && c.bodyA.label.includes(prefixoBuscado)) || 
-                     (c.bodyB && c.bodyB.label && c.bodyB.label.includes(prefixoBuscado)))) {
-                scene.matter.world.remove(c);
-            }
-        }
-        scene.matter.world.remove(player1.body); scene.matter.world.remove(player1.leftHand); scene.matter.world.remove(player1.rightHand);
-        player1.leftElos.forEach(elo => scene.matter.world.remove(elo));
-        player1.rightElos.forEach(elo => scene.matter.world.remove(elo));
-        player1.gfx.clear();
-        player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, player1.pad, 0, 0x00ff00);
-    }
-    if (playerNum === 1 && player2) {
-        for (let i = restricoesNoMundo.length - 1; i >= 0; i--) {
-            let c = restricoesNoMundo[i];
-            if (c && ((c.bodyA && c.bodyA.label && c.bodyA.label.includes(prefixoBuscado)) || 
-                     (c.bodyB && c.bodyB.label && c.bodyB.label.includes(prefixoBuscado)))) {
-                scene.matter.world.remove(c);
-            }
-        }
-        scene.matter.world.remove(player2.body); scene.matter.world.remove(player2.leftHand); scene.matter.world.remove(player2.rightHand);
-        player2.leftElos.forEach(elo => scene.matter.world.remove(elo));
-        player2.rightElos.forEach(elo => scene.matter.world.remove(elo));
-        player2.gfx.clear();
-        player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, player2.pad, 1, 0xffff00);
-    }
-}
-
 function createHeaveHoCharacter(scene, x, y, gamepad, id, bodyColor) {
     const playerGroup = scene.matter.world.nextGroup(true);
     const pFilter = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: playerGroup };
@@ -347,18 +295,31 @@ function createHeaveHoCharacter(scene, x, y, gamepad, id, bodyColor) {
         gfx: scene.add.graphics().setDepth(10), bodyColor: bodyColor, pad: gamepad, leftJoint: null, rightJoint: null
     };
 }
+
 function update() {
+    let sceneActive = game.scene.getScene('default');
     if (player1) { handlePlayerInput(this, player1); desenharJogador(player1); }
     if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
     
+    let garrasAtivas = [];
+    if (player1) { if (player1.leftJoint) garrasAtivas.push(player1.leftJointTarget); if (player1.rightJoint) garrasAtivas.push(player1.rightJointTarget); }
+    if (player2) { if (player2.leftJoint) garrasAtivas.push(player2.leftJointTarget); if (player2.rightJoint) garrasAtivas.push(player2.rightJointTarget); }
+
     listaObjetosEditaveis.forEach(obj => {
         if (!obj || !obj.body || !obj.body.position || !obj.body.velocity) return;
         desenharObjetoEditor(obj);
         
-        const MAX_VELOCITY = 12;
+        const sendoAgarrado = garrasAtivas.includes(obj.body);
+        if (sendoAgarrado && !obj.isStatic) {
+            obj.body.frictionAir = 0.45;
+            obj.body.frictionStatic = 1.0;
+        } else if (!obj.isStatic) {
+            obj.body.frictionAir = obj.air;
+        }
+
+        const MAX_VELOCITY = sendoAgarrado ? 6 : 14;
         let v = obj.body.velocity;
         if (Math.abs(v.x) > MAX_VELOCITY || Math.abs(v.y) > MAX_VELOCITY) {
-            let sceneActive = game.scene.getScene('default');
             if (sceneActive && sceneActive.matter && sceneActive.matter.body) {
                 sceneActive.matter.body.setVelocity(obj.body, {
                     x: Phaser.Math.Clamp(v.x, -MAX_VELOCITY, MAX_VELOCITY),
@@ -366,8 +327,10 @@ function update() {
                 });
             }
         }
-        if (obj.body.angularVelocity > 0.15) obj.body.angularVelocity = 0.15;
-        if (obj.body.angularVelocity < -0.15) obj.body.angularVelocity = -0.15;
+        
+        const MAX_ROTATION = sendoAgarrado ? 0.05 : 0.2;
+        if (obj.body.angularVelocity > MAX_ROTATION) obj.body.angularVelocity = MAX_ROTATION;
+        if (obj.body.angularVelocity < -MAX_ROTATION) obj.body.angularVelocity = -MAX_ROTATION;
     });
 
     if (player1 && player2) {
@@ -379,7 +342,9 @@ function update() {
         this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, zoom, 0.05));
     } else if (player1) { this.cameras.main.centerOn(player1.body.position.x, player1.body.position.y); }
 }
+
 function isButtonPressed(pad, index) { const btn = pad.buttons[index]; return btn ? (btn.pressed || btn.value > 0.1) : false; }
+
 function desenharJogador(player) {
     const g = player.gfx; g.clear(); const pad = player.pad;
     const l = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), r = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
@@ -393,6 +358,7 @@ function desenharJogador(player) {
     g.fillStyle(l ? 0xff8888 : 0xff0000, 1).fillCircle(player.leftHand.position.x, player.leftHand.position.y, 14);
     g.fillStyle(r ? 0x8888ff : 0x0000ff, 1).fillCircle(player.rightHand.position.x, player.rightHand.position.y, 14);
 }
+
 function processarGarra(scene, player, hand, jointKey, isGrabbing, enemyPrefix) {
     if (isGrabbing && !player[jointKey]) {
         const targets = scene.matter.query.region(scene.matter.world.localWorld.bodies, {
@@ -411,17 +377,26 @@ function processarGarra(scene, player, hand, jointKey, isGrabbing, enemyPrefix) 
         player[jointKey + 'Target'] = null;
     }
 }
+
 function handlePlayerInput(scene, player) {
     const pad = player.pad; if (!pad) return;
     const l = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), r = isButtonPressed(pad, 7) || isButtonPressed(pad, 5), enemy = player.id === 0 ? "p1_" : "p0_";
     if (isButtonPressed(pad, 8)) { executarRespawnIndividual(scene, player.id); return; }
+
+    let mL = 1.0, mR = 1.0;
+    if (player.leftJoint && player.rightJoint && player.leftJointTarget === player.rightJointTarget && !player.leftJointTarget.isStatic) {
+        mL = 0.5; mR = 0.5;
+    }
 
     if (pad.leftStick) {
         let f = player.leftJoint ? player.body : player.leftHand;
         let m = player.leftJoint ? 0.045 : 0.018;
         scene.matter.body.applyForce(f, f.position, { x: pad.leftStick.x * m, y: pad.leftStick.y * m });
         if (player.leftJoint && player.leftJointTarget && !player.leftJointTarget.isStatic) {
-            scene.matter.body.applyForce(player.leftJointTarget, player.leftHand.position, { x: -pad.leftStick.x * m * 0.9, y: -pad.leftStick.y * m * 0.9 });
+            scene.matter.body.applyForce(player.leftJointTarget, player.leftHand.position, { 
+                x: -pad.leftStick.x * m * 0.9 * mL, 
+                y: -pad.leftStick.y * m * 0.9 * mL 
+            });
         }
     }
     if (pad.rightStick) {
@@ -429,7 +404,10 @@ function handlePlayerInput(scene, player) {
         let m = player.rightJoint ? 0.045 : 0.018;
         scene.matter.body.applyForce(f, f.position, { x: pad.rightStick.x * m, y: pad.rightStick.y * m });
         if (player.rightJoint && player.rightJointTarget && !player.rightJointTarget.isStatic) {
-            scene.matter.body.applyForce(player.rightJointTarget, player.rightHand.position, { x: -pad.rightStick.x * m * 0.9, y: -pad.rightStick.y * m * 0.9 });
+            scene.matter.body.applyForce(player.rightJointTarget, player.rightHand.position, { 
+                x: -pad.rightStick.x * m * 0.9 * mR, 
+                y: -pad.rightStick.y * m * 0.9 * mR 
+            });
         }
     }
     processarGarra(scene, player, player.leftHand, 'leftJoint', l, enemy);
