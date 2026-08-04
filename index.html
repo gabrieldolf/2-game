@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Editor Robusto</title>
+    <title>Heave Ho - Hitbox Esférica Perfeita</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -100,7 +100,7 @@ function alternarVisibilidadeGrade() {
 }
 function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorpo) {
     let finalX = x, finalY = y; const DISTANCIA_IMA = 20, corpos = scene.matter.world.localWorld.bodies;
-    const r = shape === 'circle' ? w : w/2, mE = x - r, mD = x + r;
+    const r = w, mE = x - r, mD = x + r;
     const mT = y - (shape === 'circle' ? w : h/2), mB = y + (shape === 'circle' ? w : h/2);
     for (let i = 0; i < corpos.length; i++) {
         let b = corpos[i]; if (!b || b === ignorarCorpo || b.label !== 'ambiente') continue;
@@ -145,7 +145,14 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
     let prox = null, mDist = Infinity;
     bodies.forEach(b => {
         let dist = Math.sqrt((b.position.x - x)**2 + (b.position.y - y)**2);
-        if (x >= b.bounds.min.x && x <= b.bounds.max.x && y >= b.bounds.min.y && y <= b.bounds.max.y && dist < mDist) { mDist = dist; prox = listaObjetosEditaveis.find(o => o && o.body === b); }
+        let objRef = listaObjetosEditaveis.find(o => o && o.body === b);
+        if (objRef) {
+            // CORREÇÃO: Validação matemática radial estrita impede cliques fora do círculo visual
+            let dentro = false;
+            if (objRef.shape === 'circle') dentro = (dist <= objRef.w);
+            else dentro = (x >= b.bounds.min.x && x <= b.bounds.max.x && y >= b.bounds.min.y && y <= b.bounds.max.y);
+            if (dentro && dist < mDist) { mDist = dist; prox = objRef; }
+        }
     });
     if (prox) selecionarObjetoDoEditor(prox); else if (!pointer.leftButtonDown()) desmarcarObjetoDoEditor();
 }
@@ -232,7 +239,16 @@ function desenharJogador(p) {
 }
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
-        const t = s.matter.query.region(s.matter.world.localWorld.bodies, { min: { x: h.position.x - 16, y: h.position.y - 16 }, max: { x: h.position.x + 16, y: h.position.y + 16 } }).find(b => b.label === 'ambiente' || b.label.startsWith(enemy));
+        // CORREÇÃO: O sensor de proximidade radial estrita respeita o contorno circular real de esferas dinâmicas
+        const t = s.matter.query.region(s.matter.world.localWorld.bodies, { min: { x: h.position.x - 16, y: h.position.y - 16 }, max: { x: h.position.x + 16, y: h.position.y + 16 } }).find(b => {
+            if (b.label !== 'ambiente' && !b.label.startsWith(enemy)) return false;
+            let objRef = listaObjetosEditaveis.find(o => o && o.body === b);
+            if (objRef && objRef.shape === 'circle') {
+                let distMaoEsfera = Math.sqrt((b.position.x - h.position.x)**2 + (b.position.y - h.position.y)**2);
+                return (distMaoEsfera <= objRef.w + 16); // 16px de tolerância estrita de toque de pele
+            }
+            return true;
+        });
         if (t) { p[jKey] = s.matter.add.constraint(h, t, 0, 1.0, { pointA: { x:0, y:0 }, pointB: { x: h.position.x - t.position.x, y: h.position.y - t.position.y } }); p[jKey + 'Target'] = t; }
     } else if (!grab && p[jKey]) { s.matter.world.remove(p[jKey]); p[jKey] = null; p[jKey + 'Target'] = null; }
 }
