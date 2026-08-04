@@ -93,7 +93,6 @@ function create() {
     }, this);
     
     this.input.on('pointermove', function(p) {
-        // MUDANÇA 3: Apenas objetos selecionados sofrem auto alinhamento ao mover
         if (ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
             let pos = { x: p.worldX, y: p.worldY };
             if (document.getElementById('prop-snap-active').checked) {
@@ -178,7 +177,6 @@ function executarCriacaoObjeto(scene, x, y) {
     let alvoX = x, alvoY = y;
     const c = extrairCamposPainel();
 
-    // MUDANÇA 3: Apenas objetos criados sofrem auto alinhamento
     if (document.getElementById('prop-snap-active').checked) {
         let pos = calcularAlinhamentoPorProximidade(scene, alvoX, alvoY, c.w, c.h, c.shape, null);
         alvoX = pos.x; alvoY = pos.y;
@@ -199,7 +197,7 @@ function executarCriacaoObjeto(scene, x, y) {
     };
     listaObjetosEditaveis.push(obj);
 }
-function executarSelecaoObjeto(scene, x, y, pointer) {
+function ejecutarSelecaoObjeto(scene, x, y, pointer) {
     const clicked = scene.matter.world.localWorld.bodies;
     const target = clicked.find(b => b.label === 'ambiente' && !b.isStaticBorder);
     if (target) {
@@ -226,8 +224,6 @@ function selecionarObjetoDoEditor(obj) {
     atualizarInterfaceForma();
 }
 function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; }
-
-// MUDANÇA 2: Atualiza rigidamente o formato, tamanho e a posição das hitbox em tempo real
 function atualizarObjetoExistente() {
     if (ferramentaAtual !== 'select' || !objetoSelecionado) return;
     let obj = objetoSelecionado, scene = game.scene.scenes;
@@ -246,8 +242,6 @@ function atualizarObjetoExistente() {
     obj.body = (obj.shape === 'box') ? scene.matter.add.rectangle(px, py, obj.w, obj.h, conf) : scene.matter.add.circle(px, py, obj.w, conf);
     scene.matter.body.setInertia(obj.body, obj.fixedRotation ? Infinity : obj.body.inertia);
 }
-
-// CORREÇÃO 1: Mapeia o contexto estável correto das cenas ativas para a exclusão sem erros
 function deletarObjetoSelecionado() {
     if (!objetoSelecionado) return;
     let scene = game.scene.scenes;
@@ -257,6 +251,7 @@ function deletarObjetoSelecionado() {
     desmarcarObjetoDoEditor();
 }
 function desenharObjetoEditor(obj) {
+    if (!obj || !obj.body) return; // Proteção visual
     let g = obj.gfx; g.clear();
     g.x = obj.body.position.x; g.y = obj.body.position.y; g.rotation = obj.body.angle;
     g.fillStyle((obj === objetoSelecionado) ? 0xffea00 : 0xe67e22, 1);
@@ -311,9 +306,10 @@ function update() {
     if (player1) { handlePlayerInput(this, player1); desenharJogador(player1); }
     if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
     
-    // MUDANÇA 5: Limita a velocidade máxima linear e angular de todos os objetos editáveis
     listaObjetosEditaveis.forEach(obj => {
-        if (!obj) return;
+        // CORREÇÃO DEFINITIVA: Bloqueia rigidamente a leitura se o frame apagar ou resetar o objeto durante colisões
+        if (!obj || !obj.body) return;
+        
         desenharObjetoEditor(obj);
         
         const MAX_VELOCITY = 12;
@@ -361,7 +357,6 @@ function processarGarra(scene, player, hand, jointKey, isGrabbing, enemyPrefix) 
             player[jointKey] = scene.matter.add.constraint(hand, valid, 0, 1.0, {
                 pointA: { x: 0, y: 0 }, pointB: { x: hand.position.x - valid.position.x, y: hand.position.y - valid.position.y }
             });
-            // Salva qual corpo real a mão agarrou
             player[jointKey + 'Target'] = valid;
         }
     } else if (!isGrabbing && player[jointKey]) {
@@ -375,12 +370,10 @@ function handlePlayerInput(scene, player) {
     const l = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), r = isButtonPressed(pad, 7) || isButtonPressed(pad, 5), enemy = player.id === 0 ? "p1_" : "p0_";
     if (isButtonPressed(pad, 8)) { executarRespawnIndividual(scene, player.id); return; }
 
-    // MUDANÇA 4: Aplica força oposta (Ação e Reação) se o objeto agarrado for dinâmico/móvel
     if (pad.leftStick) {
         let f = player.leftJoint ? player.body : player.leftHand;
         let m = player.leftJoint ? 0.045 : 0.018;
         scene.matter.body.applyForce(f, f.position, { x: pad.leftStick.x * m, y: pad.leftStick.y * m });
-        
         if (player.leftJoint && player.leftJointTarget && !player.leftJointTarget.isStatic) {
             scene.matter.body.applyForce(player.leftJointTarget, player.leftHand.position, { x: -pad.leftStick.x * m * 0.9, y: -pad.leftStick.y * m * 0.9 });
         }
@@ -389,7 +382,6 @@ function handlePlayerInput(scene, player) {
         let f = player.rightJoint ? player.body : player.rightHand;
         let m = player.rightJoint ? 0.045 : 0.018;
         scene.matter.body.applyForce(f, f.position, { x: pad.rightStick.x * m, y: pad.rightStick.y * m });
-        
         if (player.rightJoint && player.rightJointTarget && !player.rightJointTarget.isStatic) {
             scene.matter.body.applyForce(player.rightJointTarget, player.rightHand.position, { x: -pad.rightStick.x * m * 0.9, y: -pad.rightStick.y * m * 0.9 });
         }
