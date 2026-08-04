@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Clone Heave Ho - Editor com Alinhamento por Proximidade</title>
+    <title>Clone Heave Ho - Editor Físico Avançado</title>
     <style>
         body { margin: 0; background: #111; display: flex; font-family: Arial, sans-serif; overflow: hidden; height: 100vh; }
         #sidebar { width: 260px; background: #222; color: #fff; padding: 15px; display: flex; flex-direction: column; gap: 12px; border-right: 2px solid #444; z-index: 10; font-size: 13px; box-sizing: border-box; overflow-y: auto; }
@@ -24,8 +24,8 @@
 <div id="sidebar">
     <h2>EDITOR</h2>
     <div class="section">
-        <h3>Instruções Gamepad</h3>
-        <p style="font-size:11px; color:#aaa; margin:0;">Pressione o botão <b>Select / Share / Back</b> no seu controle para se matar e renascer (Respawn).</p>
+        <h3>Controles Globais</h3>
+        <p style="font-size:11px; color:#aaa; margin:0;">Pressione <b>Select/Back</b> no gamepad para Respawn do seu personagem.</p>
     </div>
     <div>
         <h3>Modo de Operação</h3>
@@ -33,10 +33,10 @@
         <button id="btn-select" style="margin-top:5px;" onclick="setFerramenta('select')">Selecionar e Mover</button>
     </div>
     <div class="section">
-        <h3>Auxílios de Posicionamento</h3>
-        <div class="prop-row"><label>Mostrar Grade Visual:</label><input type="checkbox" id="prop-grid-active" onchange="alternarVisibilidadeGrade()"></div>
-        <div class="prop-row"><label>Tamanho da Grade:</label><input type="number" id="prop-grid-size" value="64" min="8" max="128" step="8" onchange="alternarVisibilidadeGrade()"></div>
-        <div class="prop-row" style="margin-top:5px; border-top:1px dashed #444; padding-top:5px;"><label style="color:#55ff55; font-weight:bold;">Alinhamento por Borda (Ímã):</label><input type="checkbox" id="prop-snap-active" checked></div>
+        <h3>Auxílios Visuais</h3>
+        <div class="prop-row"><label>Mostrar Grade:</label><input type="checkbox" id="prop-grid-active" onchange="alternarVisibilidadeGrade()"></div>
+        <div class="prop-row"><label>Tamanho Grade:</label><input type="number" id="prop-grid-size" value="64" min="8" max="128" step="8" onchange="alternarVisibilidadeGrade()"></div>
+        <div class="prop-row" style="margin-top:5px; border-top:1px dashed #444; padding-top:5px;"><label style="color:#55ff55; font-weight:bold;">Alinhamento por Borda:</label><input type="checkbox" id="prop-snap-active" checked></div>
     </div>
     <div class="section">
         <h3>Configuração do Objeto</h3>
@@ -45,7 +45,7 @@
         <div class="prop-row"><label>Forma Geométrica:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Cubo/Retângulo</option><option value="circle">Esfera/Círculo</option></select></div>
         <div class="prop-row" id="row-w"><label id="label-w">Largura (px):</label><input type="number" id="prop-w" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row" id="row-h"><label>Altura (px):</label><input type="number" id="prop-h" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
-        <div class="prop-row"><label>Afetado por Gravidade:</label><input type="checkbox" id="prop-gravity" onchange="atualizarObjetoExistente()"></div>
+        <div class="prop-row"><label>Gravidade:</label><input type="checkbox" id="prop-gravity" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row"><label>Fixo (Estático):</label><input type="checkbox" id="prop-static" checked onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row"><label>Peso (Massa):</label><input type="number" id="prop-mass" value="1.0" step="0.1" min="0.01" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row"><label>Arrasto do Ar:</label><input type="number" id="prop-air" value="0.02" step="0.01" min="0" max="1" onchange="atualizarObjetoExistente()"></div>
@@ -78,6 +78,7 @@ function create() {
     
     const borda = (s, x, y, w, h) => {
         let b = s.matter.add.rectangle(x, y, w, h, ambConf);
+        b.isStaticBorder = true;
         bordasFixasDoCenario.push(b);
         s.add.graphics().fillStyle(0x1a1a1a, 1).fillRect(x - w/2, y - h/2, w, h).setDepth(2);
     };
@@ -92,14 +93,12 @@ function create() {
     }, this);
     
     this.input.on('pointermove', function(p) {
+        // MUDANÇA 3: Apenas objetos selecionados sofrem auto alinhamento ao mover
         if (ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
             let pos = { x: p.worldX, y: p.worldY };
-            
-            // CORREÇÃO 4: Aplica o ímã magnético automático de aproximação por borda se estiver ativado
             if (document.getElementById('prop-snap-active').checked) {
                 pos = calcularAlinhamentoPorProximidade(this, pos.x, pos.y, objetoSelecionado.w, objetoSelecionado.h, objetoSelecionado.shape, objetoSelecionado.body);
             }
-            
             this.matter.body.setPosition(objetoSelecionado.body, { x: pos.x, y: pos.y });
             this.matter.body.setVelocity(objetoSelecionado.body, { x: 0, y: 0 });
         }
@@ -121,13 +120,10 @@ function alternarVisibilidadeGrade() {
     for (let y = 0; y < WORLD_HEIGHT; y += gSize) gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
 }
 
-// CORREÇÃO 4: Calcula se o objeto está perto o bastante das bordas de outros blocos e aplica o travamento imã
 function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorpo) {
     let finalX = x, finalY = y;
-    const DISTANCIA_IMA = 20; // Distância em pixels para o imã ser ativado
+    const DISTANCIA_IMA = 20;
     const corposNoMundo = scene.matter.world.localWorld.bodies;
-
-    // Estrutura a caixa delimitadora (AABB) do bloco que está sendo criado/movido
     const r = shape === 'circle' ? w : w / 2;
     const meuEsquerda = x - r, meuDireita = x + r;
     const meuTopo = y - (shape === 'circle' ? w : h / 2), meuBase = y + (shape === 'circle' ? w : h / 2);
@@ -136,16 +132,13 @@ function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorp
         let b = corposNoMundo[i];
         if (b === ignorarCorpo || b.label === 'leftHand' || b.label === 'rightHand' || b.label.includes('braco') || b.label.includes('body')) continue;
 
-        // Extrai as fronteiras do objeto colidido
         const oEsquerda = b.bounds.min.x, oDireita = b.bounds.max.x;
         const oTopo = b.bounds.min.y, oBase = b.bounds.max.y;
 
-        // Verifica se há sobreposição horizontal parcial para alinhar verticalmente
         if (meuDireita >= oEsquerda - DISTANCIA_IMA && meuEsquerda <= oDireita + DISTANCIA_IMA) {
             if (Math.abs(meuBase - oTopo) < DISTANCIA_IMA) { finalY = oTopo - (shape === 'circle' ? w : h / 2); break; }
             if (Math.abs(meuTopo - oBase) < DISTANCIA_IMA) { finalY = oBase + (shape === 'circle' ? w : h / 2); break; }
         }
-        // Verifica se há sobreposição vertical parcial para alinhar horizontalmente
         if (meuBase >= oTopo - DISTANCIA_IMA && meuTopo <= oBase + DISTANCIA_IMA) {
             if (Math.abs(meuDireita - oEsquerda) < DISTANCIA_IMA) { finalX = oEsquerda - r; break; }
             if (Math.abs(meuEsquerda - oDireita) < DISTANCIA_IMA) { finalX = oDireita + r; break; }
@@ -185,6 +178,7 @@ function executarCriacaoObjeto(scene, x, y) {
     let alvoX = x, alvoY = y;
     const c = extrairCamposPainel();
 
+    // MUDANÇA 3: Apenas objetos criados sofrem auto alinhamento
     if (document.getElementById('prop-snap-active').checked) {
         let pos = calcularAlinhamentoPorProximidade(scene, alvoX, alvoY, c.w, c.h, c.shape, null);
         alvoX = pos.x; alvoY = pos.y;
@@ -206,8 +200,8 @@ function executarCriacaoObjeto(scene, x, y) {
     listaObjetosEditaveis.push(obj);
 }
 function executarSelecaoObjeto(scene, x, y, pointer) {
-    const clicked = scene.matter.query.point(scene.matter.world.localWorld.bodies, { x: x, y: y });
-    const target = clicked.find(b => b.label === 'ambiente' && !bordasFixasDoCenario.includes(b));
+    const clicked = scene.matter.world.localWorld.bodies;
+    const target = clicked.find(b => b.label === 'ambiente' && !b.isStaticBorder);
     if (target) {
         let encontrado = listaObjetosEditaveis.find(o => o.body === target);
         if (encontrado) selecionarObjetoDoEditor(encontrado);
@@ -232,14 +226,19 @@ function selecionarObjetoDoEditor(obj) {
     atualizarInterfaceForma();
 }
 function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; }
+
+// MUDANÇA 2: Atualiza rigidamente o formato, tamanho e a posição das hitbox em tempo real
 function atualizarObjetoExistente() {
     if (ferramentaAtual !== 'select' || !objetoSelecionado) return;
     let obj = objetoSelecionado, scene = game.scene.scenes;
     const c = extrairCamposPainel();
+    
     obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity;
     obj.isStatic = c.isStatic; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce; obj.fixedRotation = c.fixedRotation;
+
     const px = obj.body.position.x, py = obj.body.position.y;
     scene.matter.world.remove(obj.body);
+    
     let conf = {
         isStatic: obj.isStatic, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass,
         friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE }
@@ -247,9 +246,12 @@ function atualizarObjetoExistente() {
     obj.body = (obj.shape === 'box') ? scene.matter.add.rectangle(px, py, obj.w, obj.h, conf) : scene.matter.add.circle(px, py, obj.w, conf);
     scene.matter.body.setInertia(obj.body, obj.fixedRotation ? Infinity : obj.body.inertia);
 }
+
+// CORREÇÃO 1: Mapeia o contexto estável correto das cenas ativas para a exclusão sem erros
 function deletarObjetoSelecionado() {
     if (!objetoSelecionado) return;
-    game.scene.scenes.matter.world.remove(objetoSelecionado.body);
+    let scene = game.scene.scenes;
+    scene.matter.world.remove(objetoSelecionado.body);
     objetoSelecionado.gfx.clear();
     listaObjetosEditaveis = listaObjetosEditaveis.filter(o => o !== objetoSelecionado);
     desmarcarObjetoDoEditor();
@@ -262,7 +264,6 @@ function desenharObjetoEditor(obj) {
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
 }
-// CORREÇÃO 1 e 2: Respawn individual por controle usando a cena instanciada correta do Phaser
 function executarRespawnIndividual(scene, playerNum) {
     if (playerNum === 0 && player1) {
         scene.matter.world.remove(player1.body); scene.matter.world.remove(player1.leftHand); scene.matter.world.remove(player1.rightHand);
@@ -309,7 +310,24 @@ function createHeaveHoCharacter(scene, x, y, gamepad, id, bodyColor) {
 function update() {
     if (player1) { handlePlayerInput(this, player1); desenharJogador(player1); }
     if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
-    listaObjetosEditaveis.forEach(obj => obj && desenharObjetoEditor(obj));
+    
+    // MUDANÇA 5: Limita a velocidade máxima linear e angular de todos os objetos editáveis
+    listaObjetosEditaveis.forEach(obj => {
+        if (!obj) return;
+        desenharObjetoEditor(obj);
+        
+        const MAX_VELOCITY = 12;
+        let v = obj.body.velocity;
+        if (Math.abs(v.x) > MAX_VELOCITY || Math.abs(v.y) > MAX_VELOCITY) {
+            game.scene.scenes.matter.body.setVelocity(obj.body, {
+                x: Phaser.Math.Clamp(v.x, -MAX_VELOCITY, MAX_VELOCITY),
+                y: Phaser.Math.Clamp(v.y, -MAX_VELOCITY, MAX_VELOCITY)
+            });
+        }
+        if (obj.body.angularVelocity > 0.15) obj.body.angularVelocity = 0.15;
+        if (obj.body.angularVelocity < -0.15) obj.body.angularVelocity = -0.15;
+    });
+
     if (player1 && player2) {
         const midX = (player1.body.position.x + player2.body.position.x) / 2, midY = (player1.body.position.y + player2.body.position.y) / 2;
         let zoom = Math.min(SCREEN_WIDTH / (Math.abs(player1.body.position.x - player2.body.position.x) + 250), SCREEN_HEIGHT / (Math.abs(player1.body.position.y - player2.body.position.y) + 250));
@@ -343,26 +361,38 @@ function processarGarra(scene, player, hand, jointKey, isGrabbing, enemyPrefix) 
             player[jointKey] = scene.matter.add.constraint(hand, valid, 0, 1.0, {
                 pointA: { x: 0, y: 0 }, pointB: { x: hand.position.x - valid.position.x, y: hand.position.y - valid.position.y }
             });
+            // Salva qual corpo real a mão agarrou
+            player[jointKey + 'Target'] = valid;
         }
-    } else if (!isGrabbing && player[jointKey]) { scene.matter.world.remove(player[jointKey]); player[jointKey] = null; }
+    } else if (!isGrabbing && player[jointKey]) {
+        scene.matter.world.remove(player[jointKey]);
+        player[jointKey] = null;
+        player[jointKey + 'Target'] = null;
+    }
 }
 function handlePlayerInput(scene, player) {
     const pad = player.pad; if (!pad) return;
     const l = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), r = isButtonPressed(pad, 7) || isButtonPressed(pad, 5), enemy = player.id === 0 ? "p1_" : "p0_";
-    
-    // CORREÇÃO 2: Captura o botão 8 (Select / Share / Back) para executar a rotina de morte individual isolada
-    if (isButtonPressed(pad, 8)) {
-        executarRespawnIndividual(scene, player.id);
-        return;
-    }
+    if (isButtonPressed(pad, 8)) { executarRespawnIndividual(scene, player.id); return; }
 
+    // MUDANÇA 4: Aplica força oposta (Ação e Reação) se o objeto agarrado for dinâmico/móvel
     if (pad.leftStick) {
-        let f = player.leftJoint ? player.body : player.leftHand, m = player.leftJoint ? 0.045 : 0.018;
+        let f = player.leftJoint ? player.body : player.leftHand;
+        let m = player.leftJoint ? 0.045 : 0.018;
         scene.matter.body.applyForce(f, f.position, { x: pad.leftStick.x * m, y: pad.leftStick.y * m });
+        
+        if (player.leftJoint && player.leftJointTarget && !player.leftJointTarget.isStatic) {
+            scene.matter.body.applyForce(player.leftJointTarget, player.leftHand.position, { x: -pad.leftStick.x * m * 0.9, y: -pad.leftStick.y * m * 0.9 });
+        }
     }
     if (pad.rightStick) {
-        let f = player.rightJoint ? player.body : player.rightHand, m = player.rightJoint ? 0.045 : 0.018;
+        let f = player.rightJoint ? player.body : player.rightHand;
+        let m = player.rightJoint ? 0.045 : 0.018;
         scene.matter.body.applyForce(f, f.position, { x: pad.rightStick.x * m, y: pad.rightStick.y * m });
+        
+        if (player.rightJoint && player.rightJointTarget && !player.rightJointTarget.isStatic) {
+            scene.matter.body.applyForce(player.rightJointTarget, player.rightHand.position, { x: -pad.rightStick.x * m * 0.9, y: -pad.rightStick.y * m * 0.9 });
+        }
     }
     processarGarra(scene, player, player.leftHand, 'leftJoint', l, enemy);
     processarGarra(scene, player, player.rightHand, 'rightJoint', r, enemy);
