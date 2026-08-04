@@ -188,7 +188,6 @@ function executarCriacaoObjeto(scene, x, y) {
         collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE }
     };
     
-    // CORREÇÃO 1: Colisor circular recebe o raio exato 'c.w' sem duplicações geométricas
     let body = (c.shape === 'box') ? scene.matter.add.rectangle(alvoX, alvoY, c.w, c.h, conf) : scene.matter.add.circle(alvoX, alvoY, c.w, conf);
     scene.matter.body.setInertia(body, c.fixedRotation ? Infinity : body.inertia);
 
@@ -198,8 +197,6 @@ function executarCriacaoObjeto(scene, x, y) {
     };
     listaObjetosEditaveis.push(obj);
 }
-
-// CORREÇÃO 2: Algoritmo busca o objeto de ambiente MAIS PRÓXIMO do clique do mouse, eliminando seleções travadas
 function executarSelecaoObjeto(scene, x, y, pointer) {
     const clicked = scene.matter.world.localWorld.bodies;
     const targets = clicked.filter(b => b.label === 'ambiente' && !b.isStaticBorder);
@@ -212,7 +209,6 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
         let dy = b.position.y - y;
         let dist = Math.sqrt(dx * dx + dy * dy);
         
-        // Verifica se o clique ocorreu dentro dos limites (bounds) reais do objeto avaliado
         if (x >= b.bounds.min.x && x <= b.bounds.max.x && y >= b.bounds.min.y && y <= b.bounds.max.y) {
             if (dist < menorDistancia) {
                 menorDistancia = dist;
@@ -244,8 +240,6 @@ function selecionarObjetoDoEditor(obj) {
     atualizarInterfaceForma();
 }
 function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; }
-
-// CORREÇÃO 1: Hitbox circular reconstruída e limpa em tempo real com as dimensões idênticas de raio
 function atualizarObjetoExistente() {
     if (ferramentaAtual !== 'select' || !objetoSelecionado) return;
     let obj = objetoSelecionado, scene = game.scene.scenes;
@@ -279,7 +273,7 @@ function desenharObjetoEditor(obj) {
     g.fillStyle((obj === objetoSelecionado) ? 0xffea00 : 0xe67e22, 1);
     g.lineStyle(2, 0xffffff, 0.6);
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
-    else { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); } // Desenho visual usa raio exato
+    else { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
 }
 function executarRespawnIndividual(scene, playerNum) {
     if (playerNum === 0 && player1) {
@@ -329,7 +323,9 @@ function update() {
     if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
     
     listaObjetosEditaveis.forEach(obj => {
-        if (!obj || !obj.body) return;
+        // CORREÇÃO: Validação de segurança estrita impede leitura de propriedades em estruturas nulas/removidas
+        if (!obj || !obj.body || !obj.body.velocity) return;
+        
         desenharObjetoEditor(obj);
         
         const MAX_VELOCITY = 12;
