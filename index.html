@@ -98,8 +98,10 @@ function create() {
             if (document.getElementById('prop-snap-active').checked) {
                 pos = calcularAlinhamentoPorProximidade(this, pos.x, pos.y, objetoSelecionado.w, objetoSelecionado.h, objetoSelecionado.shape, objetoSelecionado.body);
             }
-            this.matter.body.setPosition(objetoSelecionado.body, { x: pos.x, y: pos.y });
-            this.matter.body.setVelocity(objetoSelecionado.body, { x: 0, y: 0 });
+            if (objetoSelecionado && objetoSelecionado.body) {
+                this.matter.body.setPosition(objetoSelecionado.body, { x: pos.x, y: pos.y });
+                this.matter.body.setVelocity(objetoSelecionado.body, { x: 0, y: 0 });
+            }
         }
     }, this);
 
@@ -129,7 +131,7 @@ function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorp
 
     for (let i = 0; i < corposNoMundo.length; i++) {
         let b = corposNoMundo[i];
-        if (b === ignorarCorpo || b.label === 'leftHand' || b.label === 'rightHand' || b.label.includes('braco') || b.label.includes('body')) continue;
+        if (!b || b === ignorarCorpo || b.label === 'leftHand' || b.label === 'rightHand' || b.label.includes('braco') || b.label.includes('body')) continue;
 
         const oEsquerda = b.bounds.min.x, oDireita = b.bounds.max.x;
         const oTopo = b.bounds.min.y, oBase = b.bounds.max.y;
@@ -199,7 +201,7 @@ function executarCriacaoObjeto(scene, x, y) {
 }
 function executarSelecaoObjeto(scene, x, y, pointer) {
     const clicked = scene.matter.world.localWorld.bodies;
-    const targets = clicked.filter(b => b.label === 'ambiente' && !b.isStaticBorder);
+    const targets = clicked.filter(b => b && b.label === 'ambiente' && !b.isStaticBorder);
     
     let objetoMaisProximo = null;
     let menorDistancia = Infinity;
@@ -212,7 +214,7 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
         if (x >= b.bounds.min.x && x <= b.bounds.max.x && y >= b.bounds.min.y && y <= b.bounds.max.y) {
             if (dist < menorDistancia) {
                 menorDistancia = dist;
-                objetoMaisProximo = listaObjetosEditaveis.find(o => o.body === b);
+                objetoMaisProximo = listaObjetosEditaveis.find(o => o && o.body === b);
             }
         }
     });
@@ -224,6 +226,7 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
     }
 }
 function selecionarObjetoDoEditor(obj) {
+    if (!obj) return;
     objetoSelecionado = obj;
     document.getElementById('btn-delete').style.display = 'block';
     document.getElementById('status-modo').innerText = "Status: Editando selecionado";
@@ -242,7 +245,8 @@ function selecionarObjetoDoEditor(obj) {
 function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; }
 function atualizarObjetoExistente() {
     if (ferramentaAtual !== 'select' || !objetoSelecionado) return;
-    let obj = objetoSelecionado, scene = game.scene.scenes;
+    let obj = objetoSelecionado;
+    let scene = game.scene.getScene('default'); // CORREÇÃO INTERNA: Busca estável via API nativa
     const c = extrairCamposPainel();
     
     obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity;
@@ -258,10 +262,14 @@ function atualizarObjetoExistente() {
     obj.body = (obj.shape === 'box') ? scene.matter.add.rectangle(px, py, obj.w, obj.h, conf) : scene.matter.add.circle(px, py, obj.w, conf);
     scene.matter.body.setInertia(obj.body, obj.fixedRotation ? Infinity : obj.body.inertia);
 }
+
+// CORREÇÃO DEFINITIVA DE DELEÇÃO: Captura a instância da cena de forma segura sem depender de arrays dinâmicos vazios
 function deletarObjetoSelecionado() {
     if (!objetoSelecionado) return;
-    let scene = game.scene.scenes;
-    scene.matter.world.remove(objetoSelecionado.body);
+    let scene = game.scene.getScene('default'); 
+    if (scene && scene.matter && scene.matter.world) {
+        scene.matter.world.remove(objetoSelecionado.body);
+    }
     objetoSelecionado.gfx.clear();
     listaObjetosEditaveis = listaObjetosEditaveis.filter(o => o !== objetoSelecionado);
     desmarcarObjetoDoEditor();
@@ -322,19 +330,22 @@ function update() {
     if (player1) { handlePlayerInput(this, player1); desenharJogador(player1); }
     if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
     
+    // CORREÇÃO DEFINITIVA DO LOOP: Checa se o objeto e todas as propriedades da física existem antes de rodar
     listaObjetosEditaveis.forEach(obj => {
-        // CORREÇÃO: Validação de segurança estrita impede leitura de propriedades em estruturas nulas/removidas
-        if (!obj || !obj.body || !obj.body.velocity) return;
+        if (!obj || !obj.body || !obj.body.position || !obj.body.velocity) return;
         
         desenharObjetoEditor(obj);
         
         const MAX_VELOCITY = 12;
         let v = obj.body.velocity;
         if (Math.abs(v.x) > MAX_VELOCITY || Math.abs(v.y) > MAX_VELOCITY) {
-            game.scene.scenes.matter.body.setVelocity(obj.body, {
-                x: Phaser.Math.Clamp(v.x, -MAX_VELOCITY, MAX_VELOCITY),
-                y: Phaser.Math.Clamp(v.y, -MAX_VELOCITY, MAX_VELOCITY)
-            });
+            let sceneActive = game.scene.getScene('default');
+            if (sceneActive && sceneActive.matter && sceneActive.matter.body) {
+                sceneActive.matter.body.setVelocity(obj.body, {
+                    x: Phaser.Math.Clamp(v.x, -MAX_VELOCITY, MAX_VELOCITY),
+                    y: Phaser.Math.Clamp(v.y, -MAX_VELOCITY, MAX_VELOCITY)
+                });
+            }
         }
         if (obj.body.angularVelocity > 0.15) obj.body.angularVelocity = 0.15;
         if (obj.body.angularVelocity < -0.15) obj.body.angularVelocity = -0.15;
