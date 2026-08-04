@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Clone Heave Ho - Editor com Grade e Respawn</title>
+    <title>Clone Heave Ho - Editor com Alinhamento por Proximidade</title>
     <style>
         body { margin: 0; background: #111; display: flex; font-family: Arial, sans-serif; overflow: hidden; height: 100vh; }
         #sidebar { width: 260px; background: #222; color: #fff; padding: 15px; display: flex; flex-direction: column; gap: 12px; border-right: 2px solid #444; z-index: 10; font-size: 13px; box-sizing: border-box; overflow-y: auto; }
@@ -23,9 +23,9 @@
 
 <div id="sidebar">
     <h2>EDITOR</h2>
-    <div>
-        <h3>Controles Globais</h3>
-        <button id="btn-respawn" style="background:#3498db; margin-bottom:5px;" onclick="executarRespawnJogador()">Recriar Personagem (Respawn)</button>
+    <div class="section">
+        <h3>Instruções Gamepad</h3>
+        <p style="font-size:11px; color:#aaa; margin:0;">Pressione o botão <b>Select / Share / Back</b> no seu controle para se matar e renascer (Respawn).</p>
     </div>
     <div>
         <h3>Modo de Operação</h3>
@@ -33,9 +33,10 @@
         <button id="btn-select" style="margin-top:5px;" onclick="setFerramenta('select')">Selecionar e Mover</button>
     </div>
     <div class="section">
-        <h3>Sistema de Grade</h3>
-        <div class="prop-row"><label>Ativar Grade (Grid):</label><input type="checkbox" id="prop-grid-active" onchange="alternarVisibilidadeGrade()"></div>
+        <h3>Auxílios de Posicionamento</h3>
+        <div class="prop-row"><label>Mostrar Grade Visual:</label><input type="checkbox" id="prop-grid-active" onchange="alternarVisibilidadeGrade()"></div>
         <div class="prop-row"><label>Tamanho da Grade:</label><input type="number" id="prop-grid-size" value="64" min="8" max="128" step="8" onchange="alternarVisibilidadeGrade()"></div>
+        <div class="prop-row" style="margin-top:5px; border-top:1px dashed #444; padding-top:5px;"><label style="color:#55ff55; font-weight:bold;">Alinhamento por Borda (Ímã):</label><input type="checkbox" id="prop-snap-active" checked></div>
     </div>
     <div class="section">
         <h3>Configuração do Objeto</h3>
@@ -65,7 +66,7 @@ const config = {
 };
 const game = new Phaser.Game(config);
 let player1, player2, ferramentaAtual = 'create', objetoSelecionado = null, listaObjetosEditaveis = [];
-let gridGraphics; // Renderizador visual das linhas da grade
+let gridGraphics, bordasFixasDoCenario = [];
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
 
 function create() {
@@ -73,14 +74,14 @@ function create() {
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     gridGraphics = this.add.graphics().setDepth(1);
 
-    // CORREÇÃO 1 e 3: Filtro rígido garante colisão total impenetrável contra as mãos e caixas laranjas
     const ambConf = { isStatic: true, label: 'ambiente', friction: 0.8, restitution: 0.1, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     
     const borda = (s, x, y, w, h) => {
-        s.matter.add.rectangle(x, y, w, h, ambConf);
+        let b = s.matter.add.rectangle(x, y, w, h, ambConf);
+        bordasFixasDoCenario.push(b);
         s.add.graphics().fillStyle(0x1a1a1a, 1).fillRect(x - w/2, y - h/2, w, h).setDepth(2);
     };
-    borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50); // Solo preto unificado
+    borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50); 
     borda(this, WORLD_WIDTH/2, 25, WORLD_WIDTH, 50);
     borda(this, 25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT);
     borda(this, WORLD_WIDTH-25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT);
@@ -92,16 +93,14 @@ function create() {
     
     this.input.on('pointermove', function(p) {
         if (ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
-            let alvoX = p.worldX;
-            let alvoY = p.worldY;
+            let pos = { x: p.worldX, y: p.worldY };
             
-            // CORREÇÃO 5: Alinhamento magnético automático da peça arrastada com a grade ativa
-            if (document.getElementById('prop-grid-active').checked) {
-                const gSize = parseInt(document.getElementById('prop-grid-size').value) || 64;
-                alvoX = Math.round(alvoX / gSize) * gSize;
-                alvoY = Math.round(alvoY / gSize) * gSize;
+            // CORREÇÃO 4: Aplica o ímã magnético automático de aproximação por borda se estiver ativado
+            if (document.getElementById('prop-snap-active').checked) {
+                pos = calcularAlinhamentoPorProximidade(this, pos.x, pos.y, objetoSelecionado.w, objetoSelecionado.h, objetoSelecionado.shape, objetoSelecionado.body);
             }
-            this.matter.body.setPosition(objetoSelecionado.body, { x: alvoX, y: alvoY });
+            
+            this.matter.body.setPosition(objetoSelecionado.body, { x: pos.x, y: pos.y });
             this.matter.body.setVelocity(objetoSelecionado.body, { x: 0, y: 0 });
         }
     }, this);
@@ -115,20 +114,46 @@ function create() {
 }
 function alternarVisibilidadeGrade() {
     gridGraphics.clear();
-    const active = document.getElementById('prop-grid-active').checked;
-    if (!active) return;
-
-    // CORREÇÃO 5: Desenha a malha quadriculada sobre o cenário com base no tamanho configurado
+    if (!document.getElementById('prop-grid-active').checked) return;
     const gSize = parseInt(document.getElementById('prop-grid-size').value) || 64;
     gridGraphics.lineStyle(1, 0xffffff, 0.15);
-
-    for (let x = 0; x < WORLD_WIDTH; x += gSize) {
-        gridGraphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    }
-    for (let y = 0; y < WORLD_HEIGHT; y += gSize) {
-        gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
-    }
+    for (let x = 0; x < WORLD_WIDTH; x += gSize) gridGraphics.lineBetween(x, 0, x, WORLD_HEIGHT);
+    for (let y = 0; y < WORLD_HEIGHT; y += gSize) gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
 }
+
+// CORREÇÃO 4: Calcula se o objeto está perto o bastante das bordas de outros blocos e aplica o travamento imã
+function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorpo) {
+    let finalX = x, finalY = y;
+    const DISTANCIA_IMA = 20; // Distância em pixels para o imã ser ativado
+    const corposNoMundo = scene.matter.world.localWorld.bodies;
+
+    // Estrutura a caixa delimitadora (AABB) do bloco que está sendo criado/movido
+    const r = shape === 'circle' ? w : w / 2;
+    const meuEsquerda = x - r, meuDireita = x + r;
+    const meuTopo = y - (shape === 'circle' ? w : h / 2), meuBase = y + (shape === 'circle' ? w : h / 2);
+
+    for (let i = 0; i < corposNoMundo.length; i++) {
+        let b = corposNoMundo[i];
+        if (b === ignorarCorpo || b.label === 'leftHand' || b.label === 'rightHand' || b.label.includes('braco') || b.label.includes('body')) continue;
+
+        // Extrai as fronteiras do objeto colidido
+        const oEsquerda = b.bounds.min.x, oDireita = b.bounds.max.x;
+        const oTopo = b.bounds.min.y, oBase = b.bounds.max.y;
+
+        // Verifica se há sobreposição horizontal parcial para alinhar verticalmente
+        if (meuDireita >= oEsquerda - DISTANCIA_IMA && meuEsquerda <= oDireita + DISTANCIA_IMA) {
+            if (Math.abs(meuBase - oTopo) < DISTANCIA_IMA) { finalY = oTopo - (shape === 'circle' ? w : h / 2); break; }
+            if (Math.abs(meuTopo - oBase) < DISTANCIA_IMA) { finalY = oBase + (shape === 'circle' ? w : h / 2); break; }
+        }
+        // Verifica se há sobreposição vertical parcial para alinhar horizontalmente
+        if (meuBase >= oTopo - DISTANCIA_IMA && meuTopo <= oBase + DISTANCIA_IMA) {
+            if (Math.abs(meuDireita - oEsquerda) < DISTANCIA_IMA) { finalX = oEsquerda - r; break; }
+            if (Math.abs(meuEsquerda - oDireita) < DISTANCIA_IMA) { finalX = oDireita + r; break; }
+        }
+    }
+    return { x: finalX, y: finalY };
+}
+
 function setFerramenta(tipo) {
     ferramentaAtual = tipo;
     document.getElementById('btn-select').classList.remove('active');
@@ -158,23 +183,19 @@ function extrairCamposPainel() {
 }
 function executarCriacaoObjeto(scene, x, y) {
     let alvoX = x, alvoY = y;
-    
-    // CORREÇÃO 5: Alinhamento automático na criação de novas caixas/esferas
-    if (document.getElementById('prop-grid-active').checked) {
-        const gSize = parseInt(document.getElementById('prop-grid-size').value) || 64;
-        alvoX = Math.round(alvoX / gSize) * gSize;
-        alvoY = Math.round(alvoY / gSize) * gSize;
+    const c = extrairCamposPainel();
+
+    if (document.getElementById('prop-snap-active').checked) {
+        let pos = calcularAlinhamentoPorProximidade(scene, alvoX, alvoY, c.w, c.h, c.shape, null);
+        alvoX = pos.x; alvoY = pos.y;
     }
 
-    const c = extrairCamposPainel();
-    // CORREÇÃO 3 e 4: Colisores ganham as mesmas regras físicas impenetráveis do solo
     let conf = {
         isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass,
         friction: 0.6, frictionAir: c.air, restitution: c.bounce,
         collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE }
     };
     
-    // CORREÇÃO 4: Garante dimensões idênticas entre a física pura e o desenho visível
     let body = (c.shape === 'box') ? scene.matter.add.rectangle(alvoX, alvoY, c.w, c.h, conf) : scene.matter.add.circle(alvoX, alvoY, c.w, conf);
     scene.matter.body.setInertia(body, c.fixedRotation ? Infinity : body.inertia);
 
@@ -185,8 +206,8 @@ function executarCriacaoObjeto(scene, x, y) {
     listaObjetosEditaveis.push(obj);
 }
 function executarSelecaoObjeto(scene, x, y, pointer) {
-    const clicked = scene.matter.world.localWorld.bodies;
-    const target = clicked.find(b => b.label === 'ambiente' && b.position.y < WORLD_HEIGHT-50 && b.position.x > 50 && b.position.x < WORLD_WIDTH-50);
+    const clicked = scene.matter.query.point(scene.matter.world.localWorld.bodies, { x: x, y: y });
+    const target = clicked.find(b => b.label === 'ambiente' && !bordasFixasDoCenario.includes(b));
     if (target) {
         let encontrado = listaObjetosEditaveis.find(o => o.body === target);
         if (encontrado) selecionarObjetoDoEditor(encontrado);
@@ -199,7 +220,6 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('btn-delete').style.display = 'block';
     document.getElementById('status-modo').innerText = "Status: Editando selecionado";
     document.getElementById('status-modo').style.color = "#ffea00";
-
     document.getElementById('prop-shape').value = obj.shape;
     document.getElementById('prop-w').value = obj.w;
     document.getElementById('prop-h').value = obj.h;
@@ -216,10 +236,8 @@ function atualizarObjetoExistente() {
     if (ferramentaAtual !== 'select' || !objetoSelecionado) return;
     let obj = objetoSelecionado, scene = game.scene.scenes;
     const c = extrairCamposPainel();
-    
     obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity;
     obj.isStatic = c.isStatic; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce; obj.fixedRotation = c.fixedRotation;
-
     const px = obj.body.position.x, py = obj.body.position.y;
     scene.matter.world.remove(obj.body);
     let conf = {
@@ -241,23 +259,20 @@ function desenharObjetoEditor(obj) {
     g.x = obj.body.position.x; g.y = obj.body.position.y; g.rotation = obj.body.angle;
     g.fillStyle((obj === objetoSelecionado) ? 0xffea00 : 0xe67e22, 1);
     g.lineStyle(2, 0xffffff, 0.6);
-    // CORREÇÃO 4: O desenho visual mapeia milimetricamente o tamanho real do colisor Matter.js
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
 }
-// CORREÇÃO 2: Limpa os elos e juntas antigas da memória física antes de reconstruir o boneco na origem
-function executarRespawnJogador() {
-    let scene = game.scene.scenes;
-    if (player1) {
-        scene.matter.world.remove(player1.body);
-        scene.matter.world.remove(player1.leftHand);
-        scene.matter.world.remove(player1.rightHand);
+// CORREÇÃO 1 e 2: Respawn individual por controle usando a cena instanciada correta do Phaser
+function executarRespawnIndividual(scene, playerNum) {
+    if (playerNum === 0 && player1) {
+        scene.matter.world.remove(player1.body); scene.matter.world.remove(player1.leftHand); scene.matter.world.remove(player1.rightHand);
         player1.gfx.clear();
-        player1 = null;
+        player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, player1.pad, 0, 0x00ff00);
     }
-    // Força o nascimento imediato do primeiro controle conectado na base segura da fase
-    if (scene.input.gamepad.total > 0) {
-        player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, scene.input.gamepad.gamepads[0], 0, 0x00ff00);
+    if (playerNum === 1 && player2) {
+        scene.matter.world.remove(player2.body); scene.matter.world.remove(player2.leftHand); scene.matter.world.remove(player2.rightHand);
+        player2.gfx.clear();
+        player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, player2.pad, 1, 0xffff00);
     }
 }
 
@@ -280,12 +295,9 @@ function createArmSegment(scene, bodyA, bodyB, numLinks, linkLength, id, groupIn
 function createHeaveHoCharacter(scene, x, y, gamepad, id, bodyColor) {
     const playerGroup = scene.matter.world.nextGroup(true);
     const pFilter = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: playerGroup };
-    
     const body = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: pFilter });
-    // CORREÇÃO 1: Mãos configuradas com colisão e máscara estritas contra o solo
     const leftHand = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: pFilter });
     const rightHand = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: pFilter });
-    
     let leftElos = [], rightElos = [];
     createArmSegment(scene, body, leftHand, 3, 16, id, playerGroup, leftElos);
     createArmSegment(scene, body, rightHand, 3, 16, id, playerGroup, rightElos);
@@ -337,6 +349,13 @@ function processarGarra(scene, player, hand, jointKey, isGrabbing, enemyPrefix) 
 function handlePlayerInput(scene, player) {
     const pad = player.pad; if (!pad) return;
     const l = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), r = isButtonPressed(pad, 7) || isButtonPressed(pad, 5), enemy = player.id === 0 ? "p1_" : "p0_";
+    
+    // CORREÇÃO 2: Captura o botão 8 (Select / Share / Back) para executar a rotina de morte individual isolada
+    if (isButtonPressed(pad, 8)) {
+        executarRespawnIndividual(scene, player.id);
+        return;
+    }
+
     if (pad.leftStick) {
         let f = player.leftJoint ? player.body : player.leftHand, m = player.leftJoint ? 0.045 : 0.018;
         scene.matter.body.applyForce(f, f.position, { x: pad.leftStick.x * m, y: pad.leftStick.y * m });
