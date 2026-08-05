@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Estabilização por Frame</title>
+    <title>Heave Ho - Estabilização por Frame Corrigida</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -140,7 +140,9 @@ function executarCriacaoObjeto(scene, x, y) {
     scene.matter.body.setInertia(body, c.rotate ? Infinity : body.inertia);
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, isStatic: c.isStatic, mass: c.mass, air: c.air, bounce: c.bounce, rotate: c.rotate, ultimaPos: { x: ax, y: ay }, ultimaRot: 0 });
 }
-function外 executarSelecaoObjeto(scene, x, y, pointer) {
+
+// CORREÇÃO: Removido o caractere estranho '外' que causava o SyntaxError na declaração
+function executarSelecaoObjeto(scene, x, y, pointer) {
     const bodies = scene.matter.world.localWorld.bodies.filter(b => b && b.label === 'ambiente' && !b.isStaticBorder);
     let prox = null, mDist = Infinity;
     bodies.forEach(b => {
@@ -217,9 +219,8 @@ function update() {
     listaObjetosEditaveis.forEach(obj => {
         if (!obj?.body?.velocity) return; 
         
-        // LIMITADORES DE DESLOCAMENTO E ROTAÇÃO POR FRAME (Anti-Jitter Estrito)
         if (obj.ultimaPos) {
-            const MAX_DIST_PER_FRAME = 8; // Distância linear máxima em pixels por frame
+            const MAX_DIST_PER_FRAME = 8; 
             let dx = obj.body.position.x - obj.ultimaPos.x;
             let dy = obj.body.position.y - obj.ultimaPos.y;
             let distSq = dx*dx + dy*dy;
@@ -232,7 +233,7 @@ function update() {
             }
         }
         if (obj.ultimaRot !== undefined) {
-            const MAX_ROT_PER_FRAME = 0.04; // Rotação máxima em radianos por frame (cerca de 2.3 graus)
+            const MAX_ROT_PER_FRAME = 0.04; 
             let dRot = obj.body.angle - obj.ultimaRot;
             if (Math.abs(dRot) > MAX_ROT_PER_FRAME) {
                 let novaRot = obj.ultimaRot + Math.sign(dRot) * MAX_ROT_PER_FRAME;
@@ -272,7 +273,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
             if (objRef && objRef.shape === 'circle') return (Math.sqrt((b.position.x - h.position.x)**2 + (b.position.y - h.position.y)**2) <= objRef.w + 16);
             return true;
         });
-        if (t) { p[jKey] = s.matter.add.constraint(h, t, 0, 0.15, { pointA: { x:0, y:0 }, pointB: b => b.label.includes('Hand') ? { x:0, y:0 } : { x: h.position.x - t.position.x, y: h.position.y - t.position.y } }); p[jKey + 'Target'] = t; }
+        if (t) { p[jKey] = s.matter.add.constraint(h, t, 0, 0.15, { pointA: { x:0, y:0 }, pointB: { x: h.position.x - t.position.x, y: h.position.y - t.position.y } }); p[jKey + 'Target'] = t; }
     } else if (!grab && p[jKey]) { s.matter.world.remove(p[jKey]); p[jKey] = null; p[jKey + 'Target'] = null; }
 }
 function handlePlayerInput(s, p) {
