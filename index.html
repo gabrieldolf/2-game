@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Agarre Nativo por Impacto</title>
+    <title>Heave Ho - Agarre por Evento Nativo</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -74,6 +74,27 @@ function create() {
     };
     borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50); borda(this, WORLD_WIDTH/2, 25, WORLD_WIDTH, 50);
     borda(this, 25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT); borda(this, WORLD_WIDTH-25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT);
+    
+    // ATUALIZAÇÃO SEGURA: Ouvinte de eventos escuta os choques nativos da engine de forma limpa e estável [1]
+    this.matter.world.on('collisionstart', (event) => {
+        event.pairs.forEach(pair => {
+            let bodyA = pair.bodyA, bodyB = pair.bodyB;
+            processarToqueParaContato(bodyA, bodyB, pair); processarToqueParaContato(bodyB, bodyA, pair);
+        });
+    });
+    this.matter.world.on('collisionactive', (event) => {
+        event.pairs.forEach(pair => {
+            let bodyA = pair.bodyA, bodyB = pair.bodyB;
+            processarToqueParaContato(bodyA, bodyB, pair); processarToqueParaContato(bodyB, bodyA, pair);
+        });
+    });
+    this.matter.world.on('collisionend', (event) => {
+        event.pairs.forEach(pair => {
+            let bodyA = pair.bodyA, bodyB = pair.bodyB;
+            quebrarToqueParaContato(bodyA, bodyB); quebrarToqueParaContato(bodyB, bodyA);
+        });
+    });
+
     this.input.on('pointerdown', (p) => {
         if (ferramentaAtual === 'create') executarCriacaoObjeto(this, p.worldX, p.worldY);
         else executarSelecaoObjeto(this, p.worldX, p.worldY, p);
@@ -197,14 +218,10 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
         last = link;
     }
 }
-function BlackoutConstraintsInternasDoPlayer(scene, pNum) {
-    const cList = scene.matter.world.localWorld.constraints, pref = `p${pNum}_`;
-    const p = (pNum === 0) ? player1 : player2; if (!p) return null;
-    for (let i = cList.length - 1; i >= 0; i--) { let c = cList[i]; if (c && ((c.bodyA?.label?.includes(pref)) || (c.bodyB?.label?.includes(pref)))) scene.matter.world.remove(c); }
-    return p;
-}
 function executarRespawnIndividual(scene, pNum) {
-    const p = BlackoutConstraintsInternasDoPlayer(scene, pNum); if (!p) return;
+    const cList = scene.matter.world.localWorld.constraints, pref = `p${pNum}_`;
+    const p = (pNum === 0) ? player1 : player2; if (!p) return;
+    for (let i = cList.length - 1; i >= 0; i--) { let c = cList[i]; if (c && ((c.bodyA?.label?.includes(pref)) || (c.bodyB?.label?.includes(pref)))) scene.matter.world.remove(c); }
     scene.matter.world.remove(p.body); scene.matter.world.remove(p.leftHand); scene.matter.world.remove(p.rightHand);
     p.leftElos.forEach(e => scene.matter.world.remove(e)); p.rightElos.forEach(e => scene.matter.world.remove(e)); p.gfx.clear();
     if (pNum === 0) player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, p.pad, 0, 0x00ff00);
@@ -215,8 +232,34 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
     const lH = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
     const rH = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
+    
+    // Armazena em cache o corpo que a mão está tocando atualmente
+    lH.corpoTocadoAgora = null; lH.pontoDeContatoGlobal = null;
+    rH.corpoTocadoAgora = null; rH.pontoDeContatoGlobal = null;
+    
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
+}
+
+// LOGICA AUXILIAR SALVA O IMPACTO NO MOMENTO EM QUE ELE ACONTECE
+function processarToqueParaContato(h, b, pair) {
+    if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
+        if (b.label === 'ambiente' || b.label.startsWith('p0_') || b.label.startsWith('p1_')) {
+            if (b.label !== h.label.substring(0, 3) + 'body' && !b.label.includes('braco')) {
+                h.corpoTocadoAgora = b;
+                if (pair.activeContacts && pair.activeContacts.length > 0) {
+                    h.pontoDeContatoGlobal = { x: pair.activeContacts[0].vertex.x, y: pair.activeContacts[0].vertex.y };
+                } else {
+                    h.pontoDeContatoGlobal = { x: h.position.x, y: h.position.y };
+                }
+            }
+        }
+    }
+}
+function quebrarToqueParaContato(h, b) {
+    if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
+        if (h.corpoTocadoAgora === b) { h.corpoTocadoAgora = null; h.pontoDeContatoGlobal = null; }
+    }
 }
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
@@ -242,39 +285,17 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-// CORREÇÃO: Lê diretamente os pares de colisão ativos (`pairs`) gerados no frame pelo motor físico. Sincroniza paredes e objetos.
+// CORREÇÃO ABSOLUTA: Agarra usando a colisão de evento pré-registrada na Parte 2. 100% igual para cenário e objetos.
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
-        // Coleta todos os pares de contato que o motor físico do Matter registrou de verdade no mapa
-        const paresAtivos = s.matter.world.localWorld.pairs.list;
-        let alvoValido = null, pontoGlobalDeContato = null;
+        let alvoValido = h.corpoTocadoAgora;
+        let pontoGlobal = h.pontoDeContatoGlobal;
         
-        for (let i = 0; i < paresAtivos.length; i++) {
-            let pair = paresAtivos[i]; if (!pair || !pair.isActive) continue;
-            let corpoA = pair.bodyA, corpoB = pair.bodyB;
+        // Se a engine registrou que a mão está tocando um corpo válido, faz o travamento imediato [1]
+        if (alvoValido && pontoGlobal) {
+            let localX = pontoGlobal.x - alvoValido.position.x;
+            let localY = pontoGlobal.y - alvoValido.position.y;
             
-            // Verifica se um dos corpos envolvidos no choque é a mão atual
-            if (corpoA === h || corpoB === h) {
-                let outroCorpo = (corpoA === h) ? corpoB : corpoA;
-                if (outroCorpo.label === 'ambiente' || outroCorpo.label.startsWith(enemy)) {
-                    alvoValido = outroCorpo;
-                    // Extrai o pixel nativo exato do ponto de impacto fornecido pela engine
-                    if (pair.activeContacts && pair.activeContacts.length > 0) {
-                        pontoGlobalDeContato = pair.activeContacts[0].vertex;
-                    }
-                    break;
-                }
-            }
-        }
-        
-        if (alvoValido) {
-            // Se o motor não achou o ponto, usa a posição da mão como fallback seguro contra saltos
-            let gx = pontoGlobalDeContato ? pontoGlobalDeContato.x : h.position.x;
-            let gy = pontoGlobalDeContato ? pontoGlobalDeContato.y : h.position.y;
-            let localX = gx - alvoValido.position.x;
-            let localY = gy - alvoValido.position.y;
-            
-            // Grampeia via constraint pura sem elasticidades customizadas
             p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 0.15, { 
                 pointA: { x: 0, y: 0 }, 
                 pointB: { x: localX, y: localY } 
