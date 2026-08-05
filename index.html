@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Física Nativa Restaurada</title>
+    <title>Heave Ho - Agarre Nativo por Impacto</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -197,10 +197,14 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
         last = link;
     }
 }
-function executarRespawnIndividual(scene, pNum) {
+function BlackoutConstraintsInternasDoPlayer(scene, pNum) {
     const cList = scene.matter.world.localWorld.constraints, pref = `p${pNum}_`;
-    const p = (pNum === 0) ? player1 : player2; if (!p) return;
+    const p = (pNum === 0) ? player1 : player2; if (!p) return null;
     for (let i = cList.length - 1; i >= 0; i--) { let c = cList[i]; if (c && ((c.bodyA?.label?.includes(pref)) || (c.bodyB?.label?.includes(pref)))) scene.matter.world.remove(c); }
+    return p;
+}
+function executarRespawnIndividual(scene, pNum) {
+    const p = BlackoutConstraintsInternasDoPlayer(scene, pNum); if (!p) return;
     scene.matter.world.remove(p.body); scene.matter.world.remove(p.leftHand); scene.matter.world.remove(p.rightHand);
     p.leftElos.forEach(e => scene.matter.world.remove(e)); p.rightElos.forEach(e => scene.matter.world.remove(e)); p.gfx.clear();
     if (pNum === 0) player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, p.pad, 0, 0x00ff00);
@@ -217,14 +221,11 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
     if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
-    
-    // RESTAURAÇÃO: Removemos todos os calculos artificiais de posição por frame. Deixamos a engine rodar nativa.
     listaObjetosEditaveis.forEach(obj => {
         if (!obj?.body) return;
         if (obj.lockPos) { sAct.matter.body.setPosition(obj.body, { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY }); sAct.matter.body.setVelocity(obj.body, { x:0, y:0 }); }
         desenharObjetoEditor(obj);
     });
-
     if (player1 && player2) {
         desenharJogador(player1); desenharJogador(player2);
         const mX = (player1.body.position.x + player2.body.position.x) / 2, mY = (player1.body.position.y + player2.body.position.y) / 2;
@@ -241,38 +242,48 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-// RESTAURAÇÃO: Funil 100% limpo e simétrico. Usa a junta nativa (Constraint) do Matter.js para travar qualquer corpo sólido no pixel exato
+// CORREÇÃO: Lê diretamente os pares de colisão ativos (`pairs`) gerados no frame pelo motor físico. Sincroniza paredes e objetos.
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
-        const todosOsCorpos = s.matter.world.localWorld.bodies;
-        let pontoDeContatoLocal = null;
+        // Coleta todos os pares de contato que o motor físico do Matter registrou de verdade no mapa
+        const paresAtivos = s.matter.world.localWorld.pairs.list;
+        let alvoValido = null, pontoGlobalDeContato = null;
         
-        const alvoValido = todosOsCorpos.find(b => {
-            if (b.label !== 'ambiente' && !b.label.startsWith(enemy)) return false;
+        for (let i = 0; i < paresAtivos.length; i++) {
+            let pair = paresAtivos[i]; if (!pair || !pair.isActive) continue;
+            let corpoA = pair.bodyA, corpoB = pair.bodyB;
             
-            // Varredura estrita oficial da engine física para qualquer corpo sólido do mapa
-            let dadosColisao = Phaser.Physics.Matter.Matter.Query.collides(h, [b]);
-            if (dadosColisao && dadosColisao.length > 0) {
-                let suporte = dadosColisao.supports;
-                if (suporte) {
-                    pontoDeContatoLocal = { x: suporte.x - b.position.x, y: suporte.y - b.position.y };
-                    return true;
+            // Verifica se um dos corpos envolvidos no choque é a mão atual
+            if (corpoA === h || corpoB === h) {
+                let outroCorpo = (corpoA === h) ? corpoB : corpoA;
+                if (outroCorpo.label === 'ambiente' || outroCorpo.label.startsWith(enemy)) {
+                    alvoValido = outroCorpo;
+                    // Extrai o pixel nativo exato do ponto de impacto fornecido pela engine
+                    if (pair.activeContacts && pair.activeContacts.length > 0) {
+                        pontoGlobalDeContato = pair.activeContacts[0].vertex;
+                    }
+                    break;
                 }
             }
-            return false;
-        });
-        
-        if (alvoValido && pontoDeContatoLocal) { 
-            // Cria a amarração elástica nativa estável da engine física diretamente no pixel de contato local
-            p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 0.2, { 
-                pointA: { x: 0, y: 0 }, 
-                pointB: pontoDeContatoLocal 
-            }); 
-            p[jKey + 'Target'] = alvoValido; 
         }
-    } else if (!grab && p[jKey]) { 
-        s.matter.world.remove(p[jKey]); 
-        p[jKey] = null; p[jKey + 'Target'] = null; 
+        
+        if (alvoValido) {
+            // Se o motor não achou o ponto, usa a posição da mão como fallback seguro contra saltos
+            let gx = pontoGlobalDeContato ? pontoGlobalDeContato.x : h.position.x;
+            let gy = pontoGlobalDeContato ? pontoGlobalDeContato.y : h.position.y;
+            let localX = gx - alvoValido.position.x;
+            let localY = gy - alvoValido.position.y;
+            
+            // Grampeia via constraint pura sem elasticidades customizadas
+            p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 0.15, { 
+                pointA: { x: 0, y: 0 }, 
+                pointB: { x: localX, y: localY } 
+            });
+            p[jKey + 'Target'] = alvoValido;
+        }
+    } else if (!grab && p[jKey]) {
+        s.matter.world.remove(p[jKey]);
+        p[jKey] = null; p[jKey + 'Target'] = null;
     }
 }
 function handlePlayerInput(s, p) {
