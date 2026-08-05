@@ -184,3 +184,111 @@ function desenharObjetoEditor(obj) {
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
 }
+function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
+    let last = bA;
+    for (let i = 0; i < num; i++) {
+        const lastLink = (i === num - 1);
+        let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 10, len, { density: 0.005, frictionAir: 0.02, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
+        if (!lastLink) list.push(link);
+        scene.matter.add.constraint(last, link, len, 1.0, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 } });
+        last = link;
+    }
+}
+function executarRespawnIndividual(scene, pNum) {
+    const cList = scene.matter.world.localWorld.constraints, pref = `p${pNum}_`;
+    const p = (pNum === 0) ? player1 : player2; if (!p) return;
+    for (let i = cList.length - 1; i >= 0; i--) { let c = cList[i]; if (c && ((c.bodyA?.label?.includes(pref)) || (c.bodyB?.label?.includes(pref)))) scene.matter.world.remove(c); }
+    scene.matter.world.remove(p.body); scene.matter.world.remove(p.leftHand); scene.matter.world.remove(p.rightHand);
+    p.leftElos.forEach(e => scene.matter.world.remove(e)); p.rightElos.forEach(e => scene.matter.world.remove(e)); p.gfx.clear();
+    if (pNum === 0) player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, p.pad, 0, 0x00ff00);
+    else player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, p.pad, 1, 0xffff00);
+}
+function createHeaveHoCharacter(scene, x, y, pad, id, col) {
+    const grp = scene.matter.world.nextGroup(true), flt = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp };
+    const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
+    const lH = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
+    const rH = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
+    let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
+    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
+}
+function update() {
+    let sAct = game.scene.getScene('default'); if (player1) { handlePlayerInput(this, player1); desenharJogador(player1); } if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
+    garrasAtivas = []; if (player1) { if (player1.leftJoint) garrasAtivas.push(player1.leftJointTarget); if (player1.rightJoint) garrasAtivas.push(player1.rightJointTarget); } if (player2) { if (player2.leftJoint) garrasAtivas.push(player2.leftJointTarget); if (player2.rightJoint) garrasAtivas.push(player2.rightJointTarget); }
+    listaObjetosEditaveis.forEach(obj => {
+        if (!obj?.body?.velocity) return; 
+        
+        // LIMITADORES DE DESLOCAMENTO E ROTAÇÃO POR FRAME (Anti-Jitter Estrito)
+        if (obj.ultimaPos) {
+            const MAX_DIST_PER_FRAME = 8; // Distância linear máxima em pixels por frame
+            let dx = obj.body.position.x - obj.ultimaPos.x;
+            let dy = obj.body.position.y - obj.ultimaPos.y;
+            let distSq = dx*dx + dy*dy;
+            if (distSq > MAX_DIST_PER_FRAME * MAX_DIST_PER_FRAME) {
+                let dist = Math.sqrt(distSq);
+                let px = obj.ultimaPos.x + (dx / dist) * MAX_DIST_PER_FRAME;
+                let py = obj.ultimaPos.y + (dy / dist) * MAX_DIST_PER_FRAME;
+                this.matter.body.setPosition(obj.body, { x: px, y: py });
+                this.matter.body.setVelocity(obj.body, { x: (dx/dist)*2, y: (dy/dist)*2 });
+            }
+        }
+        if (obj.ultimaRot !== undefined) {
+            const MAX_ROT_PER_FRAME = 0.04; // Rotação máxima em radianos por frame (cerca de 2.3 graus)
+            let dRot = obj.body.angle - obj.ultimaRot;
+            if (Math.abs(dRot) > MAX_ROT_PER_FRAME) {
+                let novaRot = obj.ultimaRot + Math.sign(dRot) * MAX_ROT_PER_FRAME;
+                this.matter.body.setAngle(obj.body, novaRot);
+                obj.body.angularVelocity = Math.sign(dRot) * 0.01;
+            }
+        }
+        obj.ultimaPos = { x: obj.body.position.x, y: obj.body.position.y };
+        obj.ultimaRot = obj.body.angle;
+
+        desenharObjetoEditor(obj);
+        const agarrado = garrasAtivas.includes(obj.body);
+        obj.body.frictionAir = agarrado ? 0.25 : obj.air;
+
+        const maxV = agarrado ? 6 : 14; let v = obj.body.velocity;
+        if (Math.abs(v.x) > maxV || Math.abs(v.y) > maxV) sAct?.matter?.body?.setVelocity(obj.body, { x: Phaser.Math.Clamp(v.x, -maxV, maxV), y: Phaser.Math.Clamp(v.y, -maxV, maxV) });
+    });
+    if (player1 && player2) {
+        const mX = (player1.body.position.x + player2.body.position.x) / 2, mY = (player1.body.position.y + player2.body.position.y) / 2;
+        let z = Math.min(SCREEN_WIDTH / (Math.abs(player1.body.position.x - player2.body.position.x) + 250), SCREEN_HEIGHT / (Math.abs(player1.body.position.y - player2.body.position.y) + 250));
+        z = Phaser.Math.Clamp(z, 0.45, 1.0); this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (mX - SCREEN_WIDTH / 2), 0.08);
+        this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (mY - SCREEN_HEIGHT / 2), 0.08); this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, z, 0.05));
+    } else if (player1) { this.cameras.main.centerOn(player1.body.position.x, player1.body.position.y); }
+}
+function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
+function desenharJogador(p) {
+    const g = p.gfx; g.clear(); const lL = isButtonPressed(p.pad, 6) || isButtonPressed(p.pad, 4), rR = isButtonPressed(p.pad, 7) || isButtonPressed(p.pad, 5); g.lineStyle(12, 0x000000, 1);
+    const fil = (el, m) => { g.beginPath(); g.moveTo(p.body.position.x, p.body.position.y); el.forEach(e => g.lineTo(e.position.x, e.position.y)); g.lineTo(m.position.x, m.position.y); g.strokePath(); };
+    fil(p.leftElos, p.leftHand); fil(p.rightElos, p.rightHand); g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22);
+    g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
+}
+function processarGarra(s, p, h, jKey, grab, enemy) {
+    if (grab && !p[jKey]) {
+        const t = s.matter.query.region(s.matter.world.localWorld.bodies, { min: { x: h.position.x - 16, y: h.position.y - 16 }, max: { x: h.position.x + 16, y: h.position.y + 16 } }).find(b => {
+            if (b.label !== 'ambiente' && !b.label.startsWith(enemy)) return false;
+            let objRef = listaObjetosEditaveis.find(o => o && o.body === b);
+            if (objRef && objRef.shape === 'circle') return (Math.sqrt((b.position.x - h.position.x)**2 + (b.position.y - h.position.y)**2) <= objRef.w + 16);
+            return true;
+        });
+        if (t) { p[jKey] = s.matter.add.constraint(h, t, 0, 0.15, { pointA: { x:0, y:0 }, pointB: b => b.label.includes('Hand') ? { x:0, y:0 } : { x: h.position.x - t.position.x, y: h.position.y - t.position.y } }); p[jKey + 'Target'] = t; }
+    } else if (!grab && p[jKey]) { s.matter.world.remove(p[jKey]); p[jKey] = null; p[jKey + 'Target'] = null; }
+}
+function handlePlayerInput(s, p) {
+    const pad = p.pad; if (!pad) return; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5), enemy = p.id === 0 ? "p1_" : "p0_";
+    if (isButtonPressed(pad, 8)) { executarRespawnIndividual(s, p.id); return; }
+    let mL = 1.0, mR = 1.0; if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) { mL = 0.5; mR = 0.5; }
+    if (pad.leftStick) {
+        let f = p.leftJoint ? p.body : p.leftHand, m = p.leftJoint ? 0.045 : 0.018; s.matter.body.applyForce(f, f.position, { x: pad.leftStick.x * m, y: pad.leftStick.y * m });
+        if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.isStatic) s.matter.body.applyForce(p.leftJointTarget, p.leftHand.position, { x: -pad.leftStick.x * m * 0.9 * mL, y: -pad.leftStick.y * m * 0.9 * mL });
+    }
+    if (pad.rightStick) {
+        let f = p.rightJoint ? p.body : p.rightHand, m = p.rightJoint ? 0.045 : 0.018; s.matter.body.applyForce(f, f.position, { x: pad.rightStick.x * m, y: pad.rightStick.y * m });
+        if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.isStatic) s.matter.body.applyForce(p.rightJointTarget, p.rightHand.position, { x: -pad.rightStick.x * m * 0.9 * mR, y: -pad.rightStick.y * m * 0.9 * mR });
+    }
+    processarGarra(s, p, p.leftHand, 'leftJoint', lL, enemy); processarGarra(s, p, p.rightHand, 'rightJoint', rR, enemy);
+}
+</script>
+</body>
+</html>
