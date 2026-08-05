@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Estabilização Geral por Frame</title>
+    <title>Heave Ho - Estabilização Anatômica por Frame</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -191,6 +191,8 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
         let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 10, len, { density: 0.005, frictionAir: 0.02, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
         if (!lastLink) list.push(link);
         scene.matter.add.constraint(last, link, len, 1.0, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 } });
+        // Inicializa o buffer delta do elo do braço
+        link.ultimaPos = { x: bA.position.x, y: bA.position.y }; link.ultimaRot = 0;
         last = link;
     }
 }
@@ -208,48 +210,54 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
     const lH = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
     const rH = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
+    b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
 }
+
+// CORREÇÃO: Função auxiliar estabiliza qualquer corpo dinâmico (jogador ou objeto) limitando variações abruptas
+function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
+    if (!body || !body.position) return;
+    if (body.ultimaPos) {
+        let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y;
+        let distSq = dx*dx + dy*dy;
+        if (distSq > maxDist * maxDist) {
+            let dist = Math.sqrt(distSq);
+            scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx / dist) * maxDist, y: body.ultimaPos.y + (dy / dist) * maxDist });
+            scene.matter.body.setVelocity(body, { x: (dx/dist)*2, y: (dy/dist)*2 });
+        }
+    }
+    if (body.ultimaRot !== undefined) {
+        let dRot = body.angle - body.ultimaRot;
+        if (Math.abs(dRot) > maxRot) {
+            scene.matter.body.setAngle(body, body.ultimaRot + Math.sign(dRot) * maxRot);
+            body.angularVelocity = Math.sign(dRot) * 0.01;
+        }
+    }
+    body.ultimaPos = { x: body.position.x, y: body.position.y };
+    body.ultimaRot = body.angle;
+}
+
 function update() {
-    let sAct = game.scene.getScene('default'); if (player1) { handlePlayerInput(this, player1); desenharJogador(player1); } if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
+    let sAct = game.scene.getScene('default'); if (!sAct) return;
+    if (player1) { handlePlayerInput(this, player1); desenharJogador(player1); } if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
+    
+    // MUDANÇA: Amortece rigidamente o corpo, mãos e cada elo articulado do braço de todos os jogadores logados
+    [player1, player2].forEach(p => {
+        if (!p) return;
+        aplicarLimiteFrame(sAct, p.body, 10, 0.08); aplicarLimiteFrame(sAct, p.leftHand, 12, 0.1); aplicarLimiteFrame(sAct, p.rightHand, 12, 0.1);
+        p.leftElos.forEach(elo => aplicarLimiteFrame(sAct, elo, 10, 0.1)); p.rightElos.forEach(elo => aplicarLimiteFrame(sAct, elo, 10, 0.1));
+    });
+
     garrasAtivas = []; if (player1) { if (player1.leftJoint) garrasAtivas.push(player1.leftJointTarget); if (player1.rightJoint) garrasAtivas.push(player1.rightJointTarget); } if (player2) { if (player2.leftJoint) garrasAtivas.push(player2.leftJointTarget); if (player2.rightJoint) garrasAtivas.push(player2.rightJointTarget); }
     listaObjetosEditaveis.forEach(obj => {
-        if (!obj?.body?.velocity) return; 
-        
-        // NOVO: Limitadores rígidos aplicados a mãos E objetos não estáticos (Muda a estabilidade do mapa)
-        const agarrado = garrasAtivas.includes(obj.body);
-        if (obj.ultimaPos && (!obj.isStatic || agarrado)) {
-            const MAX_DIST_PER_FRAME = agarrado ? 5 : 8; // Trava ainda mais o objeto se o jogador estiver segurando
-            let dx = obj.body.position.x - obj.ultimaPos.x;
-            let dy = obj.body.position.y - obj.ultimaPos.y;
-            let distSq = dx*dx + dy*dy;
-            if (distSq > MAX_DIST_PER_FRAME * MAX_DIST_PER_FRAME) {
-                let dist = Math.sqrt(distSq);
-                let px = obj.ultimaPos.x + (dx / dist) * MAX_DIST_PER_FRAME;
-                let py = obj.ultimaPos.y + (dy / dist) * MAX_DIST_PER_FRAME;
-                this.matter.body.setPosition(obj.body, { x: px, y: py });
-                this.matter.body.setVelocity(obj.body, { x: (dx/dist)*2, y: (dy/dist)*2 });
-            }
-        }
-        if (obj.ultimaRot !== undefined && (!obj.isStatic || agarrado)) {
-            const MAX_ROT_PER_FRAME = agarrado ? 0.02 : 0.04; // Corta o giro frenético dos blocos laranjas dinâmicos pela metade
-            let dRot = obj.body.angle - obj.ultimaRot;
-            if (Math.abs(dRot) > MAX_ROT_PER_FRAME) {
-                let novaRot = obj.ultimaRot + Math.sign(dRot) * MAX_ROT_PER_FRAME;
-                this.matter.body.setAngle(obj.body, novaRot);
-                obj.body.angularVelocity = Math.sign(dRot) * 0.01;
-            }
-        }
-        obj.ultimaPos = { x: obj.body.position.x, y: obj.body.position.y };
-        obj.ultimaRot = obj.body.angle;
-
-        desenharObjetoEditor(obj);
-        obj.body.frictionAir = agarrado ? 0.25 : obj.air;
-
+        if (!obj?.body?.velocity) return; const agarrado = garrasAtivas.includes(obj.body);
+        if (!obj.isStatic || agarrado) aplicarLimiteFrame(sAct, obj.body, agarrado ? 5 : 8, agarrado ? 0.02 : 0.04);
+        desenharObjetoEditor(obj); obj.body.frictionAir = agarrado ? 0.25 : obj.air;
         const maxV = agarrado ? 6 : 14; let v = obj.body.velocity;
         if (Math.abs(v.x) > maxV || Math.abs(v.y) > maxV) sAct?.matter?.body?.setVelocity(obj.body, { x: Phaser.Math.Clamp(v.x, -maxV, maxV), y: Phaser.Math.Clamp(v.y, -maxV, maxV) });
     });
+
     if (player1 && player2) {
         const mX = (player1.body.position.x + player2.body.position.x) / 2, mY = (player1.body.position.y + player2.body.position.y) / 2;
         let z = Math.min(SCREEN_WIDTH / (Math.abs(player1.body.position.x - player2.body.position.x) + 250), SCREEN_HEIGHT / (Math.abs(player1.body.position.y - player2.body.position.y) + 250));
