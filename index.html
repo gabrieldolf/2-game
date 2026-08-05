@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Juntas de Pivô Unificadas</title>
+    <title>Heave Ho - Ancoragem Estática Nativa</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -30,7 +30,7 @@
         <h3>Auxílios</h3>
         <div class="prop-row"><label>Mostrar Grade:</label><input type="checkbox" id="prop-grid-active" onchange="alternarVisibilidadeGrade()"></div>
         <div class="prop-row"><label>Tamanho Grade:</label><input type="number" id="prop-grid-size" value="64" min="8" max="128" onchange="alternarVisibilidadeGrade()"></div>
-        <div class="prop-row"><label style="color:#55ff55; font-weight:bold;">Alinhamento Ímã:</label><input type="checkbox" id="prop-snap-active" checked></div>
+        <div class="prop-row"><label style="color:#00ff00; font-weight:bold;">Alinhamento Ímã:</label><input type="checkbox" id="prop-snap-active" checked></div>
     </div>
     <div class="section">
         <h3 id="status-modo" style="color:#55ff55;">Criando novos objetos</h3>
@@ -39,9 +39,9 @@
         <div class="prop-row" id="row-h"><label>Altura (px):</label><input type="number" id="prop-h" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row"><label>Gravidade:</label><input type="checkbox" id="prop-gravity" onchange="atualizarObjetoExistente()"></div>
         
-        <div class="prop-row"><label>Fixar Posição (Eixo X/Y):</label><input type="checkbox" id="prop-lock-pos" onchange="atualizarObjetoExistente()"></div>
+        <div class="prop-row"><label style="color:#3498db; font-weight:bold;">Fixar Posição (Eixo X/Y):</label><input type="checkbox" id="prop-lock-pos" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row"><label>Bloquear Rotação:</label><input type="checkbox" id="prop-lock-rot" onchange="atualizarObjetoExistente()"></div>
-        <div class="prop-row"><label style="color:#3498db; font-weight:bold;">Resistência a Rotação:</label><input type="number" id="prop-inertia-mult" value="1.0" step="0.2" min="0.1" max="50.0" onchange="atualizarObjetoExistente()"></div>
+        <div class="prop-row"><label style="color:#aaa;">Resistência a Rotação:</label><input type="number" id="prop-inertia-mult" value="1.0" step="0.2" min="0.1" max="50.0" onchange="atualizarObjetoExistente()"></div>
         
         <div class="prop-row"><label>Massa (Peso):</label><input type="number" id="prop-mass" value="1.0" step="0.1" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row"><label>Arrasto Ar:</label><input type="number" id="prop-air" value="0.02" step="0.01" onchange="atualizarObjetoExistente()"></div>
@@ -104,6 +104,7 @@ function create() {
             if (document.getElementById('prop-snap-active').checked) {
                 pos = calcularAlinhamentoPorProximidade(this, pos.x, pos.y, objetoSelecionado.w, objetoSelecionado.h, objetoSelecionado.shape, objetoSelecionado.body);
             }
+            // Quando arrasta com o mouse no editor, move a Ancoragem Estática temporariamente
             this.matter.body.setPosition(objetoSelecionado.body, { x: pos.x, y: pos.y });
             this.matter.body.setVelocity(objetoSelecionado.body, { x:0, y:0 });
             objetoSelecionado.posicaoTravadaX = pos.x; objetoSelecionado.posicaoTravadaY = pos.y;
@@ -159,8 +160,11 @@ function extrairCamposPainel() {
 function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
     if (document.getElementById('prop-snap-active').checked) { let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; }
-    let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    
+    // CORREÇÃO: Passa o c.lockPos direto como isStatic nativo. Corta conflitos e tremores de vez!
+    let conf = { isStatic: c.lockPos, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     let body = (c.shape === 'box') ? scene.matter.add.rectangle(ax, ay, c.w, c.h, conf) : scene.matter.add.circle(ax, ay, c.w, conf);
+    
     let novaInercia = c.lockRot ? Infinity : (body.inertia * c.inertiaMult); scene.matter.body.setInertia(body, novaInercia);
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay });
 }
@@ -192,8 +196,11 @@ function atualizarObjetoExistente() {
     let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
     obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity; obj.lockPos = c.lockPos; obj.lockRot = c.lockRot; obj.inertiaMult = c.inertiaMult; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce;
     const px = obj.body.position.x, py = obj.body.position.y; scene.matter.world.remove(obj.body);
-    let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    
+    // CORREÇÃO MÁXIMA AO ATUALIZAR: Sincroniza a caixa de seleção com o isStatic nativo do Matter.js
+    let conf = { isStatic: obj.lockPos, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     obj.body = (obj.shape === 'box') ? scene.matter.add.rectangle(px, py, obj.w, obj.h, conf) : scene.matter.add.circle(px, py, obj.w, conf);
+    
     let novaInercia = obj.lockRot ? Infinity : (obj.body.inertia * obj.inertiaMult); scene.matter.body.setInertia(obj.body, novaInercia);
 }
 function deletarObjetoSelecionado() {
@@ -281,11 +288,9 @@ function update() {
     if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); });
     
-    // MUDANÇA TOTAL: Removeu a solda posicional por código que quebrava o jogo multi-mão. 
-    // Deixamos o Matter gerenciar todas as constraints de uma vez só no pipeline de física.
+    // REMOVIDO: O bloco if (obj.lockPos) { setPosition } foi deletado. O Matter cuida da rigidez nativamente.
     listaObjetosEditaveis.forEach(obj => {
         if (!obj?.body) return;
-        if (obj.lockPos) { sAct.matter.body.setPosition(obj.body, { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY }); sAct.matter.body.setVelocity(obj.body, { x:0, y:0 }); }
         desenharObjetoEditor(obj);
     });
     
@@ -304,9 +309,6 @@ function desenharJogador(p) {
     fil(p.leftElos, p.leftHand); fil(p.rightElos, p.rightHand); g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
-
-// CORREÇÃO CIRÚRGICA DE UNIFICAÇÃO: Cenário e Objetos agora compartilham a mesma constraint nativa super-rígida de mola zero. 
-// O motor gerencia as forças distribuídas sem colapsar a matemática!
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         let alvoValido = h.corpoTocadoAgora; let pontoGlobal = h.pontoDeContatoGlobal;
@@ -314,7 +316,6 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
             let isOutroPlayer = alvoValido.label && (alvoValido.label.startsWith('p0_') || alvoValido.label.startsWith('p1_'));
             
             if (isOutroPlayer) {
-                // REGRA COOPERATIVA: Junta elástica amortecida para correntes humanas
                 p[jKey] = s.matter.add.constraint(h, alvoValido, 5, 0.20, { 
                     pointA: { x: 0, y: 0 }, 
                     pointB: { x: pontoGlobal.x - alvoValido.position.x, y: pontoGlobal.y - alvoValido.position.y },
@@ -322,8 +323,6 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
                 });
                 p[jKey + 'Target'] = alvoValido;
             } else {
-                // SOLUÇÃO UNIFICADA JUNTAS DE PIVÔ: Cria uma amarração nativa de rigidez total (stiffness: 1.0) e folga zero (length: 0).
-                // Funciona perfeitamente para 1 ou 2 mãos segurando blocos móveis, pois a engine calcula o atrito dinâmico correto!
                 p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 1.0, {
                     pointA: { x: 0, y: 0 },
                     pointB: { x: pontoGlobal.x - alvoValido.position.x, y: pontoGlobal.y - alvoValido.position.y },
