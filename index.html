@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Lógica de Agarre Unificada</title>
+    <title>Heave Ho - Fixação de Garra Absoluta</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -67,9 +67,9 @@ function create() {
     this.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 100, true, true, true, true);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     gridGraphics = this.add.graphics().setDepth(1);
-    const ambConf = { isStatic:true, label:'ambiente', friction:0.8, restitution:0.1, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    const ambConf = { isStatic:true, label:'ambiente', friction:0.8, restitution:0.1, slop: 0, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     const borda = (s, x, y, w, h) => {
-        let b = s.matter.add.rectangle(x, y, w, h, ambConf); b.isStaticBorder = true; bordasFixasDoCenario.push(b);
+        let b = s.matter.add.rectangle(x, y, w, h, ambConf); b.isStaticBorder = true; b.slop = 0; bordasFixasDoCenario.push(b);
         s.add.graphics().fillStyle(0x1a1a1a, 1).fillRect(x - w/2, y - h/2, w, h).setDepth(2);
     };
     borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50); borda(this, WORLD_WIDTH/2, 25, WORLD_WIDTH, 50);
@@ -139,9 +139,9 @@ function extrairCamposPainel() {
 function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
     if (document.getElementById('prop-snap-active').checked) { let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; }
-    let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, slop: 0, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     let body = (c.shape === 'box') ? scene.matter.add.rectangle(ax, ay, c.w, c.h, conf) : scene.matter.add.circle(ax, ay, c.w, conf);
-    let novaInercia = c.lockRot ? Infinity : (body.inertia * c.inertiaMult); scene.matter.body.setInertia(body, novaInercia);
+    body.slop = 0; let novaInercia = c.lockRot ? Infinity : (body.inertia * c.inertiaMult); scene.matter.body.setInertia(body, novaInercia);
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, ultimaPos: { x: ax, y: ay }, ultimaRot: 0 });
 }
 function executarSelecaoObjeto(scene, x, y, pointer) {
@@ -172,9 +172,9 @@ function atualizarObjetoExistente() {
     let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
     obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity; obj.lockPos = c.lockPos; obj.lockRot = c.lockRot; obj.inertiaMult = c.inertiaMult; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce;
     const px = obj.body.position.x, py = obj.body.position.y; scene.matter.world.remove(obj.body);
-    let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, slop: 0, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     obj.body = (obj.shape === 'box') ? scene.matter.add.rectangle(px, py, obj.w, obj.h, conf) : scene.matter.add.circle(px, py, obj.w, conf);
-    let novaInercia = obj.lockRot ? Infinity : (obj.body.inertia * obj.inertiaMult); scene.matter.body.setInertia(obj.body, novaInercia);
+    obj.body.slop = 0; let novaInercia = obj.lockRot ? Infinity : (obj.body.inertia * obj.inertiaMult); scene.matter.body.setInertia(obj.body, novaInercia);
     obj.ultimaPos = { x: px, y: py }; obj.ultimaRot = obj.body.angle;
 }
 function deletarObjetoSelecionado() {
@@ -192,8 +192,8 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
     let last = bA;
     for (let i = 0; i < num; i++) {
         const lastLink = (i === num - 1);
-        let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 10, len, { density: 0.005, frictionAir: 0.02, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
-        if (!lastLink) list.push(link);
+        let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 10, len, { density: 0.005, frictionAir: 0.02, slop: 0, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
+        link.slop = 0; if (!lastLink) list.push(link);
         scene.matter.add.constraint(last, link, len, 1.0, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 } });
         link.ultimaPos = { x: bA.position.x, y: bA.position.y }; link.ultimaRot = 0; last = link;
     }
@@ -209,9 +209,10 @@ function executarRespawnIndividual(scene, pNum) {
 }
 function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const grp = scene.matter.world.nextGroup(true), flt = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp };
-    const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
-    const lH = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
-    const rH = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
+    const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, slop: 0, label: `p${id}_body`, collisionFilter: flt });
+    const lH = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, slop: 0, label: `p${id}_leftHand`, collisionFilter: flt });
+    const rH = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, slop: 0, label: `p${id}_rightHand`, collisionFilter: flt });
+    b.slop = 0; lH.slop = 0; rH.slop = 0;
     b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
@@ -236,6 +237,24 @@ function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
     if (player1) { handlePlayerInput(this, player1); desenharJogador(player1); } if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); aplicarLimiteFrame(sAct, p.leftHand, 12, 0.1); aplicarLimiteFrame(sAct, p.rightHand, 12, 0.1); p.leftElos.forEach(elo => aplicarLimiteFrame(sAct, elo, 10, 0.1)); p.rightElos.forEach(elo => aplicarLimiteFrame(sAct, elo, 10, 0.1)); });
+    
+    // MUDANÇA ABSOLUTA: Trava matemática de frame força a mão a se mover e rodar grudada na face da caixa (Anula o esticamento e órbita)
+    [player1, player2].forEach(p => {
+        if (!p) return;
+        ['leftJoint', 'rightJoint'].forEach(jKey => {
+            if (p[jKey] && p[jKey + 'Target']) {
+                let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
+                let target = p[jKey + 'Target'];
+                let offset = p[jKey + 'Offset'];
+                let cos = Math.cos(target.angle), sin = Math.sin(target.angle);
+                let mundoX = target.position.x + (offset.x * cos - offset.y * sin);
+                let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
+                sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY });
+                sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y });
+            }
+        });
+    });
+
     garrasAtivas = []; if (player1) { if (player1.leftJoint) garrasAtivas.push(player1.leftJointTarget); if (player1.rightJoint) garrasAtivas.push(player1.rightJointTarget); } if (player2) { if (player2.leftJoint) garrasAtivas.push(player2.leftJointTarget); if (player2.rightJoint) garrasAtivas.push(player2.rightJointTarget); }
     listaObjetosEditaveis.forEach(obj => {
         if (!obj?.body?.velocity) return; const agarrado = garrasAtivas.includes(obj.body);
@@ -260,36 +279,23 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-// MUDANÇA: Lógica de garras 100% simétrica. Paredes e Objetos agora usam EXATAMENTE o mesmo funil poligonal estrito.
+// MUDANÇA CIRÚRGICA: O pino físico foi substituído por uma matriz de amostragem local. Congela o objeto na face e remove a órbita.
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         const todosOsCorpos = s.matter.world.localWorld.bodies;
-        let pontoDeContatoLocal = null;
-        
         const alvoValido = todosOsCorpos.find(b => {
             if (b.label !== 'ambiente' && !b.label.startsWith(enemy)) return false;
-            
-            // Varredura estrita oficial da engine física para qualquer corpo sólido
             let dadosColisao = Phaser.Physics.Matter.Matter.Query.collides(h, [b]);
-            if (dadosColisao && dadosColisao.length > 0) {
-                let suporte = dadosColisao[0].supports[0]; // Captura o ponto de contato exato indexado da colisão
-                if (suporte) {
-                    pontoDeContatoLocal = { x: suporte.x - b.position.x, y: suporte.y - b.position.y };
-                    return true;
-                }
-            }
-            return false;
+            return (dadosColisao && dadosColisao.length > 0); // Exige intersecção de pixel pura
         });
-        
-        if (alvoValido && pontoDeContatoLocal) { 
-            // Aplica a restrição de distância zero soldada exatamente onde ocorreu a colisão poligonal nativa
-            p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 0.25, { 
-                pointA: { x: 0, y: 0 }, 
-                pointB: pontoDeContatoLocal 
-            }); 
-            p[jKey + 'Target'] = alvoValido; 
+        if (alvoValido) { 
+            p[jKey] = true; p[jKey + 'Target'] = alvoValido;
+            // Calcula e salva a coordenada local da mão em relação ao centro e ângulo da caixa
+            let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
+            let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
+            p[jKey + 'Offset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
         }
-    } else if (!grab && p[jKey]) { s.matter.world.remove(p[jKey]); p[jKey] = null; p[jKey + 'Target'] = null; }
+    } else if (!grab && p[jKey]) { p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'Offset'] = null; }
 }
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5), enemy = p.id === 0 ? "p1_" : "p0_";
