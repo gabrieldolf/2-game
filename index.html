@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Debug de Colisão Nativo</title>
+    <title>Heave Ho - Fixação de Garra Estrita</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -45,7 +45,7 @@
         
         <div class="prop-row"><label>Massa (Peso):</label><input type="number" id="prop-mass" value="1.0" step="0.1" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row"><label>Arrasto Ar:</label><input type="number" id="prop-air" value="0.02" step="0.01" onchange="atualizarObjetoExistente()"></div>
-        <div class="prop-row"><label>Elasticidade:</label><input type="number" id="prop-bounce" value="0.1" step="0.05" min="0" max="1" onchange="atualizarObjetoExistente()"></div>
+        <div class="prop-row"><label>Elasticidade:</label><input type="number" id="prop-bounce" value="0.1" step="0.05" onchange="atualizarObjetoExistente()"></div>
         <button id="btn-delete" style="background:#ff4757; display:none; margin-top:5px;" onclick="deletarObjetoSelecionado()">Deletar Objeto</button>
     </div>
 </div>
@@ -55,7 +55,6 @@
 const SCREEN_WIDTH = 1024, SCREEN_HEIGHT = 768, WORLD_WIDTH = 3000, WORLD_HEIGHT = 2000;
 const config = {
     type: Phaser.AUTO, width: SCREEN_WIDTH, height: SCREEN_HEIGHT, parent: 'canvas-container', backgroundColor: '#4488aa',
-    // MUDANÇA: debug: true ativa linhas rígidas ao redor de todas as hitboxes do Matter automaticamente
     physics: { default: 'matter', matter: { gravity: { y:1.5 }, debug: true } },
     input: { gamepad: true }, scene: { preload: function(){}, create: create, update: update }
 };
@@ -261,21 +260,33 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-// SOLUÇÃO OFICIAL: A biblioteca Matter.js agora decide a colisão via polígonos nativos (Query.collides)
+// CORREÇÃO DA ANCORAGEM: Solda o pino na coordenada geométrica de contato local exata, cortando o salto
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         const todosOsCorpos = s.matter.world.localWorld.bodies;
+        let pontoDeContatoLocal = null;
+        
         const alvoValido = todosOsCorpos.find(b => {
             if (b.label !== 'ambiente' && !b.label.startsWith(enemy)) return false;
             
-            // Pergunta nativa para a engine física: "A mão está colidindo geometricamente com este objeto?"
-            let colisaoNativa = Phaser.Physics.Matter.Matter.Query.collides(h, [b]);
-            return (colisaoNativa && colisaoNativa.length > 0);
+            // Dispara a varredura poligonal do motor físico
+            let dadosColisao = Phaser.Physics.Matter.Matter.Query.collides(h, [b]);
+            if (dadosColisao && dadosColisao.length > 0) {
+                // Captura o pixel preciso de impacto na face do bloco
+                let suporte = dadosColisao[0].supports[0];
+                if (suporte) {
+                    pontoDeContatoLocal = { x: suporte.x - b.position.x, y: suporte.y - b.position.y };
+                    return true;
+                }
+            }
+            return false;
         });
-        if (alvoValido) { 
-            p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 0.15, { 
-                pointA: { x:0, y:0 }, 
-                pointB: { x: h.position.x - alvoValido.position.x, y: h.position.y - alvoValido.position.y } 
+        
+        if (alvoValido && pontoDeContatoLocal) { 
+            // Cria a amarração fixa usando o deslocamento exato do impacto, congelando o teletransporte
+            p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 0.25, { 
+                pointA: { x: 0, y: 0 }, 
+                pointB: pontoDeContatoLocal 
             }); 
             p[jKey + 'Target'] = alvoValido; 
         }
