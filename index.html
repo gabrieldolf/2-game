@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Soldagem Geométrica Móvel</title>
+    <title>Heave Ho - Solda por Evento de Impacto</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -75,6 +75,26 @@ function create() {
     borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50); borda(this, WORLD_WIDTH/2, 25, WORLD_WIDTH, 50);
     borda(this, 25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT); borda(this, WORLD_WIDTH-25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT);
     
+    // ATUALIZAÇÃO CRUCIAL: Captura o contato no exato frame do choque e armazena para a função de solda posicional
+    this.matter.world.on('collisionstart', (event) => {
+        event.pairs.forEach(pair => {
+            let bodyA = pair.bodyA, bodyB = pair.bodyB;
+            processarToqueParaContato(bodyA, bodyB, pair); processarToqueParaContato(bodyB, bodyA, pair);
+        });
+    });
+    this.matter.world.on('collisionactive', (event) => {
+        event.pairs.forEach(pair => {
+            let bodyA = pair.bodyA, bodyB = pair.bodyB;
+            processarToqueParaContato(bodyA, bodyB, pair); processarToqueParaContato(bodyB, bodyA, pair);
+        });
+    });
+    this.matter.world.on('collisionend', (event) => {
+        event.pairs.forEach(pair => {
+            let bodyA = pair.bodyA, bodyB = pair.bodyB;
+            quebrarToqueParaContato(bodyA, bodyB); quebrarToqueParaContato(bodyB, bodyA);
+        });
+    });
+
     this.input.on('pointerdown', (p) => {
         if (ferramentaAtual === 'create') executarCriacaoObjeto(this, p.worldX, p.worldY);
         else executarSelecaoObjeto(this, p.worldX, p.worldY, p);
@@ -213,9 +233,32 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const lH = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
     const rH = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
     
+    // Cache de eventos nativos mapeia o toque real
+    lH.corpoTocadoAgora = null; lH.pontoDeContatoGlobal = null;
+    rH.corpoTocadoAgora = null; rH.pontoDeContatoGlobal = null;
+    
     b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
+}
+function processarToqueParaContato(h, b, pair) {
+    if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
+        if (b.label === 'ambiente' || b.label.startsWith('p0_') || b.label.startsWith('p1_')) {
+            if (b.label !== h.label.substring(0, 3) + 'body' && !b.label.includes('braco')) {
+                h.corpoTocadoAgora = b;
+                if (pair.activeContacts && pair.activeContacts.length > 0) {
+                    h.pontoDeContatoGlobal = { x: pair.activeContacts[0].vertex.x, y: pair.activeContacts[0].vertex.y };
+                } else {
+                    h.pontoDeContatoGlobal = { x: h.position.x, y: h.position.y };
+                }
+            }
+        }
+    }
+}
+function quebrarToqueParaContato(h, b) {
+    if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
+        if (h.corpoTocadoAgora === b) { h.corpoTocadoAgora = null; h.pontoDeContatoGlobal = null; }
+    }
 }
 function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
     if (!body || !body.position || body.isStatic) return;
@@ -233,7 +276,7 @@ function update() {
     if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); });
     
-    // MUDANÇA MAIÚSCULA: Se a mão estiver ativada, desliga a força e fixa a posição local na malha rotatória do objeto
+    // ANCORAGEM GEOMÉTRICA ATIVA: Força a mão a acompanhar a rotação/posição do bloco sem jitter de constraints
     [player1, player2].forEach(p => {
         if (!p) return;
         ['leftJoint', 'rightJoint'].forEach(jKey => {
@@ -242,7 +285,6 @@ function update() {
                 let target = p[jKey + 'Target'];
                 let offset = p[jKey + 'Offset'];
                 
-                // Aplica a matriz de projeção trigonométrica pura baseada no ângulo atual do bloco móvel
                 let cos = Math.cos(target.angle), sin = Math.sin(target.angle);
                 let mundoX = target.position.x + (offset.x * cos - offset.y * sin);
                 let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
@@ -267,7 +309,6 @@ function update() {
         this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (mY - SCREEN_HEIGHT / 2), 0.08); this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, z, 0.05));
     } else if (player1) { desenharJogador(player1); this.cameras.main.centerOn(player1.body.position.x, player1.body.position.y); }
 }
- Berry = 0;
 function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
 function desenharJogador(p) {
     const g = p.gfx; g.clear(); const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5); g.lineStyle(12, 0x000000, 1);
@@ -276,30 +317,16 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-// CORREÇÃO: Varredura por Query.collides pura. Solda a mão calculando o offset local sem usar constraints.
+// CORREÇÃO: Lê o toque pré-registrado na Parte 4. Bloqueia o elástico e solda a mão no ângulo local exato do impacto.
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
-        const todosOsCorpos = s.matter.world.localWorld.bodies;
-        let pontoDeContatoLocal = null;
+        let alvoValido = h.corpoTocadoAgora;
+        let pontoGlobal = h.pontoDeContatoGlobal;
         
-        const alvoValido = todosOsCorpos.find(b => {
-            if (b.label !== 'ambiente' && !b.label.startsWith(enemy)) return false;
-            
-            let dadosColisao = Phaser.Physics.Matter.Matter.Query.collides(h, [b]);
-            if (dadosColisao && dadosColisao.length > 0) {
-                let suporte = dadosColisao.supports;
-                if (suporte) {
-                    pontoDeContatoLocal = { x: suporte.x - b.position.x, y: suporte.y - b.position.y };
-                    return true;
-                }
-            }
-            return false;
-        });
-        
-        if (alvoValido) { 
+        if (alvoValido && pontoGlobal) { 
             p[jKey] = true; p[jKey + 'Target'] = alvoValido;
             
-            // Calcula o deslocamento local fixo levando em conta o ângulo atual do bloco dinâmico
+            // Calcula o recuo local imutável em relação à inclinação do bloco
             let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
             let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
             p[jKey + 'Offset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
@@ -312,13 +339,11 @@ function handlePlayerInput(s, p) {
     let mL = 1.0, mR = 1.0; if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) { mL = 0.5; mR = 0.5; }
     
     if (pad.leftStick) {
-        // Redirecionamento dinâmico: se a mão esquerda estiver grudada, move o corpo principal (p.body).
         let alvoEsquerdo = p.leftJoint ? p.body : p.leftHand; let m = p.leftJoint ? 0.045 : 0.018; 
         s.matter.body.applyForce(alvoEsquerdo, alvoEsquerdo.position, { x: pad.leftStick.x * m, y: pad.leftStick.y * m });
         if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.isStatic) s.matter.body.applyForce(p.leftJointTarget, p.leftHand.position, { x: -pad.leftStick.x * m * 0.9 * mL, y: -pad.leftStick.y * m * 0.9 * mL });
     }
     if (pad.rightStick) {
-        // Se a mão direita estiver grudada, move o corpo principal (p.body).
         let alvoDireito = p.rightJoint ? p.body : p.rightHand; let m = p.rightJoint ? 0.045 : 0.018; 
         s.matter.body.applyForce(alvoDireito, alvoDireito.position, { x: pad.rightStick.x * m, y: pad.rightStick.y * m });
         if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.isStatic) s.matter.body.applyForce(p.rightJointTarget, p.rightHand.position, { x: -pad.rightStick.x * m * 0.9 * mR, y: -pad.rightStick.y * m * 0.9 * mR });
