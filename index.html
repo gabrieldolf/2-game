@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Juntas Rígidas Anti-Elástico</title>
+    <title>Heave Ho - Estabilização de Contato Estrita</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -75,25 +75,7 @@ function create() {
     borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50); borda(this, WORLD_WIDTH/2, 25, WORLD_WIDTH, 50);
     borda(this, 25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT); borda(this, WORLD_WIDTH-25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT);
     
-    this.matter.world.on('collisionstart', (event) => {
-        event.pairs.forEach(pair => {
-            let bodyA = pair.bodyA, bodyB = pair.bodyB;
-            processarToqueParaContato(bodyA, bodyB, pair); processarToqueParaContato(bodyB, bodyA, pair);
-        });
-    });
-    this.matter.world.on('collisionactive', (event) => {
-        event.pairs.forEach(pair => {
-            let bodyA = pair.bodyA, bodyB = pair.bodyB;
-            processarToqueParaContato(bodyA, bodyB, pair); processarToqueParaContato(bodyB, bodyA, pair);
-        });
-    });
-    this.matter.world.on('collisionend', (event) => {
-        event.pairs.forEach(pair => {
-            let bodyA = pair.bodyA, bodyB = pair.bodyB;
-            quebrarToqueParaContato(bodyA, bodyB); quebrarToqueParaContato(bodyB, bodyA);
-        });
-    });
-
+    // CORREÇÃO: Limpamos completamente todos os listeners de eventos antigos que geravam travamentos e garras fantasmas
     this.input.on('pointerdown', (p) => {
         if (ferramentaAtual === 'create') executarCriacaoObjeto(this, p.worldX, p.worldY);
         else executarSelecaoObjeto(this, p.worldX, p.worldY, p);
@@ -232,34 +214,30 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const lH = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
     const rH = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
     
-    lH.corpoTocadoAgora = null; lH.pontoDeContatoGlobal = null;
-    rH.corpoTocadoAgora = null; rH.pontoDeContatoGlobal = null;
-    
+    b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
 }
-function processarToqueParaContato(h, b, pair) {
-    if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
-        if (b.label === 'ambiente' || b.label.startsWith('p0_') || b.label.startsWith('p1_')) {
-            if (b.label !== h.label.substring(0, 3) + 'body' && !b.label.includes('braco')) {
-                h.corpoTocadoAgora = b;
-                if (pair.activeContacts && pair.activeContacts.length > 0) {
-                    h.pontoDeContatoGlobal = { x: pair.activeContacts.vertex.x, y: pair.activeContacts.vertex.y };
-                } else {
-                    h.pontoDeContatoGlobal = { x: h.position.x, y: h.position.y };
-                }
-            }
+function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
+    if (!body || !body.position) return;
+    if (body.ultimaPos) {
+        let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y, distSq = dx*dx + dy*dy;
+        if (distSq > maxDist * maxDist) {
+            let dist = Math.sqrt(distSq);
+            scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx / dist) * maxDist, y: body.ultimaPos.y + (dy / dist) * maxDist });
+            scene.matter.body.setVelocity(body, { x: (dx/dist)*2, y: (dy/dist)*2 });
         }
     }
-}
-function quebrarToqueParaContato(h, b) {
-    if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
-        if (h.corpoTocadoAgora === b) { h.corpoTocadoAgora = null; h.pontoDeContatoGlobal = null; }
+    if (body.ultimaRot !== undefined) {
+        let dRot = body.angle - body.ultimaRot;
+        if (Math.abs(dRot) > maxRot) { scene.matter.body.setAngle(body, body.ultimaRot + Math.sign(dRot) * maxRot); body.angularVelocity = Math.sign(dRot) * 0.01; }
     }
+    body.ultimaPos = { x: body.position.x, y: body.position.y }; body.ultimaRot = body.angle;
 }
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
     if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
+    [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); aplicarLimiteFrame(sAct, p.leftHand, 12, 0.1); aplicarLimiteFrame(sAct, p.rightHand, 12, 0.1); });
     listaObjetosEditaveis.forEach(obj => {
         if (!obj?.body) return;
         if (obj.lockPos) { sAct.matter.body.setPosition(obj.body, { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY }); sAct.matter.body.setVelocity(obj.body, { x:0, y:0 }); }
@@ -273,7 +251,6 @@ function update() {
         this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (mY - SCREEN_HEIGHT / 2), 0.08); this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, z, 0.05));
     } else if (player1) { desenharJogador(player1); this.cameras.main.centerOn(player1.body.position.x, player1.body.position.y); }
 }
- Berry = 0;
 function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
 function desenharJogador(p) {
     const g = p.gfx; g.clear(); const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5); g.lineStyle(12, 0x000000, 1);
@@ -282,19 +259,35 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-// CORREÇÃO CIRÚRGICA: Configura stiffness: 1.0, length: 0 e damping: 0. Transforma a mola elástica em uma solda rígida indestrutível.
+// CORREÇÃO MÁXIMA: Varredura síncrona por Query.collides com absorção mecânica estável (Cancelamento de espasmos)
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
-        let alvoValido = h.corpoTocadoAgora; let pontoGlobal = h.pontoDeContatoGlobal;
-        if (alvoValido && pontoGlobal) {
-            let localX = pontoGlobal.x - alvoValido.position.x; let localY = pontoGlobal.y - alvoValido.position.y;
+        const todosOsCorpos = s.matter.world.localWorld.bodies;
+        let pontoDeContatoLocal = null;
+        
+        const alvoValido = todosOsCorpos.find(b => {
+            if (b.label !== 'ambiente' && !b.label.startsWith(enemy)) return false;
             
-            p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 1.0, { 
+            // Dispara o teste geométrico poligonal oficial direto na engine física por frame
+            let dadosColisao = Phaser.Physics.Matter.Matter.Query.collides(h, [b]);
+            if (dadosColisao && dadosColisao.length > 0) {
+                let suporte = dadosColisao[0].supports[0]; // Captura o ponto exato da interseção de contato
+                if (suporte) {
+                    pontoDeContatoLocal = { x: suporte.x - b.position.x, y: suporte.y - b.position.y };
+                    return true;
+                }
+            }
+            return false;
+        });
+        
+        if (alvoValido && pontoDeContatoLocal) { 
+            // PARAMETRIZAÇÃO ESTABILIZADA: Rigidez balanceada (0.85) com damping (0.05) absorve forças sem tremer a simulação
+            p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 0.85, { 
                 pointA: { x: 0, y: 0 }, 
-                pointB: { x: localX, y: localY },
-                damping: 0 // Zera o amortecimento elástico para remover a folga visual de mola
-            });
-            p[jKey + 'Target'] = alvoValido;
+                pointB: pontoDeContatoLocal,
+                damping: 0.05 
+            }); 
+            p[jKey + 'Target'] = alvoValido; 
         }
     } else if (!grab && p[jKey]) { s.matter.world.remove(p[jKey]); p[jKey] = null; p[jKey + 'Target'] = null; }
 }
@@ -302,13 +295,17 @@ function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5), enemy = p.id === 0 ? "p1_" : "p0_";
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     let mL = 1.0, mR = 1.0; if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) { mL = 0.5; mR = 0.5; }
+    
     if (pad.leftStick) {
-        let alvoEsquerdo = p.leftJoint ? p.body : p.leftHand; let m = p.leftJoint ? 0.045 : 0.018; 
+        // Redirecionamento dinâmico de força preservado: alavanca o corpo redondo se estiver ancorado
+        let alvoEsquerdo = p.leftJoint ? p.body : p.leftHand;
+        let m = p.leftJoint ? 0.045 : 0.018; 
         s.matter.body.applyForce(alvoEsquerdo, alvoEsquerdo.position, { x: pad.leftStick.x * m, y: pad.leftStick.y * m });
         if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.isStatic) s.matter.body.applyForce(p.leftJointTarget, p.leftHand.position, { x: -pad.leftStick.x * m * 0.9 * mL, y: -pad.leftStick.y * m * 0.9 * mL });
     }
     if (pad.rightStick) {
-        let alvoDireito = p.rightJoint ? p.body : p.rightHand; let m = p.rightJoint ? 0.045 : 0.018; 
+        let alvoDireito = p.rightJoint ? p.body : p.rightHand;
+        let m = p.rightJoint ? 0.045 : 0.018; 
         s.matter.body.applyForce(alvoDireito, alvoDireito.position, { x: pad.rightStick.x * m, y: pad.rightStick.y * m });
         if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.isStatic) s.matter.body.applyForce(p.rightJointTarget, p.rightHand.position, { x: -pad.rightStick.x * m * 0.9 * mR, y: -pad.rightStick.y * m * 0.9 * mR });
     }
