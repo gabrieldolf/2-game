@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Toque Milimétrico Estabilizado</title>
+    <title>Heave Ho - Toque de Superfície Perfeito</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -259,23 +259,48 @@ function desenharJogador(p) {
     fil(p.leftElos, p.leftHand); fil(p.rightElos, p.rightHand); g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
+
+// CORREÇÃO RADICAL: Mede a distância da casca da mão até a quina/linha poligonal real mais próxima do bloco laranja
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         const todosOsCorpos = s.matter.world.localWorld.bodies;
         const alvoValido = todosOsCorpos.find(b => {
             if (b.label !== 'ambiente' && !b.label.startsWith(enemy)) return false;
+            
+            // 1. Verifica se há sobreposição física estrita
             let colisaoReal = Phaser.Physics.Matter.Matter.Query.collides(h, [b]);
             if (colisaoReal && colisaoReal.length > 0) return true;
-            let dx = b.position.x - h.position.x, dy = b.position.y - h.position.y, distCentro = Math.sqrt(dx*dx + dy*dy);
+            
+            // 2. Projeta a distância real do ponto mais próximo da casca do objeto até a mão
             let objRef = listaObjetosEditaveis.find(o => o && o.body === b);
             if (objRef) {
-                if (objRef.shape === 'circle') return (distCentro <= objRef.w + 14 + 3);
-                let projBounds = (h.position.x >= b.bounds.min.x - 4 && h.position.x <= b.bounds.max.x + 4 && h.position.y >= b.bounds.min.y - 4 && h.position.y <= b.bounds.max.y + 4);
-                return (projBounds && distCentro <= (Math.max(objRef.w, objRef.h) + 14 + 3));
+                if (objRef.shape === 'circle') {
+                    let dx = b.position.x - h.position.x, dy = b.position.y - h.position.y;
+                    return (Math.sqrt(dx*dx + dy*dy) <= objRef.w + 14 + 1); // 14px da mão + Raio + 1px de tolerância visual
+                } else {
+                    // Varre cada face poligonal (vértices) para encontrar o ponto mais próximo da superfície inclinada
+                    let minDistBorda = Infinity;
+                    const verts = b.vertices;
+                    for (let i = 0; i < verts.length; i++) {
+                        let v1 = verts[i], v2 = verts[(i + 1) % verts.length];
+                        // Projeção escalar do vetor para achar a distância até o segmento de reta da face
+                        let l2 = (v1.x - v2.x)**2 + (v1.y - v2.y)**2;
+                        let t = ((h.position.x - v1.x) * (v2.x - v1.x) + (h.position.y - v1.y) * (v2.y - v1.y)) / l2;
+                        t = Phaser.Math.Clamp(t, 0, 1);
+                        let projX = v1.x + t * (v2.x - v1.x);
+                        let projY = v1.y + t * (v2.y - v1.y);
+                        let distFace = Math.sqrt((h.position.x - projX)**2 + (h.position.y - projY)**2);
+                        if (distFace < minDistBorda) minDistBorda = distFace;
+                    }
+                    return (minDistBorda <= 14 + 1); // Exige que a borda da mão (14px) esteja a no máximo 1px de tocar a casca
+                }
             }
             return false;
         });
-        if (alvoValido) { p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 0.15, { pointA: { x:0, y:0 }, pointB: { x: h.position.x - alvoValido.position.x, y: h.position.y - alvoValido.position.y } }); p[jKey + 'Target'] = alvoValido; }
+        if (alvoValido) { 
+            p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 0.15, { pointA: { x:0, y:0 }, pointB: { x: h.position.x - alvoValido.position.x, y: h.position.y - alvoValido.position.y } }); 
+            p[jKey + 'Target'] = alvoValido; 
+        }
     } else if (!grab && p[jKey]) { s.matter.world.remove(p[jKey]); p[jKey] = null; p[jKey + 'Target'] = null; }
 }
 function handlePlayerInput(s, p) {
