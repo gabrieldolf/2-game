@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Inversão Dinâmica de Forças</title>
+    <title>Heave Ho - Física Nativa Restaurada</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -67,9 +67,9 @@ function create() {
     this.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 100, true, true, true, true);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     gridGraphics = this.add.graphics().setDepth(1);
-    const ambConf = { isStatic:true, label:'ambiente', friction:0.8, restitution:0.1, slop: 0, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    const ambConf = { isStatic:true, label:'ambiente', friction:0.8, restitution:0.1, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     const borda = (s, x, y, w, h) => {
-        let b = s.matter.add.rectangle(x, y, w, h, ambConf); b.isStaticBorder = true; b.slop = 0; bordasFixasDoCenario.push(b);
+        let b = s.matter.add.rectangle(x, y, w, h, ambConf); b.isStaticBorder = true; bordasFixasDoCenario.push(b);
         s.add.graphics().fillStyle(0x1a1a1a, 1).fillRect(x - w/2, y - h/2, w, h).setDepth(2);
     };
     borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50); borda(this, WORLD_WIDTH/2, 25, WORLD_WIDTH, 50);
@@ -139,10 +139,10 @@ function extrairCamposPainel() {
 function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
     if (document.getElementById('prop-snap-active').checked) { let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; }
-    let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, slop: 0, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     let body = (c.shape === 'box') ? scene.matter.add.rectangle(ax, ay, c.w, c.h, conf) : scene.matter.add.circle(ax, ay, c.w, conf);
-    body.slop = 0; let novaInercia = c.lockRot ? Infinity : (body.inertia * c.inertiaMult); scene.matter.body.setInertia(body, novaInercia);
-    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, ultimaPos: { x: ax, y: ay }, ultimaRot: 0 });
+    let novaInercia = c.lockRot ? Infinity : (body.inertia * c.inertiaMult); scene.matter.body.setInertia(body, novaInercia);
+    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay });
 }
 function executarSelecaoObjeto(scene, x, y, pointer) {
     const bodies = scene.matter.world.localWorld.bodies.filter(b => b && b.label === 'ambiente' && !b.isStaticBorder);
@@ -172,10 +172,9 @@ function atualizarObjetoExistente() {
     let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
     obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity; obj.lockPos = c.lockPos; obj.lockRot = c.lockRot; obj.inertiaMult = c.inertiaMult; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce;
     const px = obj.body.position.x, py = obj.body.position.y; scene.matter.world.remove(obj.body);
-    let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, slop: 0, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     obj.body = (obj.shape === 'box') ? scene.matter.add.rectangle(px, py, obj.w, obj.h, conf) : scene.matter.add.circle(px, py, obj.w, conf);
-    obj.body.slop = 0; let novaInercia = obj.lockRot ? Infinity : (obj.body.inertia * obj.inertiaMult); scene.matter.body.setInertia(obj.body, novaInercia);
-    obj.ultimaPos = { x: px, y: py }; obj.ultimaRot = obj.body.angle;
+    let novaInercia = obj.lockRot ? Infinity : (obj.body.inertia * obj.inertiaMult); scene.matter.body.setInertia(obj.body, novaInercia);
 }
 function deletarObjetoSelecionado() {
     if (!objetoSelecionado) return; let scene = game.scene.getScene('default');
@@ -192,19 +191,15 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
     let last = bA;
     for (let i = 0; i < num; i++) {
         const lastLink = (i === num - 1);
-        let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 10, len, { density: 0.005, frictionAir: 0.02, slop: 0, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
-        link.slop = 0; if (!lastLink) list.push(link);
+        let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 10, len, { density: 0.005, frictionAir: 0.02, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
+        if (!lastLink) list.push(link);
         scene.matter.add.constraint(last, link, len, 1.0, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 } });
-        link.ultimaPos = { x: bA.position.x, y: bA.position.y }; link.ultimaRot = 0; last = link;
+        last = link;
     }
-}
-function blackoutGarra(scene, hand) {
-    if (hand && hand.isStatic) { scene.matter.body.setStatic(hand, false); }
 }
 function executarRespawnIndividual(scene, pNum) {
     const cList = scene.matter.world.localWorld.constraints, pref = `p${pNum}_`;
     const p = (pNum === 0) ? player1 : player2; if (!p) return;
-    blackoutGarra(scene, p.leftHand); blackoutGarra(scene, p.rightHand);
     for (let i = cList.length - 1; i >= 0; i--) { let c = cList[i]; if (c && ((c.bodyA?.label?.includes(pref)) || (c.bodyB?.label?.includes(pref)))) scene.matter.world.remove(c); }
     scene.matter.world.remove(p.body); scene.matter.world.remove(p.leftHand); scene.matter.world.remove(p.rightHand);
     p.leftElos.forEach(e => scene.matter.world.remove(e)); p.rightElos.forEach(e => scene.matter.world.remove(e)); p.gfx.clear();
@@ -213,67 +208,30 @@ function executarRespawnIndividual(scene, pNum) {
 }
 function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const grp = scene.matter.world.nextGroup(true), flt = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp };
-    const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, slop: 0, label: `p${id}_body`, collisionFilter: flt });
-    const lH = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, slop: 0, label: `p${id}_leftHand`, collisionFilter: flt });
-    const rH = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, slop: 0, label: `p${id}_rightHand`, collisionFilter: flt });
-    b.slop = 0; lH.slop = 0; rH.slop = 0;
-    b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
+    const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
+    const lH = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
+    const rH = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
 }
-function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
-    if (!body || !body.position || body.isStatic) return;
-    if (body.ultimaPos) {
-        let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y, distSq = dx*dx + dy*dy;
-        if (distSq > maxDist * maxDist) {
-            let dist = Math.sqrt(distSq);
-            scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx / dist) * maxDist, y: body.ultimaPos.y + (dy / dist) * maxDist });
-            scene.matter.body.setVelocity(body, { x: (dx/dist)*2, y: (dy/dist)*2 });
-        }
-    }
-    if (body.ultimaRot !== undefined) {
-        let dRot = body.angle - body.ultimaRot;
-        if (Math.abs(dRot) > maxRot) { scene.matter.body.setAngle(body, body.ultimaRot + Math.sign(dRot) * maxRot); body.angularVelocity = Math.sign(dRot) * 0.01; }
-    }
-    body.ultimaPos = { x: body.position.x, y: body.position.y }; body.ultimaRot = body.angle;
-}
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
-    if (player1) { handlePlayerInput(this, player1); desenharJogador(player1); } if (player2) { handlePlayerInput(this, player2); desenharJogador(player2); }
-    [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); aplicarLimiteFrame(sAct, p.leftHand, 12, 0.1); aplicarLimiteFrame(sAct, p.rightHand, 12, 0.1); p.leftElos.forEach(elo => aplicarLimiteFrame(sAct, elo, 10, 0.1)); p.rightElos.forEach(elo => aplicarLimiteFrame(sAct, elo, 10, 0.1)); });
+    if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
     
-    // ATUALIZAÇÃO REVOLUCIONÁRIA: Sincroniza a mão estática soldada à malha do objeto móvel (Diz adeus ao tremor frenético)
-    [player1, player2].forEach(p => {
-        if (!p) return;
-        ['leftJoint', 'rightJoint'].forEach(jKey => {
-            if (p[jKey] && p[jKey + 'Target']) {
-                let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
-                let target = p[jKey + 'Target'];
-                let offset = p[jKey + 'Offset'];
-                let cos = Math.cos(target.angle), sin = Math.sin(target.angle);
-                let mundoX = target.position.x + (offset.x * cos - offset.y * sin);
-                let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
-                sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY });
-                sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y });
-            }
-        });
+    // RESTAURAÇÃO: Removemos todos os calculos artificiais de posição por frame. Deixamos a engine rodar nativa.
+    listaObjetosEditaveis.forEach(obj => {
+        if (!obj?.body) return;
+        if (obj.lockPos) { sAct.matter.body.setPosition(obj.body, { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY }); sAct.matter.body.setVelocity(obj.body, { x:0, y:0 }); }
+        desenharObjetoEditor(obj);
     });
 
-    garrasAtivas = []; if (player1) { if (player1.leftJoint) garrasAtivas.push(player1.leftJointTarget); if (player1.rightJoint) garrasAtivas.push(player1.rightJointTarget); } if (player2) { if (player2.leftJoint) garrasAtivas.push(player2.leftJointTarget); if (player2.rightJoint) garrasAtivas.push(player2.rightJointTarget); }
-    listaObjetosEditaveis.forEach(obj => {
-        if (!obj?.body?.velocity) return; const agarrado = garrasAtivas.includes(obj.body);
-        if (obj.lockPos) { sAct.matter.body.setPosition(obj.body, { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY }); sAct.matter.body.setVelocity(obj.body, { x:0, y:0 }); }
-        if (!obj.lockPos || agarrado) aplicarLimiteFrame(sAct, obj.body, agarrado ? 5 : 8, agarrado ? 0.02 : 0.04);
-        desenharObjetoEditor(obj); obj.body.frictionAir = agarrado ? 0.25 : obj.air;
-        const maxV = agarrado ? 6 : 14; let v = obj.body.velocity;
-        if (Math.abs(v.x) > maxV || Math.abs(v.y) > maxV) sAct?.matter?.body?.setVelocity(obj.body, { x: Phaser.Math.Clamp(v.x, -maxV, maxV), y: Phaser.Math.Clamp(v.y, -maxV, maxV) });
-    });
     if (player1 && player2) {
+        desenharJogador(player1); desenharJogador(player2);
         const mX = (player1.body.position.x + player2.body.position.x) / 2, mY = (player1.body.position.y + player2.body.position.y) / 2;
         let z = Math.min(SCREEN_WIDTH / (Math.abs(player1.body.position.x - player2.body.position.x) + 250), SCREEN_HEIGHT / (Math.abs(player1.body.position.y - player2.body.position.y) + 250));
         z = Phaser.Math.Clamp(z, 0.45, 1.0); this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (mX - SCREEN_WIDTH / 2), 0.08);
         this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (mY - SCREEN_HEIGHT / 2), 0.08); this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, z, 0.05));
-    } else if (player1) { this.cameras.main.centerOn(player1.body.position.x, player1.body.position.y); }
+    } else if (player1) { desenharJogador(player1); this.cameras.main.centerOn(player1.body.position.x, player1.body.position.y); }
 }
 function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
 function desenharJogador(p) {
@@ -282,41 +240,51 @@ function desenharJogador(p) {
     fil(p.leftElos, p.leftHand); fil(p.rightElos, p.rightHand); g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
+
+// RESTAURAÇÃO: Funil 100% limpo e simétrico. Usa a junta nativa (Constraint) do Matter.js para travar qualquer corpo sólido no pixel exato
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         const todosOsCorpos = s.matter.world.localWorld.bodies;
+        let pontoDeContatoLocal = null;
+        
         const alvoValido = todosOsCorpos.find(b => {
             if (b.label !== 'ambiente' && !b.label.startsWith(enemy)) return false;
+            
+            // Varredura estrita oficial da engine física para qualquer corpo sólido do mapa
             let dadosColisao = Phaser.Physics.Matter.Matter.Query.collides(h, [b]);
-            return (dadosColisao && dadosColisao.length > 0);
+            if (dadosColisao && dadosColisao.length > 0) {
+                let suporte = dadosColisao.supports;
+                if (suporte) {
+                    pontoDeContatoLocal = { x: suporte.x - b.position.x, y: suporte.y - b.position.y };
+                    return true;
+                }
+            }
+            return false;
         });
-        if (alvoValido) { 
-            p[jKey] = true; p[jKey + 'Target'] = alvoValido;
-            s.matter.body.setStatic(h, true); // Trava física congela o tremor da mão
-            let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
-            let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
-            p[jKey + 'Offset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
+        
+        if (alvoValido && pontoDeContatoLocal) { 
+            // Cria a amarração elástica nativa estável da engine física diretamente no pixel de contato local
+            p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 0.2, { 
+                pointA: { x: 0, y: 0 }, 
+                pointB: pontoDeContatoLocal 
+            }); 
+            p[jKey + 'Target'] = alvoValido; 
         }
-    } else if (!grab && p[jKey]) {
-        s.matter.body.setStatic(h, false); // Devolve a dinâmica quando solta
-        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'Offset'] = null;
+    } else if (!grab && p[jKey]) { 
+        s.matter.world.remove(p[jKey]); 
+        p[jKey] = null; p[jKey + 'Target'] = null; 
     }
 }
-// MUDANÇA MAIÚSCULA: Se a mão estiver agarrando algo, o analógico empurra o corpo (p.body) em vez de empurrar a mão!
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5), enemy = p.id === 0 ? "p1_" : "p0_";
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     let mL = 1.0, mR = 1.0; if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) { mL = 0.5; mR = 0.5; }
     if (pad.leftStick) {
-        let f = p.leftJoint ? p.body : p.leftHand; 
-        let m = p.leftJoint ? 0.045 : 0.018; 
-        s.matter.body.applyForce(f, f.position, { x: pad.leftStick.x * m, y: pad.leftStick.y * m });
+        let f = p.leftHand, m = 0.018; s.matter.body.applyForce(f, f.position, { x: pad.leftStick.x * m, y: pad.leftStick.y * m });
         if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.isStatic) s.matter.body.applyForce(p.leftJointTarget, p.leftHand.position, { x: -pad.leftStick.x * m * 0.9 * mL, y: -pad.leftStick.y * m * 0.9 * mL });
     }
     if (pad.rightStick) {
-        let f = p.rightJoint ? p.body : p.rightHand; 
-        let m = p.rightJoint ? 0.045 : 0.018; 
-        s.matter.body.applyForce(f, f.position, { x: pad.rightStick.x * m, y: pad.rightStick.y * m });
+        let f = p.rightHand, m = 0.018; s.matter.body.applyForce(f, f.position, { x: pad.rightStick.x * m, y: pad.rightStick.y * m });
         if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.isStatic) s.matter.body.applyForce(p.rightJointTarget, p.rightHand.position, { x: -pad.rightStick.x * m * 0.9 * mR, y: -pad.rightStick.y * m * 0.9 * mR });
     }
     processarGarra(s, p, p.leftHand, 'leftJoint', lL, enemy); processarGarra(s, p, p.rightHand, 'rightJoint', rR, enemy);
