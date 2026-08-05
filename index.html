@@ -150,7 +150,6 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
     bodies.forEach(b => {
         let objRef = listaObjetosEditaveis.find(o => o && o.body === b);
         if (objRef) {
-            // CORREÇÃO MOUSE: Usa o detector geométrico real do Matter para saber se o ponteiro clicou dentro da forma rotacionada
             let dentro = scene.matter.vector.contains(b.vertices, { x: x, y: y });
             let dist = Math.sqrt((b.position.x - x)**2 + (b.position.y - y)**2);
             if (dentro && dist < mDist) { mDist = dist; prox = objRef; }
@@ -240,7 +239,6 @@ function update() {
     garrasAtivas = []; if (player1) { if (player1.leftJoint) garrasAtivas.push(player1.leftJointTarget); if (player1.rightJoint) garrasAtivas.push(player1.rightJointTarget); } if (player2) { if (player2.leftJoint) garrasAtivas.push(player2.leftJointTarget); if (player2.rightJoint) garrasAtivas.push(player2.rightJointTarget); }
     listaObjetosEditaveis.forEach(obj => {
         if (!obj?.body?.velocity) return; const agarrado = garrasAtivas.includes(obj.body);
-        if (obj.torque !== 0.0 && !obj.lockRot) { sAct.matter.body.setAngularVelocity(obj.body, obj.body.angularVelocity + (obj.torque * 0.005)); }
         if (obj.lockPos) { sAct.matter.body.setPosition(obj.body, { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY }); sAct.matter.body.setVelocity(obj.body, { x:0, y:0 }); }
         if (!obj.lockPos || agarrado) aplicarLimiteFrame(sAct, obj.body, agarrado ? 5 : 8, agarrado ? 0.02 : 0.04);
         desenharObjetoEditor(obj); obj.body.frictionAir = agarrado ? 0.25 : obj.air;
@@ -261,15 +259,15 @@ function desenharJogador(p) {
     fil(p.leftElos, p.leftHand); fil(p.rightElos, p.rightHand); g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
-// CORREÇÃO DA GARRA: Filtra colisões físicas exatas usando o detector de intersecção poligonal real do Matter.js
+// CORREÇÃO DEFINITIVA: Usa a rota estática global da API do Phaser para rodar o detector de colisão poligonal real
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         const todosOsCorpos = s.matter.world.localWorld.bodies;
         const alvoValido = todosOsCorpos.find(b => {
             if (b.label !== 'ambiente' && !b.label.startsWith(enemy)) return false;
             
-            // Usa o Matter.Query.collides nativo para testar se as formas geométricas colidiram de verdade (pele com casca)
-            let colisaoReal = s.matter.Query.collides(h, [b]);
+            // Acessa a ferramenta estática global de forma limpa para testar o perímetro poligonal real
+            let colisaoReal = Phaser.Physics.Matter.Matter.Query.collides(h, [b]);
             return (colisaoReal && colisaoReal.length > 0);
         });
         if (alvoValido) { 
