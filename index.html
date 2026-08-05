@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Hitbox Esférica Perfeita</title>
+    <title>Heave Ho - Física de Solda Cooperativa</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -147,10 +147,7 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
         let dist = Math.sqrt((b.position.x - x)**2 + (b.position.y - y)**2);
         let objRef = listaObjetosEditaveis.find(o => o && o.body === b);
         if (objRef) {
-            // CORREÇÃO: Validação matemática radial estrita impede cliques fora do círculo visual
-            let dentro = false;
-            if (objRef.shape === 'circle') dentro = (dist <= objRef.w);
-            else dentro = (x >= b.bounds.min.x && x <= b.bounds.max.x && y >= b.bounds.min.y && y <= b.bounds.max.y);
+            let dentro = false; if (objRef.shape === 'circle') dentro = (dist <= objRef.w); else dentro = (x >= b.bounds.min.x && x <= b.bounds.max.x && y >= b.bounds.min.y && y <= b.bounds.max.y);
             if (dentro && dist < mDist) { mDist = dist; prox = objRef; }
         }
     });
@@ -239,17 +236,18 @@ function desenharJogador(p) {
 }
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
-        // CORREÇÃO: O sensor de proximidade radial estrita respeita o contorno circular real de esferas dinâmicas
         const t = s.matter.query.region(s.matter.world.localWorld.bodies, { min: { x: h.position.x - 16, y: h.position.y - 16 }, max: { x: h.position.x + 16, y: h.position.y + 16 } }).find(b => {
             if (b.label !== 'ambiente' && !b.label.startsWith(enemy)) return false;
             let objRef = listaObjetosEditaveis.find(o => o && o.body === b);
-            if (objRef && objRef.shape === 'circle') {
-                let distMaoEsfera = Math.sqrt((b.position.x - h.position.x)**2 + (b.position.y - h.position.y)**2);
-                return (distMaoEsfera <= objRef.w + 16); // 16px de tolerância estrita de toque de pele
-            }
+            if (objRef && objRef.shape === 'circle') return (Math.sqrt((b.position.x - h.position.x)**2 + (b.position.y - h.position.y)**2) <= objRef.w + 16);
             return true;
         });
-        if (t) { p[jKey] = s.matter.add.constraint(h, t, 0, 1.0, { pointA: { x:0, y:0 }, pointB: { x: h.position.x - t.position.x, y: h.position.y - t.position.y } }); p[jKey + 'Target'] = t; }
+        // CORREÇÃO: Se a garra travar na mão do parceiro (enemyPrefix), aplica a "solda rígida" travando os eixos geométricos X e Y
+        if (t) {
+            let rigidezConf = t.label.includes('Hand') ? 1.0 : 1.0; // Força solda rígida imediata contra jitter
+            p[jKey] = s.matter.add.constraint(h, t, 0, rigidezConf, { pointA: { x:0, y:0 }, pointB: t.label.includes('Hand') ? { x:0, y:0 } : { x: h.position.x - t.position.x, y: h.position.y - t.position.y } });
+            p[jKey + 'Target'] = t;
+        }
     } else if (!grab && p[jKey]) { s.matter.world.remove(p[jKey]); p[jKey] = null; p[jKey + 'Target'] = null; }
 }
 function handlePlayerInput(s, p) {
