@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Toque Geométrico Perfeito</title>
+    <title>Heave Ho - Seleção Geométrica Corrigida</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -144,13 +144,15 @@ function executarCriacaoObjeto(scene, x, y) {
     let novaInercia = c.lockRot ? Infinity : (body.inertia * c.inertiaMult); scene.matter.body.setInertia(body, novaInercia);
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, ultimaPos: { x: ax, y: ay }, ultimaRot: 0 });
 }
+
+// CORREÇÃO: Ajustada a rota do detector para a API de Vértices nativa e estável do Phaser 3
 function executarSelecaoObjeto(scene, x, y, pointer) {
     const bodies = scene.matter.world.localWorld.bodies.filter(b => b && b.label === 'ambiente' && !b.isStaticBorder);
     let prox = null, mDist = Infinity;
     bodies.forEach(b => {
         let objRef = listaObjetosEditaveis.find(o => o && o.body === b);
         if (objRef) {
-            let dentro = scene.matter.vector.contains(b.vertices, { x: x, y: y });
+            let dentro = Phaser.Physics.Matter.Matter.Vertices.contains(b.vertices, { x: x, y: y });
             let dist = Math.sqrt((b.position.x - x)**2 + (b.position.y - y)**2);
             if (dentro && dist < mDist) { mDist = dist; prox = objRef; }
         }
@@ -259,22 +261,16 @@ function desenharJogador(p) {
     fil(p.leftElos, p.leftHand); fil(p.rightElos, p.rightHand); g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
-// CORREÇÃO DEFINITIVA: Usa a rota estática global da API do Phaser para rodar o detector de colisão poligonal real
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         const todosOsCorpos = s.matter.world.localWorld.bodies;
         const alvoValido = todosOsCorpos.find(b => {
             if (b.label !== 'ambiente' && !b.label.startsWith(enemy)) return false;
-            
-            // Acessa a ferramenta estática global de forma limpa para testar o perímetro poligonal real
             let colisaoReal = Phaser.Physics.Matter.Matter.Query.collides(h, [b]);
             return (colisaoReal && colisaoReal.length > 0);
         });
         if (alvoValido) { 
-            p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 0.15, { 
-                pointA: { x:0, y:0 }, 
-                pointB: { x: h.position.x - alvoValido.position.x, y: h.position.y - alvoValido.position.y } 
-            }); 
+            p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 0.15, { pointA: { x:0, y:0 }, pointB: { x: h.position.x - alvoValido.position.x, y: h.position.y - alvoValido.position.y } }); 
             p[jKey + 'Target'] = alvoValido; 
         }
     } else if (!grab && p[jKey]) { s.matter.world.remove(p[jKey]); p[jKey] = null; p[jKey + 'Target'] = null; }
