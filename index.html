@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Corrente Humana Estabilizada</title>
+    <title>Heave Ho - Visual Limpo</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -55,7 +55,8 @@
 const SCREEN_WIDTH = 1024, SCREEN_HEIGHT = 768, WORLD_WIDTH = 3000, WORLD_HEIGHT = 2000;
 const config = {
     type: Phaser.AUTO, width: SCREEN_WIDTH, height: SCREEN_HEIGHT, parent: 'canvas-container', backgroundColor: '#4488aa',
-    physics: { default: 'matter', matter: { gravity: { y:1.5 }, debug: true } },
+    // DESLIGADO: debug: false remove todas as linhas e caixas de vetor da engine física automaticamente
+    physics: { default: 'matter', matter: { gravity: { y:1.5 }, debug: false } },
     input: { gamepad: true }, scene: { preload: function(){}, create: create, update: update }
 };
 const game = new Phaser.Game(config);
@@ -121,6 +122,91 @@ function alternarVisibilidadeGrade() {
     const gSize = parseInt(document.getElementById('prop-grid-size').value) || 64; gridGraphics.lineStyle(1, 0xffffff, 0.15);
     for (let x = 0; x < WORLD_WIDTH; x += gSize) gridGraphics.lineBetween(x, 0, x, WORLD_HEIGHT);
     for (let y = 0; y < WORLD_HEIGHT; y += gSize) gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
+}
+function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorpo) {
+    let finalX = x, finalY = y; const DISTANCIA_IMA = 20, corpos = scene.matter.world.localWorld.bodies;
+    const r = w, mE = x - r, mD = x + r;
+    const mT = y - (shape === 'circle' ? w : h/2), mB = y + (shape === 'circle' ? w : h/2);
+    for (let i = 0; i < corpos.length; i++) {
+        let b = corpos[i]; if (!b || b === ignorarCorpo || b.label !== 'ambiente') continue;
+        const oE = b.bounds.min.x, oD = b.bounds.max.x, oT = b.bounds.min.y, oB = b.bounds.max.y;
+        if (mD >= oE - DISTANCIA_IMA && mE <= oD + DISTANCIA_IMA) {
+            if (Math.abs(mB - oT) < DISTANCIA_IMA) { finalY = oT - (shape === 'circle' ? w : h/2); break; }
+            if (Math.abs(mT - oB) < DISTANCIA_IMA) { finalY = oB + (shape === 'circle' ? w : h/2); break; }
+        }
+        if (mB >= oT - DISTANCIA_IMA && mT <= oB + DISTANCIA_IMA) {
+            if (Math.abs(mD - oE) < DISTANCIA_IMA) { finalX = oE - r; break; }
+            if (Math.abs(mE - oD) < DISTANCIA_IMA) { finalX = oD + r; break; }
+        }
+    }
+    return { x: finalX, y: finalY };
+}
+function setFerramenta(tipo) {
+    ferramentaAtual = tipo; document.getElementById('btn-select').classList.remove('active'); document.getElementById('btn-create').classList.remove('active');
+    document.getElementById(tipo === 'select' ? 'btn-select' : 'btn-create').classList.add('active'); desmarcarObjetoDoEditor();
+    let s = document.getElementById('status-modo'); s.innerText = tipo === 'create' ? "Criando objetos" : "Nenhum selecionado"; s.style.color = tipo === 'create' ? "#55ff55" : "#aaa";
+}
+function atualizarInterfaceForma() {
+    const s = document.getElementById('prop-shape').value; document.getElementById('row-h').style.display = s === 'circle' ? 'none' : 'flex';
+    document.getElementById('label-w').innerText = s === 'circle' ? "Raio (px):" : "Largura (px):";
+}
+function extrairCamposPainel() {
+    return {
+        shape: document.getElementById('prop-shape').value, w: parseFloat(document.getElementById('prop-w').value) || 50, h: parseFloat(document.getElementById('prop-h').value) || 50,
+        gravity: document.getElementById('prop-gravity').checked, lockPos: document.getElementById('prop-lock-pos').checked, lockRot: document.getElementById('prop-lock-rot').checked,
+        inertiaMult: parseFloat(document.getElementById('prop-inertia-mult').value) || 1.0, mass: parseFloat(document.getElementById('prop-mass').value) || 1, air: parseFloat(document.getElementById('prop-air').value) || 0.02, bounce: parseFloat(document.getElementById('prop-bounce').value) || 0
+    };
+}
+function executarCriacaoObjeto(scene, x, y) {
+    let ax = x, ay = y; const c = extrairCamposPainel();
+    if (document.getElementById('prop-snap-active').checked) { let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; }
+    let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    let body = (c.shape === 'box') ? scene.matter.add.rectangle(ax, ay, c.w, c.h, conf) : scene.matter.add.circle(ax, ay, c.w, conf);
+    let novaInercia = c.lockRot ? Infinity : (body.inertia * c.inertiaMult); scene.matter.body.setInertia(body, novaInercia);
+    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay });
+}
+function executarSelecaoObjeto(scene, x, y, pointer) {
+    const bodies = scene.matter.world.localWorld.bodies.filter(b => b && b.label === 'ambiente' && !b.isStaticBorder);
+    let prox = null, mDist = Infinity;
+    bodies.forEach(b => {
+        let objRef = listaObjetosEditaveis.find(o => o && o.body === b);
+        if (objRef) {
+            let dentro = Phaser.Physics.Matter.Matter.Vertices.contains(b.vertices, { x: x, y: y });
+            let dist = Math.sqrt((b.position.x - x)**2 + (b.position.y - y)**2);
+            if (dentro && dist < mDist) { mDist = dist; prox = objRef; }
+        }
+    });
+    if (prox) selecionarObjetoDoEditor(prox); else if (!pointer.leftButtonDown()) desmarcarObjetoDoEditor();
+}
+function selecionarObjetoDoEditor(obj) {
+    objetoSelecionado = obj; document.getElementById('btn-delete').style.display = 'block';
+    let s = document.getElementById('status-modo'); s.innerText = "Editando selecionado"; s.style.color = "#ffea00";
+    document.getElementById('prop-shape').value = obj.shape; document.getElementById('prop-w').value = obj.w; document.getElementById('prop-h').value = obj.h;
+    document.getElementById('prop-gravity').checked = obj.gravity; document.getElementById('prop-lock-pos').checked = obj.lockPos;
+    document.getElementById('prop-lock-rot').checked = obj.lockRot; document.getElementById('prop-inertia-mult').value = obj.inertiaMult;
+    document.getElementById('prop-mass').value = obj.body.mass.toFixed(1); document.getElementById('prop-air').value = obj.body.frictionAir;
+    document.getElementById('prop-bounce').value = obj.body.restitution; atualizarInterfaceForma();
+}
+function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; }
+function atualizarObjetoExistente() {
+    if (ferramentaAtual !== 'select' || !objetoSelecionado) return;
+    let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
+    obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity; obj.lockPos = c.lockPos; obj.lockRot = c.lockRot; obj.inertiaMult = c.inertiaMult; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce;
+    const px = obj.body.position.x, py = obj.body.position.y; scene.matter.world.remove(obj.body);
+    let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    obj.body = (obj.shape === 'box') ? scene.matter.add.rectangle(px, py, obj.w, obj.h, conf) : scene.matter.add.circle(px, py, obj.w, conf);
+    let novaInercia = obj.lockRot ? Infinity : (obj.body.inertia * obj.inertiaMult); scene.matter.body.setInertia(obj.body, novaInercia);
+}
+function deletarObjetoSelecionado() {
+    if (!objetoSelecionado) return; let scene = game.scene.getScene('default');
+    if (scene?.matter?.world) scene.matter.world.remove(objetoSelecionado.body);
+    objetoSelecionado.gfx.clear(); listaObjetosEditaveis = listaObjetosEditaveis.filter(o => o !== objetoSelecionado); desmarcarObjetoDoEditor();
+}
+function desenharObjetoEditor(obj) {
+    if (!obj?.body) return; let g = obj.gfx; g.clear(); g.x = obj.body.position.x; g.y = obj.body.position.y; g.rotation = obj.body.angle;
+    g.fillStyle((obj === objetoSelecionado) ? 0xffea00 : (obj.body.isStatic ? 0xf1c40f : 0xe67e22), 1).lineStyle(2, 0xffffff, 0.6);
+    if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
+    else { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
 }
 function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorpo) {
     let finalX = x, finalY = y; const DISTANCIA_IMA = 20, corpos = scene.matter.world.localWorld.bodies;
@@ -281,13 +367,11 @@ function update() {
     if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); });
     
-    // PRESERVAÇÃO DA VERSÃO "AGARRAR OBJETOS OK": Aplica a solda posicional rígida trigonométrica APENAS se o alvo não for um player
     [player1, player2].forEach(p => {
         if (!p) return;
         ['leftJoint', 'rightJoint'].forEach(jKey => {
             if (p[jKey] && p[jKey + 'Target']) {
                 let target = p[jKey + 'Target'];
-                // Se for um jogador, a junta nativa (mola) cuida de tudo. Não aplicamos a solda por código!
                 if (target.label && (target.label.startsWith('p0_') || target.label.startsWith('p1_'))) return;
                 
                 let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
@@ -323,8 +407,6 @@ function desenharJogador(p) {
     fil(p.leftElos, p.leftHand); fil(p.rightElos, p.rightHand); g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
-
-// NOVAS REGRAS COOPERATIVAS: Gerencia de forma inteligente alvos rígidos (Cenário/Objetos) vs alvos elásticos (Jogadores)
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         let alvoValido = h.corpoTocadoAgora; let pontoGlobal = h.pontoDeContatoGlobal;
@@ -332,7 +414,6 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
             let isOutroPlayer = alvoValido.label && (alvoValido.label.startsWith('p0_') || alvoValido.label.startsWith('p1_'));
             
             if (isOutroPlayer) {
-                // REGRA PLAYER: Cria uma mola amortecida elástica nativa perfeita para pêndulos corporais de corrente humana
                 p[jKey] = s.matter.add.constraint(h, alvoValido, 5, 0.20, { 
                     pointA: { x: 0, y: 0 }, 
                     pointB: { x: pontoGlobal.x - alvoValido.position.x, y: pontoGlobal.y - alvoValido.position.y },
@@ -340,7 +421,6 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
                 });
                 p[jKey + 'Target'] = alvoValido;
             } else {
-                // REGRA REGULAR "AGARRAR OBJETOS OK": Aplica a solda posicional estrita sem usar constraints elásticas
                 p[jKey] = true; p[jKey + 'Target'] = alvoValido;
                 let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
                 let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
@@ -348,7 +428,6 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
             }
         }
     } else if (!grab && p[jKey]) {
-        // Se a garra era uma constraint (objeto de mola do player), remove ela nativamente do motor
         if (p[jKey] && typeof p[jKey] === 'object') { s.matter.world.remove(p[jKey]); }
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'Offset'] = null;
     }
