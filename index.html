@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Solda por Evento de Impacto</title>
+    <title>Heave Ho - Corrente Humana Estabilizada</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -75,7 +75,6 @@ function create() {
     borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50); borda(this, WORLD_WIDTH/2, 25, WORLD_WIDTH, 50);
     borda(this, 25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT); borda(this, WORLD_WIDTH-25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT);
     
-    // ATUALIZAÇÃO CRUCIAL: Captura o contato no exato frame do choque e armazena para a função de solda posicional
     this.matter.world.on('collisionstart', (event) => {
         event.pairs.forEach(pair => {
             let bodyA = pair.bodyA, bodyB = pair.bodyB;
@@ -218,9 +217,16 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
         last = link;
     }
 }
+function limparGarrasAntesDoRespawn(scene, p) {
+    if (!p) return;
+    if (p.leftJoint && typeof p.leftJoint === 'object') { scene.matter.world.remove(p.leftJoint); }
+    if (p.rightJoint && typeof p.rightJoint === 'object') { scene.matter.world.remove(p.rightJoint); }
+    p.leftJoint = null; p.rightJoint = null;
+}
 function executarRespawnIndividual(scene, pNum) {
     const cList = scene.matter.world.localWorld.constraints, pref = `p${pNum}_`;
     const p = (pNum === 0) ? player1 : player2; if (!p) return;
+    limparGarrasAntesDoRespawn(scene, p);
     for (let i = cList.length - 1; i >= 0; i--) { let c = cList[i]; if (c && ((c.bodyA?.label?.includes(pref)) || (c.bodyB?.label?.includes(pref)))) scene.matter.world.remove(c); }
     scene.matter.world.remove(p.body); scene.matter.world.remove(p.leftHand); scene.matter.world.remove(p.rightHand);
     p.leftElos.forEach(e => scene.matter.world.remove(e)); p.rightElos.forEach(e => scene.matter.world.remove(e)); p.gfx.clear();
@@ -233,7 +239,6 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const lH = scene.matter.add.circle(x - 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
     const rH = scene.matter.add.circle(x + 50, y, 14, { density: 0.01, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
     
-    // Cache de eventos nativos mapeia o toque real
     lH.corpoTocadoAgora = null; lH.pontoDeContatoGlobal = null;
     rH.corpoTocadoAgora = null; rH.pontoDeContatoGlobal = null;
     
@@ -247,7 +252,7 @@ function processarToqueParaContato(h, b, pair) {
             if (b.label !== h.label.substring(0, 3) + 'body' && !b.label.includes('braco')) {
                 h.corpoTocadoAgora = b;
                 if (pair.activeContacts && pair.activeContacts.length > 0) {
-                    h.pontoDeContatoGlobal = { x: pair.activeContacts[0].vertex.x, y: pair.activeContacts[0].vertex.y };
+                    h.pontoDeContatoGlobal = { x: pair.activeContacts.vertex.x, y: pair.activeContacts.vertex.y };
                 } else {
                     h.pontoDeContatoGlobal = { x: h.position.x, y: h.position.y };
                 }
@@ -276,15 +281,17 @@ function update() {
     if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); });
     
-    // ANCORAGEM GEOMÉTRICA ATIVA: Força a mão a acompanhar a rotação/posição do bloco sem jitter de constraints
+    // PRESERVAÇÃO DA VERSÃO "AGARRAR OBJETOS OK": Aplica a solda posicional rígida trigonométrica APENAS se o alvo não for um player
     [player1, player2].forEach(p => {
         if (!p) return;
         ['leftJoint', 'rightJoint'].forEach(jKey => {
             if (p[jKey] && p[jKey + 'Target']) {
-                let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
                 let target = p[jKey + 'Target'];
-                let offset = p[jKey + 'Offset'];
+                // Se for um jogador, a junta nativa (mola) cuida de tudo. Não aplicamos a solda por código!
+                if (target.label && (target.label.startsWith('p0_') || target.label.startsWith('p1_'))) return;
                 
+                let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
+                let offset = p[jKey + 'Offset'];
                 let cos = Math.cos(target.angle), sin = Math.sin(target.angle);
                 let mundoX = target.position.x + (offset.x * cos - offset.y * sin);
                 let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
@@ -317,21 +324,34 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-// CORREÇÃO: Lê o toque pré-registrado na Parte 4. Bloqueia o elástico e solda a mão no ângulo local exato do impacto.
+// NOVAS REGRAS COOPERATIVAS: Gerencia de forma inteligente alvos rígidos (Cenário/Objetos) vs alvos elásticos (Jogadores)
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
-        let alvoValido = h.corpoTocadoAgora;
-        let pontoGlobal = h.pontoDeContatoGlobal;
-        
-        if (alvoValido && pontoGlobal) { 
-            p[jKey] = true; p[jKey + 'Target'] = alvoValido;
+        let alvoValido = h.corpoTocadoAgora; let pontoGlobal = h.pontoDeContatoGlobal;
+        if (alvoValido && pontoGlobal) {
+            let isOutroPlayer = alvoValido.label && (alvoValido.label.startsWith('p0_') || alvoValido.label.startsWith('p1_'));
             
-            // Calcula o recuo local imutável em relação à inclinação do bloco
-            let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
-            let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
-            p[jKey + 'Offset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
+            if (isOutroPlayer) {
+                // REGRA PLAYER: Cria uma mola amortecida elástica nativa perfeita para pêndulos corporais de corrente humana
+                p[jKey] = s.matter.add.constraint(h, alvoValido, 5, 0.20, { 
+                    pointA: { x: 0, y: 0 }, 
+                    pointB: { x: pontoGlobal.x - alvoValido.position.x, y: pontoGlobal.y - alvoValido.position.y },
+                    damping: 0.1
+                });
+                p[jKey + 'Target'] = alvoValido;
+            } else {
+                // REGRA REGULAR "AGARRAR OBJETOS OK": Aplica a solda posicional estrita sem usar constraints elásticas
+                p[jKey] = true; p[jKey + 'Target'] = alvoValido;
+                let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
+                let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
+                p[jKey + 'Offset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
+            }
         }
-    } else if (!grab && p[jKey]) { p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'Offset'] = null; }
+    } else if (!grab && p[jKey]) {
+        // Se a garra era uma constraint (objeto de mola do player), remove ela nativamente do motor
+        if (p[jKey] && typeof p[jKey] === 'object') { s.matter.world.remove(p[jKey]); }
+        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'Offset'] = null;
+    }
 }
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5), enemy = p.id === 0 ? "p1_" : "p0_";
