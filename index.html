@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Editor de Polígonos Completo</title>
+    <title>Heave Ho - Colisão Poligonal Blindada</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -203,20 +203,36 @@ function executarCriacaoObjeto(scene, x, y) {
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: c.physicsActive, visualX: ax, visualY: ay, polygonVertices: null });
 }
 
+// SOLUÇÃO DO BUG VISUAL: Gera fatias convexas estáveis em torno do centro geométrico para blindar a colisão de formas côncavas complexas
 function finalizarCriacaoPoligono(scene) {
     if (verticesCriacaoAtiva.length < 3) { alert("Polígonos precisam de pelo menos 3 vértices!"); return; }
     const c = extrairCamposPainel();
+    
     let somatorioX = 0, somatorioY = 0; verticesCriacaoAtiva.forEach(v => { somatorioX += v.x; somatorioY += v.y; });
     let centroX = somatorioX / verticesCriacaoAtiva.length; let centroY = somatorioY / verticesCriacaoAtiva.length;
-    let vertString = verticesCriacaoAtiva.map(v => `${v.x} ${v.y}`).join(' '); let body = null;
+    let body = null;
     
     if (c.physicsActive) {
         let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
-        body = scene.matter.add.fromVertices(centroX, centroY, vertString, conf);
-        if (!body) { alert("Erro ao criar polígono! Garanta que ele não possua linhas cruzadas."); verticesCriacaoAtiva = []; previewGraphicsPoligono.clear(); return; }
+        let partesFisicasTriangulares = [];
+        
+        // Decompõe a forma complexa côncava criando fatias triangulares convexas perfeitas e blindadas ligadas ao centro
+        for (let i = 0; i < verticesCriacaoAtiva.length; i++) {
+            let p1 = verticesCriacaoAtiva[i];
+            let p2 = verticesCriacaoAtiva[(i + 1) % verticesCriacaoAtiva.length];
+            let trianguloVertices = [{ x: centroX, y: centroY }, { x: p1.x, y: p1.y }, { x: p2.x, y: p2.y }];
+            let corpoFatia = scene.matter.add.fromVertices((centroX + p1.x + p2.x)/3, (centroY + p1.y + p2.y)/3, trianguloVertices, conf, false);
+            if (corpoFatia) partesFisicasTriangulares.push(corpoFatia);
+        }
+        
+        // Solda todas as fatias em um único corpo composto rígido e indestrutível
+        body = scene.matter.body.create({ parts: partesFisicasTriangulares, isStatic: false, label: 'ambiente', ignoreGravity: !c.gravity });
+        scene.matter.world.add(body);
+        scene.matter.body.setPosition(body, { x: centroX, y: centroY });
         let novaInercia = c.lockRot ? Infinity : (body.inertia * c.inertiaMult); scene.matter.body.setInertia(body, novaInercia);
         centroX = body.position.x; centroY = body.position.y;
     }
+    
     let verticesLocaisRelativos = verticesCriacaoAtiva.map(v => { return { x: v.x - centroX, y: v.y - centroY }; });
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: c.physicsActive, visualX: centroX, visualY: centroY, polygonVertices: verticesLocaisRelativos });
     verticesCriacaoAtiva = []; previewGraphicsPoligono.clear();
@@ -273,8 +289,17 @@ function atualizarObjetoExistente() {
         if (obj.shape === 'box') obj.body = scene.matter.add.rectangle(px, py, obj.w, obj.h, conf);
         else if (obj.shape === 'circle') obj.body = scene.matter.add.circle(px, py, obj.w, conf);
         else if (obj.shape === 'polygon' && obj.polygonVertices) {
-            let vertString = obj.polygonVertices.map(v => `${v.x + px} ${v.y + py}`).join(' ');
-            obj.body = scene.matter.add.fromVertices(px, py, vertString, conf);
+            let partesFisicasTriangulares = [];
+            for (let i = 0; i < obj.polygonVertices.length; i++) {
+                let p1 = obj.polygonVertices[i];
+                let p2 = obj.polygonVertices[(i + 1) % obj.polygonVertices.length];
+                let trianguloVertices = [{ x: 0, y: 0 }, { x: p1.x, y: p1.y }, { x: p2.x, y: p2.y }];
+                let corpoFatia = scene.matter.add.fromVertices(px + (p1.x + p2.x)/3, py + (p1.y + p2.y)/3, trianguloVertices, conf, false);
+                if (corpoFatia) partesFisicasTriangulares.push(corpoFatia);
+            }
+            obj.body = scene.matter.body.create({ parts: partesFisicasTriangulares, isStatic: false, label: 'ambiente', ignoreGravity: !obj.gravity });
+            scene.matter.world.add(obj.body);
+            scene.matter.body.setPosition(obj.body, { x: px, y: py });
         }
         if (obj.body) { let novaInercia = obj.lockRot ? Infinity : (obj.body.inertia * obj.inertiaMult); scene.matter.body.setInertia(obj.body, novaInercia); scene.matter.body.setAngle(obj.body, anguloSalvo); }
     }
@@ -375,7 +400,6 @@ function executarRespawnIndividual(scene, pNum) {
     if (pNum === 0) player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, p.pad, 0, 0x00ff00);
     else player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, p.pad, 1, 0xffff00);
 }
-// CORREÇÃO CRÍTICA EXIGIDA: Reinserção oficial da função que calcula o limite elástico por frame
 function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
     if (!body || !body.position || body.isStatic) return;
     if (body.ultimaPos) {
