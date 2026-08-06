@@ -344,7 +344,6 @@ function limparGarrasAntesDoRespawn(scene, p) {
     if (p.rightJoint && typeof p.rightJoint === 'object') { scene.matter.world.remove(p.rightJoint); }
     p.leftJoint = null; p.rightJoint = null;
 }
-// CORREÇÃO CRÍTICA DO CONSOLE: Recolocação oficial dos listeners que processam o contato tátil das luvas
 function processarToqueParaContato(h, b, pair) {
     if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
         if (b.label === 'ambiente' || b.label.startsWith('p0_') || b.label.startsWith('p1_')) {
@@ -376,6 +375,19 @@ function executarRespawnIndividual(scene, pNum) {
     if (pNum === 0) player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, p.pad, 0, 0x00ff00);
     else player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, p.pad, 1, 0xffff00);
 }
+// CORREÇÃO CRÍTICA EXIGIDA: Reinserção oficial da função que calcula o limite elástico por frame
+function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
+    if (!body || !body.position || body.isStatic) return;
+    if (body.ultimaPos) {
+        let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y, distSq = dx*dx + dy*dy;
+        if (distSq > maxDist * maxDist) {
+            let dist = Math.sqrt(distSq);
+            scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx / dist) * maxDist, y: body.ultimaPos.y + (dy / dist) * maxDist });
+        }
+    }
+    body.ultimaPos = { x: body.position.x, y: body.position.y }; body.ultimaRot = body.angle;
+}
+
 function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const grp = scene.matter.world.nextGroup(true), flt = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp };
     const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
