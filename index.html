@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Estabilização de Agarre Cooperativo</title>
+    <title>Heave Ho - Sistema de Salvaguarda Ativo</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -194,7 +194,7 @@ function atualizarObjetoExistente() {
     const px = obj.body.position.x, py = obj.body.position.y; scene.matter.world.remove(obj.body);
     let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     obj.body = (obj.shape === 'box') ? scene.matter.add.rectangle(px, py, obj.w, obj.h, conf) : scene.matter.add.circle(px, py, obj.w, conf);
-    let novaInercia = obj.lockRot ? Infinity : (obj.body.inertia * obj.inertiaMult); scene.matter.body.setInertia(obj.body, novaInercia);
+    let novaInercia = obj.lockRot ? Infinity : (obj.body.inertia * obj.inertiaMult); scene.matter.body.setInertia(body, novaInercia);
 }
 function deletarObjetoSelecionado() {
     if (!objetoSelecionado) return; let scene = game.scene.getScene('default');
@@ -278,10 +278,8 @@ function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
 }
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
-    if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
-    [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); });
     
-    // ANCORAGEM "FÍSICA OK": Fixa as luvas mantendo a matriz geométrica local sincronizada
+    // ANCORAGEM PRINCIPAL: Mantém as mãos soldadas localmente nas estruturas móveis
     [player1, player2].forEach(p => {
         if (!p) return;
         ['leftJoint', 'rightJoint'].forEach(jKey => {
@@ -302,22 +300,35 @@ function update() {
             }
         });
         
-        // NOVIDADE CRÍTICA: Se o boneco está segurando o MESMO objeto livre com as DUAS mãos, aplica amortecimento cooperativo
+        // Amortecimento de Agarre Duplo Cooperativo da versão referência
         if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget) {
             let objB = p.leftJointTarget;
             if (!objB.isStatic && !objB.label.startsWith('p0_') && !objB.label.startsWith('p1_')) {
-                // Descobre se o objeto editável não tem gravidade ativa
                 let objRef = listaObjetosEditaveis.find(o => o && o.body === objB);
                 if (objRef && !objRef.gravity) {
-                    // Amortece e limita o torque centrípeto acumulado pelos analógicos para impedir o estiramento
                     sAct.matter.body.setAngularVelocity(objB, objB.angularVelocity * 0.82);
-                    let velX = Phaser.Math.Clamp(objB.velocity.x * 0.85, -8, 8);
-                    let velY = Phaser.Math.Clamp(objB.velocity.y * 0.85, -8, 8);
-                    sAct.matter.body.setVelocity(objB, { x: velX, y: velY });
+                    sAct.matter.body.setVelocity(objB, { x: Phaser.Math.Clamp(objB.velocity.x * 0.85, -8, 8), y: Phaser.Math.Clamp(objB.velocity.y * 0.85, -8, 8) });
                 }
             }
         }
+
+        // SISTEMA DE SALVAGUARDA 1 (ANTI-ESTIRAMENTO): Executa a autodestruição se a mão se distanciar muito do tronco
+        let distEsqSq = (p.leftHand.position.x - p.body.position.x)**2 + (p.leftHand.position.y - p.body.position.y)**2;
+        let distDirSq = (p.rightHand.position.x - p.body.position.x)**2 + (p.rightHand.position.y - p.body.position.y)**2;
+        const LIMITE_ESTIRAMENTO_MAXIMO = 180; 
+        if (distEsqSq > LIMITE_ESTIRAMENTO_MAXIMO * LIMITE_ESTIRAMENTO_MAXIMO || distDirSq > LIMITE_ESTIRAMENTO_MAXIMO * LIMITE_ESTIRAMENTO_MAXIMO) {
+            executarRespawnIndividual(sAct, p.id);
+            return;
+        }
+
+        // SISTEMA DE SALVAGUARDA 2 (ANTI-LIMBO): Executa a autodestruição se o boneco cair para fora dos limites reais do mapa
+        if (p.body.position.x < -100 || p.body.position.x > WORLD_WIDTH + 100 || p.body.position.y < -100 || p.body.position.y > WORLD_HEIGHT + 100) {
+            executarRespawnIndividual(sAct, p.id);
+            return;
+        }
     });
+
+    if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
 
     listaObjetosEditaveis.forEach(obj => {
         if (!obj?.body) return;
@@ -392,7 +403,7 @@ function handlePlayerInput(s, p) {
         s.matter.body.applyForce(alvoDireito, alvoDireito.position, { x: pad.rightStick.x * m, y: pad.rightStick.y * m });
         if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.isStatic) s.matter.body.applyForce(p.rightJointTarget, p.rightHand.position, { x: -pad.rightStick.x * m * 0.9 * mR, y: -pad.rightStick.y * m * 0.9 * mR });
     }
-    processarGuarda = processarGarra(s, p, p.leftHand, 'leftJoint', lL, enemy); processarGarra(s, p, p.rightHand, 'rightJoint', rR, enemy);
+    processarGarra(s, p, p.leftHand, 'leftJoint', lL, enemy); processarGarra(s, p, p.rightHand, 'rightJoint', rR, enemy);
 }
 </script>
 </body>
