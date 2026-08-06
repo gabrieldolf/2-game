@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Correção Pós-Física Estabilizada</title>
+    <title>Heave Ho - Sistema de Ancoragem Estabilizado</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -35,7 +35,7 @@
     <div class="section">
         <h3 id="status-modo" style="color:#55ff55;">Criando novos objetos</h3>
         <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option></select></div>
-        <div class="prop-row" id="row-w"><label id="label-w">Largura (px):</label><input type="number" id="prop-w" value="100" min="10" max="400" onchange="atualizarObjetoExisting()"></div>
+        <div class="prop-row" id="row-w"><label id="label-w">Largura (px):</label><input type="number" id="prop-w" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row" id="row-h"><label>Altura (px):</label><input type="number" id="prop-h" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row"><label>Gravidade:</label><input type="checkbox" id="prop-gravity" onchange="atualizarObjetoExistente()"></div>
         
@@ -159,11 +159,8 @@ function extrairCamposPainel() {
 function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
     if (document.getElementById('prop-snap-active').checked) { let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; }
-    
-    // RESTAURAÇÃO: Todos os blocos criados voltam a nascer dinâmicos (isStatic: false) para rodar e cair livremente
     let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     let body = (c.shape === 'box') ? scene.matter.add.rectangle(ax, ay, c.w, c.h, conf) : scene.matter.add.circle(ax, ay, c.w, conf);
-    
     let novaInercia = c.lockRot ? Infinity : (body.inertia * c.inertiaMult); scene.matter.body.setInertia(body, novaInercia);
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay });
 }
@@ -189,16 +186,14 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('prop-mass').value = obj.body.mass.toFixed(1); document.getElementById('prop-air').value = obj.body.frictionAir;
     document.getElementById('prop-bounce').value = obj.body.restitution; atualizarInterfaceForma();
 }
-function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; }
+function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.none = 'none'; }
 function atualizarObjetoExistente() {
     if (ferramentaAtual !== 'select' || !objetoSelecionado) return;
     let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
     obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity; obj.lockPos = c.lockPos; obj.lockRot = c.lockRot; obj.inertiaMult = c.inertiaMult; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce;
     const px = obj.body.position.x, py = obj.body.position.y; scene.matter.world.remove(obj.body);
-    
     let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     obj.body = (obj.shape === 'box') ? scene.matter.add.rectangle(px, py, obj.w, obj.h, conf) : scene.matter.add.circle(px, py, obj.w, conf);
-    
     let novaInercia = obj.lockRot ? Infinity : (obj.body.inertia * obj.inertiaMult); scene.matter.body.setInertia(obj.body, novaInercia);
 }
 function deletarObjetoSelecionado() {
@@ -286,16 +281,15 @@ function update() {
     if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); });
     
-    // RESTAURAÇÃO "AGARRAR OBJETOS OK": Garante que a mão acompanhe estritamente o deslocamento angular local do bloco móvel
+    // VERSÃO "AGARRAR OBJETOS OK" PRESERVADA: Garante que a mão acompanhe perfeitamente a malha local rotatória do bloco móvel
     [player1, player2].forEach(p => {
         if (!p) return;
         ['leftJoint', 'rightJoint'].forEach(jKey => {
             if (p[jKey] && p[jKey + 'Target']) {
-                let target = p[jKey + 'Target'];
-                if (target.label && (target.label.startsWith('p0_') || target.label.startsWith('p1_'))) return;
-                
                 let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
+                let target = p[jKey + 'Target'];
                 let offset = p[jKey + 'Offset'];
+                
                 let cos = Math.cos(target.angle), sin = Math.sin(target.angle);
                 let mundoX = target.position.x + (offset.x * cos - offset.y * sin);
                 let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
@@ -306,16 +300,13 @@ function update() {
         });
     });
 
-    // ETAPA CORRETIVA FINAL COPIADA DA SUA IDEIA: Valida a ancoragem no final do frame. 
-    // Anula a translação linear (Eixo X/Y) mas deixa a velocidade angular livre para rodar feito hélice!
+    // ETAPA CORRETIVA DO MAPA: Congela a translação (Eixo X/Y) mas deixa a velocidade angular livre para rodar feito hélice
     listaObjetosEditaveis.forEach(obj => {
         if (!obj?.body) return;
         
-        if (obj.lockPos && !obj.body.isStatic) {
-            // Se saiu da coordenada de origem definida no editor, reposiciona suavemente sem dar saltos
+        if (obj.lockPos) {
             if (obj.body.position.x !== obj.posicaoTravadaX || obj.body.position.y !== obj.posicaoTravadaY) {
                 sAct.matter.body.setPosition(obj.body, { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY });
-                // Zera as forças e velocidades de caminhada linear
                 sAct.matter.body.setVelocity(obj.body, { x: 0, y: 0 });
             }
         }
@@ -337,26 +328,20 @@ function desenharJogador(p) {
     fil(p.leftElos, p.leftHand); fil(p.rightElos, p.rightHand); g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
+
+// SOLUÇÃO HOMOLOGADA DA VERSÃO "AGARRAR OBJETOS OK": Corrigida a variável faltante do player. Agarra com precisão absoluta.
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
-        const todosOsCorpos = s.matter.world.localWorld.bodies;
-        let pontoDeContatoLocal = null;
-        const alvoValido = todosOsCorpos.find(b => {
-            if (b.label !== 'ambiente' && !b.label.startsWith(enemy)) return false;
-            let dadosColisao = Phaser.Physics.Matter.Matter.Query.collides(h, [b]);
-            if (dadosColisao && dadosColisao.length > 0) {
-                let suporte = dadosColisao.supports;
-                if (suporte) {
-                    pontoDeContatoLocal = { x: suporte.x - b.position.x, y: suporte.y - b.position.y };
-                    return true;
-                }
-            }
-            return false;
-        });
-        if (alvoValido) { 
+        let alvoValido = h.corpoTocadoAgora; let pontoGlobal = h.pontoDeContatoGlobal;
+        if (alvoValido && pontoGlobal) {
             let isOutroPlayer = alvoValido.label && (alvoValido.label.startsWith('p0_') || alvoValido.label.startsWith('p1_'));
+            
             if (isOutroPlayer) {
-                p[jKey] = s.matter.add.constraint(h, alvoValido, 5, 0.20, { pointA: { x: 0, y: 0 }, pointB: { x: pontoGlobal.x - alvoValido.position.x, y: pontoGlobal.y - alvoValido.position.y }, damping: 0.1 });
+                p[jKey] = s.matter.add.constraint(h, alvoValido, 5, 0.20, { 
+                    pointA: { x: 0, y: 0 }, 
+                    pointB: { x: pontoGlobal.x - alvoValido.position.x, y: pontoGlobal.y - alvoValido.position.y }, 
+                    damping: 0.1 
+                });
                 p[jKey + 'Target'] = alvoValido;
             } else {
                 p[jKey] = true; p[jKey + 'Target'] = alvoValido;
@@ -374,6 +359,7 @@ function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5), enemy = p.id === 0 ? "p1_" : "p0_";
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     let mL = 1.0, mR = 1.0; if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) { mL = 0.5; mR = 0.5; }
+    
     if (pad.leftStick) {
         let alvoEsquerdo = p.leftJoint ? p.body : p.leftHand; let m = p.leftJoint ? 0.045 : 0.018; 
         s.matter.body.applyForce(alvoEsquerdo, alvoEsquerdo.position, { x: pad.leftStick.x * m, y: pad.leftStick.y * m });
