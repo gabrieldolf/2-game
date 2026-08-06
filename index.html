@@ -173,44 +173,6 @@ function alternarVisibilidadeGrade() {
     for (let x = 0; x < WORLD_WIDTH; x += gSize) gridGraphics.lineBetween(x, 0, x, WORLD_HEIGHT);
     for (let y = 0; y < WORLD_HEIGHT; y += gSize) gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
 }
-    this.input.keyboard.on('keydown-E', () => { alternarModoEditor(this); });
-    
-    this.input.keyboard.on('keydown-ENTER', () => {
-        if (modoEditorAtivo && ferramentaAtual === 'create' && document.getElementById('prop-shape').value === 'polygon') {
-            finalizarCriacaoPoligono(this);
-        }
-    });
-
-    this.input.gamepad.on('down', (pad) => {
-        if (pad.index === 0 && !player1) player1 = createHeaveHoCharacter(this, 300, WORLD_HEIGHT-150, pad, 0, 0x00ff00);
-        if (pad.index === 1 && !player2) player2 = createHeaveHoCharacter(this, 500, WORLD_HEIGHT-150, pad, 1, 0xffff00);
-    });
-    atualizarInterfaceForma(); alternarVisibilidadeGrade();
-}
-
-function alternarModoEditor(scene) {
-    modoEditorAtivo = !modoEditorAtivo;
-    const panel = document.getElementById('sidebar');
-    const aviso = document.getElementById('aviso-modo');
-    verticesCriacaoAtiva = []; previewGraphicsPoligono.clear();
-    
-    if (modoEditorAtivo) {
-        cameraSalvaX = scene.cameras.main.scrollX; cameraSalvaY = scene.cameras.main.scrollY; cameraSalvaZoom = scene.cameras.main.zoom;
-        scene.cameras.main.setZoom(1.0); scene.matter.world.pause();
-        panel.style.display = 'flex'; aviso.innerText = "Modo Editor Ativo - Aperte [E] para Jogar"; aviso.style.color = "#00ff00";
-    } else {
-        desmarcarObjetoDoEditor(); scene.cameras.main.scrollX = cameraSalvaX; scene.cameras.main.scrollY = cameraSalvaY; scene.cameras.main.setZoom(cameraSalvaZoom);
-        scene.matter.world.resume(); panel.style.display = 'none'; aviso.innerText = "Aperte [E] para abrir o Editor"; aviso.style.color = "#fff";
-    }
-    alternarVisibilidadeGrade();
-}
-
-function alternarVisibilidadeGrade() {
-    gridGraphics.clear(); if (!modoEditorAtivo || !document.getElementById('prop-grid-active').checked) return;
-    const gSize = parseInt(document.getElementById('prop-grid-size').value) || 64; gridGraphics.lineStyle(1, 0xffffff, 0.15);
-    for (let x = 0; x < WORLD_WIDTH; x += gSize) gridGraphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    for (let y = 0; y < WORLD_HEIGHT; y += gSize) gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
-}
 function atualizarInterfaceForma() {
     const s = document.getElementById('prop-shape').value;
     document.getElementById('row-h').style.display = (s === 'circle' || s === 'polygon') ? 'none' : 'flex';
