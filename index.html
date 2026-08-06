@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Braços Limpos com Cores Customizadas</title>
+    <title>Heave Ho - Editor com Seleção Corrigida</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -175,7 +175,9 @@ function executarCriacaoObjeto(scene, x, y) {
     
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, corpoPivoOculto: pivoCorpo, molaPivoOculto: pivoMola });
 }
-function ejecutarSelecaoObjeto(scene, x, y, pointer) {
+
+// CORREÇÃO CIRÚRGICA: Recolocação oficial da função de varredura e clique de seleção do painel lateral
+function executarSelecaoObjeto(scene, x, y, pointer) {
     const bodies = scene.matter.world.localWorld.bodies.filter(b => b && b.label === 'ambiente' && !b.isStaticBorder);
     let prox = null, mDist = Infinity;
     bodies.forEach(b => {
@@ -188,6 +190,7 @@ function ejecutarSelecaoObjeto(scene, x, y, pointer) {
     });
     if (prox) selecionarObjetoDoEditor(prox); else if (!pointer.leftButtonDown()) desmarcarObjetoDoEditor();
 }
+
 function selecionarObjetoDoEditor(obj) {
     objetoSelecionado = obj; document.getElementById('btn-delete').style.display = 'block';
     let s = document.getElementById('status-modo'); s.innerText = "Editando selecionado"; s.style.color = "#ffea00";
@@ -320,32 +323,17 @@ function update() {
 }
 function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
 
-// REESTRUTURAÇÃO COMPLETA DO DESIGN VISUAL: Corta a renderização dos elos pretos trêmulos e desenha linhas diretas e firmes
 function desenharJogador(p) {
     const g = p.gfx; g.clear();
     
-    // Braço Esquerdo: Linha sólida vermelha espessa ligando o centro do tronco à palma da mão esquerda
     g.lineStyle(12, 0xff0000, 1);
-    g.beginPath();
-    g.moveTo(p.body.position.x, p.body.position.y);
-    g.lineTo(p.leftHand.position.x, p.leftHand.position.y);
-    g.strokePath();
+    g.beginPath(); g.moveTo(p.body.position.x, p.body.position.y); g.lineTo(p.leftHand.position.x, p.leftHand.position.y); g.strokePath();
     
-    // Braço Direito: Linha sólida azul espessa ligando o centro do tronco à palma da mão direita
     g.lineStyle(12, 0x0000ff, 1);
-    g.beginPath();
-    g.moveTo(p.body.position.x, p.body.position.y);
-    g.lineTo(p.rightHand.position.x, p.rightHand.position.y);
-    g.strokePath();
+    g.beginPath(); g.moveTo(p.body.position.x, p.body.position.y); g.lineTo(p.rightHand.position.x, p.rightHand.position.y); g.strokePath();
     
-    // Desenha o Corpo Redondo Principal (Verde ou Amarelo)
     g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22);
-    
-    // Desenha as Luvas das Mãos por cima, mudando para tom pastel claro quando o gatilho estiver ativo
-    const pad = p.pad;
-    const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
-    const rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
-    
+    const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14);
     g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
