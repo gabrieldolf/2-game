@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Sistema de Salvaguarda Ativo</title>
+    <title>Heave Ho - Fadiga por Estiramento Natural</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -194,7 +194,7 @@ function atualizarObjetoExistente() {
     const px = obj.body.position.x, py = obj.body.position.y; scene.matter.world.remove(obj.body);
     let conf = { isStatic: false, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass, friction: 0.6, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     obj.body = (obj.shape === 'box') ? scene.matter.add.rectangle(px, py, obj.w, obj.h, conf) : scene.matter.add.circle(px, py, obj.w, conf);
-    let novaInercia = obj.lockRot ? Infinity : (obj.body.inertia * obj.inertiaMult); scene.matter.body.setInertia(body, novaInercia);
+    let novaInercia = obj.lockRot ? Infinity : (obj.body.inertia * obj.inertiaMult); scene.matter.body.setInertia(obj.body, novaInercia);
 }
 function deletarObjetoSelecionado() {
     if (!objetoSelecionado) return; let scene = game.scene.getScene('default');
@@ -279,7 +279,6 @@ function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
     
-    // ANCORAGEM PRINCIPAL: Mantém as mãos soldadas localmente nas estruturas móveis
     [player1, player2].forEach(p => {
         if (!p) return;
         ['leftJoint', 'rightJoint'].forEach(jKey => {
@@ -300,7 +299,6 @@ function update() {
             }
         });
         
-        // Amortecimento de Agarre Duplo Cooperativo da versão referência
         if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget) {
             let objB = p.leftJointTarget;
             if (!objB.isStatic && !objB.label.startsWith('p0_') && !objB.label.startsWith('p1_')) {
@@ -312,17 +310,22 @@ function update() {
             }
         }
 
-        // SISTEMA DE SALVAGUARDA 1 (ANTI-ESTIRAMENTO): Executa a autodestruição se a mão se distanciar muito do tronco
+        // NOVIDADE CIRÚRGICA: Mecânica de Fadiga por Estiramento. Desgruda as mãos se afastar mais de 185px!
         let distEsqSq = (p.leftHand.position.x - p.body.position.x)**2 + (p.leftHand.position.y - p.body.position.y)**2;
         let distDirSq = (p.rightHand.position.x - p.body.position.x)**2 + (p.rightHand.position.y - p.body.position.y)**2;
-        const LIMITE_ESTIRAMENTO_MAXIMO = 180; 
-        if (distEsqSq > LIMITE_ESTIRAMENTO_MAXIMO * LIMITE_ESTIRAMENTO_MAXIMO || distDirSq > LIMITE_ESTIRAMENTO_MAXIMO * LIMITE_ESTIRAMENTO_MAXIMO) {
-            executarRespawnIndividual(sAct, p.id);
-            return;
+        const LIMITE_ESTIRAMENTO_MAXIMO = 185; 
+
+        if (p.leftJoint && distEsqSq > LIMITE_ESTIRAMENTO_MAXIMO * LIMITE_ESTIRAMENTO_MAXIMO) {
+            if (p.leftJoint && typeof p.leftJoint === 'object') { sAct.matter.world.remove(p.leftJoint); }
+            p.leftJoint = null; p.leftJointTarget = null; p.leftJointOffset = null;
+        }
+        if (p.rightJoint && distDirSq > LIMITE_ESTIRAMENTO_MAXIMO * LIMITE_ESTIRAMENTO_MAXIMO) {
+            if (p.rightJoint && typeof p.rightJoint === 'object') { sAct.matter.world.remove(p.rightJoint); }
+            p.rightJoint = null; p.rightJointTarget = null; p.rightJointOffset = null;
         }
 
-        // SISTEMA DE SALVAGUARDA 2 (ANTI-LIMBO): Executa a autodestruição se o boneco cair para fora dos limites reais do mapa
-        if (p.body.position.x < -100 || p.body.position.x > WORLD_WIDTH + 100 || p.body.position.y < -100 || p.body.position.y > WORLD_HEIGHT + 100) {
+        // SALVAGUARDA DE QUEDA: Mantém o respawn ativo apenas se cair fora dos limites físicos do mapa (Limbo)
+        if (p.body.position.x < -120 || p.body.position.x > WORLD_WIDTH + 120 || p.body.position.y < -120 || p.body.position.y > WORLD_HEIGHT + 120) {
             executarRespawnIndividual(sAct, p.id);
             return;
         }
