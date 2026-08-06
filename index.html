@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Pivô Corpóreo Estabilizado</title>
+    <title>Heave Ho - Braços Limpos com Cores Customizadas</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -107,8 +107,6 @@ function create() {
             this.matter.body.setPosition(objetoSelecionado.body, { x: pos.x, y: pos.y });
             this.matter.body.setVelocity(objetoSelecionado.body, { x:0, y:0 });
             objetoSelecionado.posicaoTravadaX = pos.x; objetoSelecionado.posicaoTravadaY = pos.y;
-            
-            // Se mover o objeto arrastando no editor, reposiciona também o pino fixo oculto
             if (objetoSelecionado.corpoPivoOculto) {
                 this.matter.body.setPosition(objetoSelecionado.corpoPivoOculto, { x: pos.x, y: pos.y });
                 this.matter.body.setVelocity(objetoSelecionado.corpoPivoOculto, { x:0, y:0 });
@@ -169,7 +167,6 @@ function executarCriacaoObjeto(scene, x, y) {
     let body = (c.shape === 'box') ? scene.matter.add.rectangle(ax, ay, c.w, c.h, conf) : scene.matter.add.circle(ax, ay, c.w, conf);
     let novaInercia = c.lockRot ? Infinity : (body.inertia * c.inertiaMult); scene.matter.body.setInertia(body, novaInercia);
     
-    // ANCORAGEM REVOLUCIONÁRIA: Em vez de prender no ar vazio (que gera NaNs), cria um pino físico estático micro e solda o objeto dinâmico nele!
     let pivoCorpo = null, pivoMola = null;
     if (c.lockPos) {
         pivoCorpo = scene.matter.add.circle(ax, ay, 1, { isStatic: true, label: 'pivo_oculto', collisionFilter: { group: -1 } });
@@ -178,7 +175,7 @@ function executarCriacaoObjeto(scene, x, y) {
     
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, corpoPivoOculto: pivoCorpo, molaPivoOculto: pivoMola });
 }
-function executarSelecaoObjeto(scene, x, y, pointer) {
+function ejecutarSelecaoObjeto(scene, x, y, pointer) {
     const bodies = scene.matter.world.localWorld.bodies.filter(b => b && b.label === 'ambiente' && !b.isStaticBorder);
     let prox = null, mDist = Infinity;
     bodies.forEach(b => {
@@ -205,7 +202,6 @@ function atualizarObjetoExistente() {
     if (ferramentaAtual !== 'select' || !objetoSelecionado) return;
     let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
     
-    // Limpa o par de pivôs antigos antes de gerar o novo arranjo estrutural
     if (obj.molaPivoOculto) scene.matter.world.remove(obj.molaPivoOculto);
     if (obj.corpoPivoOculto) scene.matter.world.remove(obj.corpoPivoOculto);
     obj.molaPivoOculto = null; obj.corpoPivoOculto = null;
@@ -309,7 +305,6 @@ function update() {
     if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); });
     
-    // ANCORAGEM LIMPA PARTE 5: A física roda 100% nativa. Sem comandos setPosition intrusivos!
     listaObjetosEditaveis.forEach(obj => {
         if (!obj?.body) return;
         desenharObjetoEditor(obj);
@@ -324,14 +319,37 @@ function update() {
     } else if (player1) { desenharJogador(player1); this.cameras.main.centerOn(player1.body.position.x, player1.body.position.y); }
 }
 function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
+
+// REESTRUTURAÇÃO COMPLETA DO DESIGN VISUAL: Corta a renderização dos elos pretos trêmulos e desenha linhas diretas e firmes
 function desenharJogador(p) {
-    const g = p.gfx; g.clear(); const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5); g.lineStyle(12, 0x000000, 1);
-    const fil = (el, m) => { g.beginPath(); g.moveTo(p.body.position.x, p.body.position.y); el.forEach(e => g.lineTo(e.position.x, e.position.y)); g.lineTo(m.position.x, m.position.y); g.strokePath(); };
-    fil(p.leftElos, p.leftHand); fil(p.rightElos, p.rightHand); g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22);
-    g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
+    const g = p.gfx; g.clear();
+    
+    // Braço Esquerdo: Linha sólida vermelha espessa ligando o centro do tronco à palma da mão esquerda
+    g.lineStyle(12, 0xff0000, 1);
+    g.beginPath();
+    g.moveTo(p.body.position.x, p.body.position.y);
+    g.lineTo(p.leftHand.position.x, p.leftHand.position.y);
+    g.strokePath();
+    
+    // Braço Direito: Linha sólida azul espessa ligando o centro do tronco à palma da mão direita
+    g.lineStyle(12, 0x0000ff, 1);
+    g.beginPath();
+    g.moveTo(p.body.position.x, p.body.position.y);
+    g.lineTo(p.rightHand.position.x, p.rightHand.position.y);
+    g.strokePath();
+    
+    // Desenha o Corpo Redondo Principal (Verde ou Amarelo)
+    g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22);
+    
+    // Desenha as Luvas das Mãos por cima, mudando para tom pastel claro quando o gatilho estiver ativo
+    const pad = p.pad;
+    const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
+    const rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
+    
+    g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14);
+    g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-// CÓDIGO DA RESPOSTA REFERÊNCIA RESTAURADO: Conecta via constraints nativas super-rígidas (stiffness: 1.0)
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         let alvoValido = h.corpoTocadoAgora; let pontoGlobal = h.pontoDeContatoGlobal;
