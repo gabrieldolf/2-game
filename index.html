@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Pivô Nativo Anti-Colapso</title>
+    <title>Heave Ho - Pivô de Mundo Corrigido</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -107,7 +107,7 @@ function create() {
             this.matter.body.setPosition(objetoSelecionado.body, { x: pos.x, y: pos.y });
             this.matter.body.setVelocity(objetoSelecionado.body, { x:0, y:0 });
             objetoSelecionado.posicaoTravadaX = pos.x; objetoSelecionado.posicaoTravadaY = pos.y;
-            // Se mover o objeto no editor, atualiza a mola de ancoragem invisível
+            // Se mover a engrenagem fixa no mapa do editor, o ponto de ancoragem do mundo é atualizado
             if (objetoSelecionado.pivoInvisivel) {
                 objetoSelecionado.pivoInvisivel.pointB = { x: pos.x, y: pos.y };
             }
@@ -167,10 +167,10 @@ function executarCriacaoObjeto(scene, x, y) {
     let body = (c.shape === 'box') ? scene.matter.add.rectangle(ax, ay, c.w, c.h, conf) : scene.matter.add.circle(ax, ay, c.w, conf);
     let novaInercia = c.lockRot ? Infinity : (body.inertia * c.inertiaMult); scene.matter.body.setInertia(body, novaInercia);
     
-    // NOVIDADE: Se a trava estiver ativada, cria um pivô nativo rígido invisível prendendo o bloco ao cenário de fundo
+    // CORREÇÃO CIRÚRGICA: Usar worldConstraint evita o erro de leitura de 'type' e amarra o pino dinâmico no cenário de fundo de forma legítima
     let pivo = null;
     if (c.lockPos) {
-        pivo = scene.matter.add.constraint(body, null, 0, 1.0, { pointA: { x: 0, y: 0 }, pointB: { x: ax, y: ay }, damping: 0 });
+        pivo = scene.matter.add.worldConstraint(body, 0, 1.0, { pointA: { x: 0, y: 0 }, pointB: { x: ax, y: ay }, damping: 0 });
     }
     
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, pivoInvisivel: pivo });
@@ -210,7 +210,7 @@ function atualizarObjetoExistente() {
     let novaInercia = obj.lockRot ? Infinity : (obj.body.inertia * obj.inertiaMult); scene.matter.body.setInertia(obj.body, novaInercia);
     
     if (obj.lockPos) {
-        obj.pivoInvisivel = scene.matter.add.constraint(obj.body, null, 0, 1.0, { pointA: { x: 0, y: 0 }, pointB: { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY }, damping: 0 });
+        obj.pivoInvisivel = scene.matter.add.worldConstraint(obj.body, 0, 1.0, { pointA: { x: 0, y: 0 }, pointB: { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY }, damping: 0 });
     }
 }
 function deletarObjetoSelecionado() {
@@ -260,6 +260,7 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     lH.corpoTocadoAgora = null; lH.pontoDeContatoGlobal = null;
     rH.corpoTocadoAgora = null; rH.pontoDeContatoGlobal = null;
     
+    b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
 }
@@ -282,11 +283,22 @@ function quebrarToqueParaContato(h, b) {
         if (h.corpoTocadoAgora === b) { h.corpoTocadoAgora = null; h.pontoDeContatoGlobal = null; }
     }
 }
+function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
+    if (!body || !body.position || body.isStatic) return;
+    if (body.ultimaPos) {
+        let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y, distSq = dx*dx + dy*dy;
+        if (distSq > maxDist * maxDist) {
+            let dist = Math.sqrt(distSq);
+            scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx / dist) * maxDist, y: body.ultimaPos.y + (dy / dist) * maxDist });
+        }
+    }
+    body.ultimaPos = { x: body.position.x, y: body.position.y }; body.ultimaRot = body.angle;
+}
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
     if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
+    [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); });
     
-    // ANCORAGEM LIMPA: Nenhum comando de setPosition artificial roda aqui. O motor físico resolve tudo de forma pura.
     listaObjetosEditaveis.forEach(obj => {
         if (!obj?.body) return;
         desenharObjetoEditor(obj);
@@ -308,7 +320,7 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14).fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-// VERSÃO REFERÊNCIA RESTAURADA: Usa a constraint clássica estável (stiffness: 1.0) para anular superdeterminações
+// CÓDIGO DA RESPOSTA REFERÊNCIA RESTAURADO: Usa juntas nativas estáveis (stiffness: 1.0) para anular a superdeterminação
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         let alvoValido = h.corpoTocadoAgora; let pontoGlobal = h.pontoDeContatoGlobal;
@@ -323,7 +335,6 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
                 });
                 p[jKey + 'Target'] = alvoValido;
             } else {
-                // Junta de Pivô Rígida oficial da nossa versão estável de referência
                 p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 1.0, {
                     pointA: { x: 0, y: 0 },
                     pointB: { x: pontoGlobal.x - alvoValido.position.x, y: pontoGlobal.y - alvoValido.position.y },
