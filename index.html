@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Física OK com Elos Coloridos</title>
+    <title>Heave Ho - Física OK Blindada</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:flex; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -164,19 +164,22 @@ function executarCriacaoObjeto(scene, x, y) {
     let novaInercia = c.lockRot ? Infinity : (body.inertia * c.inertiaMult); scene.matter.body.setInertia(body, novaInercia);
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay });
 }
+
+// CORREÇÃO ERRO 2 SELEÇÃO: Usar a chamada de escopo correta do Matter garante o clique perfeito nos blocos
 function executarSelecaoObjeto(scene, x, y, pointer) {
     const bodies = scene.matter.world.localWorld.bodies.filter(b => b && b.label === 'ambiente' && !b.isStaticBorder);
     let prox = null, mDist = Infinity;
     bodies.forEach(b => {
         let objRef = listaObjetosEditaveis.find(o => o && o.body === b);
         if (objRef) {
-            let dentro = Phaser.Physics.Matter.Vertices.contains(b.vertices, { x: x, y: y });
+            let dentro = Phaser.Physics.Matter.Matter.Vertices.contains(b.vertices, { x: x, y: y });
             let dist = Math.sqrt((b.position.x - x)**2 + (b.position.y - y)**2);
             if (dentro && dist < mDist) { mDist = dist; prox = objRef; }
         }
     });
     if (prox) selecionarObjetoDoEditor(prox); else if (!pointer.leftButtonDown()) desmarcarObjetoDoEditor();
 }
+
 function selecionarObjetoDoEditor(obj) {
     objetoSelecionado = obj; document.getElementById('btn-delete').style.display = 'block';
     let s = document.getElementById('status-modo'); s.innerText = "Editando selecionado"; s.style.color = "#ffea00";
@@ -207,7 +210,6 @@ function desenharObjetoEditor(obj) {
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
 }
-// RESTAURAÇÃO: Os braços voltam a nascer como elos rígidos articulados reais para responder à gravidade e tração
 function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
     let last = bA;
     for (let i = 0; i < num; i++) {
@@ -282,14 +284,19 @@ function update() {
     if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); });
     
-    // ANCORAGEM DA VERSÃO REFERÊNCIA "FÍSICA OK": Move as mãos baseando-se no ângulo local do bloco dinâmico
+    // ANCORAGEM "FÍSICA OK": Atualiza as mãos baseado no ângulo do bloco, protegendo contra garras de player nulas
     [player1, player2].forEach(p => {
         if (!p) return;
         ['leftJoint', 'rightJoint'].forEach(jKey => {
             if (p[jKey] && p[jKey + 'Target']) {
-                let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
                 let target = p[jKey + 'Target'];
+                
+                // CORREÇÃO ERRO 1 PLAYER: Se o alvo for um jogador, ignora a solda por código (a constraint elástica resolve tudo)
+                if (target.label && (target.label.startsWith('p0_') || target.label.startsWith('p1_'))) return;
+                
+                let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
                 let offset = p[jKey + 'Offset'];
+                if (!offset) return;
                 
                 let cos = Math.cos(target.angle), sin = Math.sin(target.angle);
                 let mundoX = target.position.x + (offset.x * cos - offset.y * sin);
@@ -322,17 +329,14 @@ function update() {
 }
 function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
 
-// ATUALIZAÇÃO VISUAL COMBINADA: Renderiza os elos físicos originais do esqueleto articulado usando as novas cores customizadas das mãos
 function desenharJogador(p) {
     const g = p.gfx; g.clear(); g.lineStyle(12, 0x000000, 1);
     
-    // Desenha os elos articulados reais do braço esquerdo usando a cor VERMELHA
     g.beginPath(); g.moveTo(p.body.position.x, p.body.position.y);
     p.leftElos.forEach(e => g.lineTo(e.position.x, e.position.y));
     g.lineTo(p.leftHand.position.x, p.leftHand.position.y);
     g.lineStyle(12, 0xff0000, 1); g.strokePath();
     
-    // Desenha os elos articulados reais do braço direito usando a cor AZUL
     g.beginPath(); g.moveTo(p.body.position.x, p.body.position.y);
     p.rightElos.forEach(e => g.lineTo(e.position.x, e.position.y));
     g.lineTo(p.rightHand.position.x, p.rightHand.position.y);
@@ -357,6 +361,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
                     damping: 0.1
                 });
                 p[jKey + 'Target'] = alvoValido;
+                p[jKey + 'Offset'] = null;
             } else {
                 p[jKey] = true; p[jKey + 'Target'] = alvoValido;
                 let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
