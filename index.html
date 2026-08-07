@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Ancoragem de Órbita Blindada</title>
+    <title>Heave Ho - Garras com Fixação Absoluta</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -116,7 +116,7 @@ function create() {
                 executarCriacaoObjeto(this, p.worldX, p.worldY);
             }
         } else {
-            executarSelecaoObjeto(this, p.worldX, y, p);
+            executarSelecaoObjeto(this, p.worldX, p.worldY, p);
         }
     });
     
@@ -403,12 +403,10 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-// CORREÇÃO CRÍTICA DO HOMEM-ARANHA: Redireciona o alvo do toque para o corpo pai (target.parent) para evitar o congelamento das subfatias
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         let corpoTocado = h.corpoTocadoAgora; let pontoGlobal = h.pontoDeContatoGlobal;
         if (corpoTocado && pontoGlobal) {
-            // FIX CORE: Garante o redirecionamento ao corpo pai principal para polígonos compostos quebrados em triângulos
             let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
             
             let pivotLeveCinematico = s.matter.add.circle(h.position.x, h.position.y, 6, { 
@@ -419,11 +417,11 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
                 visible: true
             });
             
-            p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 1, 1.0, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
-            p[jKey + 'Target'] = alvoValido; // Salva o corpo pai principal unificado
+            // CONSERTO DE FIXAÇÃO: Reduzir a rigidez para 0.85 permite amortecer o resolvedor impedindo a soltura elástica
+            p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 1, 0.85, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
+            p[jKey + 'Target'] = alvoValido;
             p[jKey + 'PivotBody'] = pivotLeveCinematico;
             
-            // Calcula o deslocamento local estrito em relação ao centro de massa real do corpo unificado
             let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
             let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
             p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
@@ -525,6 +523,12 @@ function update() {
                 
                 sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
                 sAct.matter.body.setVelocity(pivot, { x: target.velocity.x, y: target.velocity.y });
+                
+                // RESTAURAÇÃO DE POSIÇÃO ABSOLUTA: Trava o centro da luva de forma idêntica à órbita cinemática,
+                // eliminando o atraso elástico acumulado que afastava as mãos no frame anterior
+                let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
+                sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY });
+                sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y });
             }
         });
         
