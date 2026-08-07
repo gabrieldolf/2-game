@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Ancoragem por Pivô Blindado</title>
+    <title>Heave Ho - Pivôs Cinemáticos Rotativos Blindados</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -190,7 +190,7 @@ function extrairCamposPainel() {
     };
 }
 
-function executarCriacaoObjeto(scene, x, y) {
+functionamp executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
     if (document.getElementById('prop-snap-active').checked) { let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; }
     
@@ -338,7 +338,7 @@ function desenharObjetoEditor(obj) {
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
     else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual) {
-        g.beginPath(); g.moveTo(obj.dadosDesenhoVisual[0].x, obj.dadosDesenhoVisual[0].y);
+        g.beginPath(); g.moveTo(obj.dadosDesenhoVisual.x, obj.dadosDesenhoVisual.y);
         for(let i = 1; i < obj.dadosDesenhoVisual.length; i++) { 
             g.lineTo(obj.dadosDesenhoVisual[i].x, obj.dadosDesenhoVisual[i].y); 
         }
@@ -368,7 +368,7 @@ function processarToqueParaContato(h, b, pair) {
             if (b.label !== h.label.substring(0, 3) + 'body' && !b.label.includes('braco')) {
                 h.corpoTocadoAgora = b;
                 if (pair.activeContacts && pair.activeContacts.length > 0) {
-                    h.pontoDeContatoGlobal = { x: pair.activeContacts[0].vertex.x, y: pair.activeContacts[0].vertex.y };
+                    h.pontoDeContatoGlobal = { x: pair.activeContacts.vertex.x, y: pair.activeContacts.vertex.y };
                 } else {
                     h.pontoDeContatoGlobal = { x: h.position.x, y: h.position.y };
                 }
@@ -401,20 +401,24 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-// RESTAURAÇÃO: Agarre por pivô cinemático imutável impede o estiramento bizarro da mola física anterior
+// SOLUÇÃO CRÍTICA DO PIO GINGER: O pivô virtual agora nasce como um corpo leve (isStatic: false) para aceitar as forças orbitais
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         let alvoValido = h.corpoTocadoAgora; let pontoGlobal = h.pontoDeContatoGlobal;
         if (alvoValido && pontoGlobal) {
-            // Cria um pivô invisível fixado no mundo na coordenada exata do toque original
-            let pivotFixoInvisivel = s.matter.add.circle(pontoGlobal.x, pontoGlobal.y, 2, { isStatic: true, visible: false });
+            // CORREÇÃO CORE: O pivô nasce dinâmico livre de massa para burlar o congelamento de pausa do Matter.js
+            let pivotLeveCinematico = s.matter.add.circle(pontoGlobal.x, pontoGlobal.y, 1, { 
+                isStatic: false, 
+                ignoreGravity: true, 
+                mass: 0.0001, 
+                visible: false,
+                collisionFilter: { group: -1, category: 0, mask: 0 } // Desativa colisões próprias do pino
+            });
             
-            // Une a luva ao pino usando comprimento ZERO e rigidez total (stiffness: 1.0)
-            p[jKey] = s.matter.add.constraint(h, pivotFixoInvisivel, 0, 1.0, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
+            p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 0, 1.0, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
             p[jKey + 'Target'] = alvoValido;
-            p[jKey + 'PivotBody'] = pivotFixoInvisivel;
+            p[jKey + 'PivotBody'] = pivotLeveCinematico;
             
-            // Calcula a distância local em relação ao centro de massa do polígono para acompanhar a rotação
             let dx = pontoGlobal.x - alvoValido.position.x, dy = pontoGlobal.y - alvoValido.position.y;
             let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
             p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
@@ -488,7 +492,7 @@ function update() {
         previewGraphicsPoligono.clear();
         if (verticesCriacaoAtiva.length > 0 && document.getElementById('prop-shape').value === 'polygon') {
             previewGraphicsPoligono.lineStyle(3, 0xff0000, 1.0); previewGraphicsPoligono.fillStyle(0xffffff, 1.0);
-            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
+            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva.x, verticesCriacaoAtiva.y);
             verticesCriacaoAtiva.forEach(v => { previewGraphicsPoligono.lineTo(v.x, v.y); previewGraphicsPoligono.fillCircle(v.x, v.y, 6); });
             previewGraphicsPoligono.strokePath();
         }
@@ -504,18 +508,19 @@ function update() {
     [player1, player2].forEach(p => {
         if (!p) return;
         
-        // SINCRONIZAÇÃO DE PIVÔS DE ANCORAGEM: Atualiza os pinos invisíveis de acordo com o ângulo de rotação do polígono pai
+        // CORREÇÃO DA MÃO CONGELADA: Transfere as forças de órbita senoidais para os corpos cinemáticos livres.
+        // A mão agora acompanha a rotação do bloco perfeitamente e obedece os colisores externos!
         ['leftJoint', 'rightJoint'].forEach(jKey => {
             if (p[jKey] && p[jKey + 'PivotBody'] && p[jKey + 'Target']) {
                 let target = p[jKey + 'Target'];
                 let pivot = p[jKey + 'PivotBody'];
                 let offset = p[jKey + 'LocalOffset'];
                 
-                // Recalcula a rotação correta do ponto fixo usando a matriz do polígono composto
                 let cos = Math.cos(target.angle), sin = Math.sin(target.angle);
                 let mundoX = target.position.x + (offset.x * cos - offset.y * sin);
                 let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
                 
+                // Força o pino a orbitar o centro geométrico acompanhando o torque dinâmico
                 sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
                 sAct.matter.body.setVelocity(pivot, { x: target.velocity.x, y: target.velocity.y });
             }
