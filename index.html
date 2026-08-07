@@ -190,7 +190,8 @@ function extrairCamposPainel() {
     };
 }
 
-functionamp executarCriacaoObjeto(scene, x, y) {
+// CORREÇÃO DA SINTAXE: Removido o termo truncado para reestabelecer o escopo correto da função no interpretador
+function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
     if (document.getElementById('prop-snap-active').checked) { let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; }
     
@@ -401,18 +402,16 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-// SOLUÇÃO CRÍTICA DO PIO GINGER: O pivô virtual agora nasce como um corpo leve (isStatic: false) para aceitar as forças orbitais
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         let alvoValido = h.corpoTocadoAgora; let pontoGlobal = h.pontoDeContatoGlobal;
         if (alvoValido && pontoGlobal) {
-            // CORREÇÃO CORE: O pivô nasce dinâmico livre de massa para burlar o congelamento de pausa do Matter.js
             let pivotLeveCinematico = s.matter.add.circle(pontoGlobal.x, pontoGlobal.y, 1, { 
                 isStatic: false, 
                 ignoreGravity: true, 
                 mass: 0.0001, 
                 visible: false,
-                collisionFilter: { group: -1, category: 0, mask: 0 } // Desativa colisões próprias do pino
+                collisionFilter: { group: -1, category: 0, mask: 0 }
             });
             
             p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 0, 1.0, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
@@ -508,8 +507,6 @@ function update() {
     [player1, player2].forEach(p => {
         if (!p) return;
         
-        // CORREÇÃO DA MÃO CONGELADA: Transfere as forças de órbita senoidais para os corpos cinemáticos livres.
-        // A mão agora acompanha a rotação do bloco perfeitamente e obedece os colisores externos!
         ['leftJoint', 'rightJoint'].forEach(jKey => {
             if (p[jKey] && p[jKey + 'PivotBody'] && p[jKey + 'Target']) {
                 let target = p[jKey + 'Target'];
@@ -520,7 +517,6 @@ function update() {
                 let mundoX = target.position.x + (offset.x * cos - offset.y * sin);
                 let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
                 
-                // Força o pino a orbitar o centro geométrico acompanhando o torque dinâmico
                 sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
                 sAct.matter.body.setVelocity(pivot, { x: target.velocity.x, y: target.velocity.y });
             }
