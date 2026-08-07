@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Agarre Cinemático Blindado</title>
+    <title>Heave Ho - Ancoragem por Pivô Blindado</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -360,7 +360,7 @@ function limparGarrasAntesDoRespawn(scene, p) {
     if (!p) return;
     if (p.leftJoint && typeof p.leftJoint === 'object') { scene.matter.world.remove(p.leftJoint); }
     if (p.rightJoint && typeof p.rightJoint === 'object') { scene.matter.world.remove(p.rightJoint); }
-    p.leftJoint = null; p.rightJoint = null;
+    p.leftJoint = null; p.rightJoint = null; p.leftPivotWorld = null; p.rightPivotWorld = null;
 }
 function processarToqueParaContato(h, b, pair) {
     if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
@@ -368,7 +368,7 @@ function processarToqueParaContato(h, b, pair) {
             if (b.label !== h.label.substring(0, 3) + 'body' && !b.label.includes('braco')) {
                 h.corpoTocadoAgora = b;
                 if (pair.activeContacts && pair.activeContacts.length > 0) {
-                    h.pontoDeContatoGlobal = { x: pair.activeContacts.vertex.x, y: pair.activeContacts.vertex.y };
+                    h.pontoDeContatoGlobal = { x: pair.activeContacts[0].vertex.x, y: pair.activeContacts[0].vertex.y };
                 } else {
                     h.pontoDeContatoGlobal = { x: h.position.x, y: h.position.y };
                 }
@@ -401,22 +401,28 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-// SOLUÇÃO DO ENTRANHAMENTO: O agarre de objetos do cenário passa a usar constraints elásticas nativas em vez de setPosition manual
+// RESTAURAÇÃO: Agarre por pivô cinemático imutável impede o estiramento bizarro da mola física anterior
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         let alvoValido = h.corpoTocadoAgora; let pontoGlobal = h.pontoDeContatoGlobal;
         if (alvoValido && pontoGlobal) {
-            // Cria uma mola física ultra rígida que vincula a luva à subfatia rotativa sem quebrar as colisões
-            p[jKey] = s.matter.add.constraint(h, alvoValido, 2, 0.95, { 
-                pointA: { x: 0, y: 0 }, 
-                pointB: { x: pontoGlobal.x - alvoValido.position.x, y: pontoGlobal.y - alvoValido.position.y }, 
-                damping: 0.1 
-            });
+            // Cria um pivô invisível fixado no mundo na coordenada exata do toque original
+            let pivotFixoInvisivel = s.matter.add.circle(pontoGlobal.x, pontoGlobal.y, 2, { isStatic: true, visible: false });
+            
+            // Une a luva ao pino usando comprimento ZERO e rigidez total (stiffness: 1.0)
+            p[jKey] = s.matter.add.constraint(h, pivotFixoInvisivel, 0, 1.0, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
             p[jKey + 'Target'] = alvoValido;
+            p[jKey + 'PivotBody'] = pivotFixoInvisivel;
+            
+            // Calcula a distância local em relação ao centro de massa do polígono para acompanhar a rotação
+            let dx = pontoGlobal.x - alvoValido.position.x, dy = pontoGlobal.y - alvoValido.position.y;
+            let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
+            p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
         }
     } else if (!grab && p[jKey]) {
         if (p[jKey] && typeof p[jKey] === 'object') { s.matter.world.remove(p[jKey]); }
-        p[jKey] = null; p[jKey + 'Target'] = null;
+        if (p[jKey + 'PivotBody']) { s.matter.world.remove(p[jKey + 'PivotBody']); }
+        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
 function handlePlayerInput(s, p) {
@@ -498,29 +504,35 @@ function update() {
     [player1, player2].forEach(p => {
         if (!p) return;
         
-        // INTERVENÇÃO DE MÃO: A lógica antiga que usava setPosition manual foi totalmente extinta!
-        // As restrições agora rodam 100% integradas na memória interna do solver de colisões do Matter.js
-        if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget) {
-            let objB = p.leftJointTarget;
-            if (!objB.isStatic && !objB.label.startsWith('p0_') && !objB.label.startsWith('p1_')) {
-                let objRef = listaObjetosEditaveis.find(o => o && o.body === objB);
-                if (objRef && !objRef.gravity) {
-                    sAct.matter.body.setAngularVelocity(objB, objB.angularVelocity * 0.82);
-                    sAct.matter.body.setVelocity(objB, { x: Phaser.Math.Clamp(objB.velocity.x * 0.85, -8, 8), y: Phaser.Math.Clamp(objB.velocity.y * 0.85, -8, 8) });
-                }
+        // SINCRONIZAÇÃO DE PIVÔS DE ANCORAGEM: Atualiza os pinos invisíveis de acordo com o ângulo de rotação do polígono pai
+        ['leftJoint', 'rightJoint'].forEach(jKey => {
+            if (p[jKey] && p[jKey + 'PivotBody'] && p[jKey + 'Target']) {
+                let target = p[jKey + 'Target'];
+                let pivot = p[jKey + 'PivotBody'];
+                let offset = p[jKey + 'LocalOffset'];
+                
+                // Recalcula a rotação correta do ponto fixo usando a matriz do polígono composto
+                let cos = Math.cos(target.angle), sin = Math.sin(target.angle);
+                let mundoX = target.position.x + (offset.x * cos - offset.y * sin);
+                let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
+                
+                sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
+                sAct.matter.body.setVelocity(pivot, { x: target.velocity.x, y: target.velocity.y });
             }
-        }
+        });
         
         let distEsqSq = (p.leftHand.position.x - p.body.position.x)**2 + (p.leftHand.position.y - p.body.position.y)**2;
         let distDirSq = (p.rightHand.position.x - p.body.position.x)**2 + (p.rightHand.position.y - p.body.position.y)**2;
         const LIMITE_ESTIRAMENTO_MAXIMO = 185; 
         if (p.leftJoint && distEsqSq > LIMITE_ESTIRAMENTO_MAXIMO * LIMITE_ESTIRAMENTO_MAXIMO) {
             if (p.leftJoint && typeof p.leftJoint === 'object') { sAct.matter.world.remove(p.leftJoint); }
-            p.leftJoint = null; p.leftJointTarget = null;
+            if (p.leftJointPivotBody) { sAct.matter.world.remove(p.leftJointPivotBody); }
+            p.leftJoint = null; p.leftJointTarget = null; p.leftJointPivotBody = null; p.leftJointLocalOffset = null;
         }
         if (p.rightJoint && distDirSq > LIMITE_ESTIRAMENTO_MAXIMO * LIMITE_ESTIRAMENTO_MAXIMO) {
             if (p.rightJoint && typeof p.rightJoint === 'object') { sAct.matter.world.remove(p.rightJoint); }
-            p.rightJoint = null; p.rightJointTarget = null;
+            if (p.rightJointPivotBody) { sAct.matter.world.remove(p.rightJointPivotBody); }
+            p.rightJoint = null; p.rightJointTarget = null; p.rightJointPivotBody = null; p.rightJointLocalOffset = null;
         }
         if (p.body.position.x < -120 || p.body.position.x > WORLD_WIDTH + 120 || p.body.position.y < -120 || p.body.position.y > WORLD_HEIGHT + 120) {
             executarRespawnIndividual(sAct, p.id); return;
