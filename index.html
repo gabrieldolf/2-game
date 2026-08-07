@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Garras com Fixação Absoluta</title>
+    <title>Heave Ho - Polígonos Renderizados Sólidos</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -325,6 +325,7 @@ function setFerramenta(tipo) {
     document.getElementById(tipo === 'select' ? 'btn-select' : 'btn-create').classList.add('active'); desmarcarObjetoDoEditor();
     let s = document.getElementById('status-modo'); s.innerText = tipo === 'create' ? "Criando objetos" : "Nenhum selecionado"; s.style.color = tipo === 'create' ? "#55ff55" : "#aaa";
 }
+// CORREÇÃO DE PINTURA: Corrige o ponteiro de index para preencher a cor marrom sólida sem quebrar a geometria
 function desenharObjetoEditor(obj) {
     if (!obj) return; let g = obj.gfx; g.clear();
     let posX = obj.body ? obj.body.position.x : obj.visualX; let posY = obj.body ? obj.body.position.y : obj.visualY;
@@ -337,8 +338,11 @@ function desenharObjetoEditor(obj) {
     
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
-    else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual) {
-        g.beginPath(); g.moveTo(obj.dadosDesenhoVisual.x, obj.dadosDesenhoVisual.y);
+    
+    // ATUALIZAÇÃO CORRIGIDA: Aponta para o primeiro índice [0] resolvendo o bug de polígono invisível transparentes
+    else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual && obj.dadosDesenhoVisual.length > 0) {
+        g.beginPath();
+        g.moveTo(obj.dadosDesenhoVisual[0].x, obj.dadosDesenhoVisual[0].y);
         for(let i = 1; i < obj.dadosDesenhoVisual.length; i++) { 
             g.lineTo(obj.dadosDesenhoVisual[i].x, obj.dadosDesenhoVisual[i].y); 
         }
@@ -417,7 +421,6 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
                 visible: true
             });
             
-            // CONSERTO DE FIXAÇÃO: Reduzir a rigidez para 0.85 permite amortecer o resolvedor impedindo a soltura elástica
             p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 1, 0.85, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
             p[jKey + 'Target'] = alvoValido;
             p[jKey + 'PivotBody'] = pivotLeveCinematico;
@@ -495,7 +498,7 @@ function update() {
         previewGraphicsPoligono.clear();
         if (verticesCriacaoAtiva.length > 0 && document.getElementById('prop-shape').value === 'polygon') {
             previewGraphicsPoligono.lineStyle(3, 0xff0000, 1.0); previewGraphicsPoligono.fillStyle(0xffffff, 1.0);
-            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva.x, verticesCriacaoAtiva.y);
+            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
             verticesCriacaoAtiva.forEach(v => { previewGraphicsPoligono.lineTo(v.x, v.y); previewGraphicsPoligono.fillCircle(v.x, v.y, 6); });
             previewGraphicsPoligono.strokePath();
         }
@@ -524,8 +527,6 @@ function update() {
                 sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
                 sAct.matter.body.setVelocity(pivot, { x: target.velocity.x, y: target.velocity.y });
                 
-                // RESTAURAÇÃO DE POSIÇÃO ABSOLUTA: Trava o centro da luva de forma idêntica à órbita cinemática,
-                // eliminando o atraso elástico acumulado que afastava as mãos no frame anterior
                 let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
                 sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY });
                 sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y });
