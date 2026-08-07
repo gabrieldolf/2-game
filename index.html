@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Polígonos Visíveis e Blindados</title>
+    <title>Heave Ho - Agarre Cinemático Blindado</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -203,7 +203,6 @@ function executarCriacaoObjeto(scene, x, y) {
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: c.physicsActive, visualX: ax, visualY: ay, dadosDesenhoVisual: null });
 }
 
-// SOLUÇÃO OFICIAL: Cria uma matriz geométrica imutável ('dadosDesenhoVisual') para blindar a pintura marrom contra distorções de subpartes
 function finalizarCriacaoPoligono(scene) {
     if (verticesCriacaoAtiva.length < 3) { alert("Polígonos precisam de pelo menos 3 vértices!"); return; }
     const c = extrairCamposPainel();
@@ -227,9 +226,8 @@ function finalizarCriacaoPoligono(scene) {
         centroX = body.position.x; centroY = body.position.y;
     }
     
-    // NOVIDADE: Registra e sela os vértices geométricos visuais puros em relação ao pivô fixo
-    let pontosGeometricosProtegidos = verticesCriacaoAtiva.map(v => { return { x: v.x - centroX, y: v.y - centroY }; });
-    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: c.physicsActive, visualX: centroX, visualY: centroY, dadosDesenhoVisual: pontosGeometricosProtegidos });
+    let verticesLocaisRelativos = verticesCriacaoAtiva.map(v => { return { x: v.x - centroX, y: v.y - centroY }; });
+    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, inertiaMult: c.inertiaMult, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: c.physicsActive, visualX: centroX, visualY: centroY, dadosDesenhoVisual: verticesLocaisRelativos });
     verticesCriacaoAtiva = []; previewGraphicsPoligono.clear();
 }
 function executarSelecaoObjeto(scene, x, y, pointer) {
@@ -327,7 +325,6 @@ function setFerramenta(tipo) {
     document.getElementById(tipo === 'select' ? 'btn-select' : 'btn-create').classList.add('active'); desmarcarObjetoDoEditor();
     let s = document.getElementById('status-modo'); s.innerText = tipo === 'create' ? "Criando objetos" : "Nenhum selecionado"; s.style.color = tipo === 'create' ? "#55ff55" : "#aaa";
 }
-// CORREÇÃO VISUAL: Lê a matriz 'dadosDesenhoVisual' pura para renderizar o polígono marrom na posição real sem achatamento
 function desenharObjetoEditor(obj) {
     if (!obj) return; let g = obj.gfx; g.clear();
     let posX = obj.body ? obj.body.position.x : obj.visualX; let posY = obj.body ? obj.body.position.y : obj.visualY;
@@ -340,11 +337,8 @@ function desenharObjetoEditor(obj) {
     
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
-    
-    // ATUALIZAÇÃO REVOLUCIONÁRIA: Desenha usando o histórico visual para blindar o preenchimento marrom
     else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual) {
-        g.beginPath();
-        g.moveTo(obj.dadosDesenhoVisual[0].x, obj.dadosDesenhoVisual[0].y);
+        g.beginPath(); g.moveTo(obj.dadosDesenhoVisual[0].x, obj.dadosDesenhoVisual[0].y);
         for(let i = 1; i < obj.dadosDesenhoVisual.length; i++) { 
             g.lineTo(obj.dadosDesenhoVisual[i].x, obj.dadosDesenhoVisual[i].y); 
         }
@@ -407,24 +401,22 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
+// SOLUÇÃO DO ENTRANHAMENTO: O agarre de objetos do cenário passa a usar constraints elásticas nativas em vez de setPosition manual
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         let alvoValido = h.corpoTocadoAgora; let pontoGlobal = h.pontoDeContatoGlobal;
         if (alvoValido && pontoGlobal) {
-            let isOutroPlayer = alvoValido.label && (alvoValido.label.startsWith('p0_') || alvoValido.label.startsWith('p1_'));
-            if (isOutroPlayer) {
-                p[jKey] = s.matter.add.constraint(h, alvoValido, 5, 0.20, { pointA: { x: 0, y: 0 }, pointB: { x: pontoGlobal.x - alvoValido.position.x, y: pontoGlobal.y - alvoValido.position.y }, damping: 0.1 });
-                p[jKey + 'Target'] = alvoValido; p[jKey + 'Offset'] = null;
-            } else {
-                p[jKey] = true; p[jKey + 'Target'] = alvoValido;
-                let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
-                let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
-                p[jKey + 'Offset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
-            }
+            // Cria uma mola física ultra rígida que vincula a luva à subfatia rotativa sem quebrar as colisões
+            p[jKey] = s.matter.add.constraint(h, alvoValido, 2, 0.95, { 
+                pointA: { x: 0, y: 0 }, 
+                pointB: { x: pontoGlobal.x - alvoValido.position.x, y: pontoGlobal.y - alvoValido.position.y }, 
+                damping: 0.1 
+            });
+            p[jKey + 'Target'] = alvoValido;
         }
     } else if (!grab && p[jKey]) {
         if (p[jKey] && typeof p[jKey] === 'object') { s.matter.world.remove(p[jKey]); }
-        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'Offset'] = null;
+        p[jKey] = null; p[jKey + 'Target'] = null;
     }
 }
 function handlePlayerInput(s, p) {
@@ -490,7 +482,7 @@ function update() {
         previewGraphicsPoligono.clear();
         if (verticesCriacaoAtiva.length > 0 && document.getElementById('prop-shape').value === 'polygon') {
             previewGraphicsPoligono.lineStyle(3, 0xff0000, 1.0); previewGraphicsPoligono.fillStyle(0xffffff, 1.0);
-            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva.x, verticesCriacaoAtiva.y);
+            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
             verticesCriacaoAtiva.forEach(v => { previewGraphicsPoligono.lineTo(v.x, v.y); previewGraphicsPoligono.fillCircle(v.x, v.y, 6); });
             previewGraphicsPoligono.strokePath();
         }
@@ -505,15 +497,9 @@ function update() {
     
     [player1, player2].forEach(p => {
         if (!p) return;
-        ['leftJoint', 'rightJoint'].forEach(jKey => {
-            if (p[jKey] && p[jKey + 'Target']) {
-                let target = p[jKey + 'Target']; if (target.label && (target.label.startsWith('p0_') || target.label.startsWith('p1_'))) return;
-                let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand; let offset = p[jKey + 'Offset']; if (!offset) return;
-                let cos = Math.cos(target.angle), sin = Math.sin(target.angle);
-                let mundoX = target.position.x + (offset.x * cos - offset.y * sin); let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
-                sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY }); sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y });
-            }
-        });
+        
+        // INTERVENÇÃO DE MÃO: A lógica antiga que usava setPosition manual foi totalmente extinta!
+        // As restrições agora rodam 100% integradas na memória interna do solver de colisões do Matter.js
         if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget) {
             let objB = p.leftJointTarget;
             if (!objB.isStatic && !objB.label.startsWith('p0_') && !objB.label.startsWith('p1_')) {
@@ -524,16 +510,17 @@ function update() {
                 }
             }
         }
+        
         let distEsqSq = (p.leftHand.position.x - p.body.position.x)**2 + (p.leftHand.position.y - p.body.position.y)**2;
         let distDirSq = (p.rightHand.position.x - p.body.position.x)**2 + (p.rightHand.position.y - p.body.position.y)**2;
         const LIMITE_ESTIRAMENTO_MAXIMO = 185; 
         if (p.leftJoint && distEsqSq > LIMITE_ESTIRAMENTO_MAXIMO * LIMITE_ESTIRAMENTO_MAXIMO) {
             if (p.leftJoint && typeof p.leftJoint === 'object') { sAct.matter.world.remove(p.leftJoint); }
-            p.leftJoint = null; p.leftJointTarget = null; p.leftJointOffset = null;
+            p.leftJoint = null; p.leftJointTarget = null;
         }
         if (p.rightJoint && distDirSq > LIMITE_ESTIRAMENTO_MAXIMO * LIMITE_ESTIRAMENTO_MAXIMO) {
             if (p.rightJoint && typeof p.rightJoint === 'object') { sAct.matter.world.remove(p.rightJoint); }
-            p.rightJoint = null; p.rightJointTarget = null; p.rightJointOffset = null;
+            p.rightJoint = null; p.rightJointTarget = null;
         }
         if (p.body.position.x < -120 || p.body.position.x > WORLD_WIDTH + 120 || p.body.position.y < -120 || p.body.position.y > WORLD_HEIGHT + 120) {
             executarRespawnIndividual(sAct, p.id); return;
