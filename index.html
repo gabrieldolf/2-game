@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Agarre de Órbita Blindado</title>
+    <title>Heave Ho - Ancoragem Cinemática Estável</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -403,26 +403,25 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-// SOLUÇÃO DO ALINHAMENTO DO VIOLETA: Instanciar o pivô cinemático de órbita no centro exato da luva e aplicar comprimento mínimo seguro (length: 1)
+// CORREÇÃO CRÍTICA DO PIO SENSOR: Usar isSensor: true e massa zero impede o congelamento do resolvedor no chão do mapa
 function processarGarra(s, p, h, jKey, grab, enemy) {
     if (grab && !p[jKey]) {
         let alvoValido = h.corpoTocadoAgora; let pontoGlobal = h.pontoDeContatoGlobal;
         if (alvoValido && pontoGlobal) {
-            // CORREÇÃO 1: Criar o pivô na posição real da luva impede o colapso por distância nula no Matter.js
+            // SOLUÇÃO CORE: Ativar isSensor e zerar massa blinda a translação orbital no solver físico do Matter.js
             let pivotLeveCinematico = s.matter.add.circle(h.position.x, h.position.y, 6, { 
                 isStatic: false, 
+                isSensor: true, // Define como sensor puro para transladar livremente pelo ar
                 ignoreGravity: true, 
-                mass: 0.0001, 
-                visible: true, // Deixamos true temporariamente para você ver o nó roxo orbitando o polígono amarelo
-                collisionFilter: { group: -1, category: 0, mask: 0 }
+                mass: 0, // Massa zero absoluta impede o travamento na coordenada (0,0)
+                visible: true
             });
             
-            // CORREÇÃO 2: Mudar de 0 para 1 estabiliza o solver de juntas físicas, prendendo o braço do boneco de forma sólida
+            // Cria a junta com comprimento seguro estável (length: 1)
             p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 1, 1.0, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
             p[jKey + 'Target'] = alvoValido;
             p[jKey + 'PivotBody'] = pivotLeveCinematico;
             
-            // CORREÇÃO 3: O offset local agora é calculado com base nas coordenadas de encaixe da luva
             let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
             let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
             p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
@@ -512,6 +511,7 @@ function update() {
     [player1, player2].forEach(p => {
         if (!p) return;
         
+        // SINCRONIZAÇÃO DE ÓRBITA DO SENSOR: Força os sensores de massa zero a orbitarem a quina sem congelar no ar
         ['leftJoint', 'rightJoint'].forEach(jKey => {
             if (p[jKey] && p[jKey + 'PivotBody'] && p[jKey + 'Target']) {
                 let target = p[jKey + 'Target'];
