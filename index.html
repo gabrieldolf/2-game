@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Controle Direto de Extremidades</title>
+    <title>Heave Ho - Física Ragdoll Blindada Anti-Voo</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -58,42 +58,6 @@
 </div>
 
 <script>
-const SCREEN_WIDTH = 1024, SCREEN_HEIGHT = 768, WORLD_WIDTH = 3000, WORLD_HEIGHT = 2000;
-const config = {
-    type: Phaser.AUTO, width: SCREEN_WIDTH, height: SCREEN_HEIGHT, parent: 'canvas-container', backgroundColor: '#4488aa',
-    physics: { default: 'matter', matter: { gravity: { y:1.5 }, debug: true } },
-    input: { gamepad: true }, scene: { preload: function(){}, create: create, update: update }
-};
-const game = new Phaser.Game(config);
-let player1, player2, ferramentaAtual = 'create', objetoSelecionado = null, listaObjetosEditaveis = [];
-let gridGraphics, bordasFixasDoCenario = [], cursorsKeyboard;
-let modoEditorAtivo = false, cameraSalvaX = 0, cameraSalvaY = 0, cameraSalvaZoom = 1;
-let clickOffsetX = 0, clickOffsetY = 0;
-
-let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
-const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
-
-function create() {
-    this.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 100, true, true, true, true);
-    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    gridGraphics = this.add.graphics().setDepth(1);
-    previewGraphicsPoligono = this.add.graphics().setDepth(15);
-    cursorsKeyboard = this.input.keyboard.createCursorKeys();
-    
-    const ambConf = { isStatic:true, label:'ambiente', friction:0.8, restitution:0.1, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
-    const borda = (s, x, y, w, h) => {
-        let b = s.matter.add.rectangle(x, y, w, h, ambConf); b.isStaticBorder = true; bordasFixasDoCenario.push(b);
-        s.add.graphics().fillStyle(0x1a1a1a, 1).fillRect(x - w/2, y - h/2, w, h).setDepth(2);
-    };
-    borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50); borda(this, WORLD_WIDTH/2, 25, WORLD_WIDTH, 50);
-    borda(this, 25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT); borda(this, WORLD_WIDTH-25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT);
-    
-    this.matter.world.on('collisionstart', (event) => {
-        event.pairs.forEach(pair => {
-            let bodyA = pair.bodyA, bodyB = pair.bodyB;
-            processarToqueParaContato(bodyA, bodyB, pair); processarToqueParaContato(bodyB, bodyA, pair);
-        });
-    });
     this.matter.world.on('collisionactive', (event) => {
         event.pairs.forEach(pair => {
             let bodyA = pair.bodyA, bodyB = pair.bodyB;
@@ -432,7 +396,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// ATUALIZAÇÃO REVOLUCIONÁRIA: Os analógicos controlam exclusivamente as MÃOS. Força aumentada (m=0.038) e blindagem contra tração anti-gravidade para blocos pesados.
+// ATUALIZAÇÃO BLINDADA: Permite erguer e arremessar caixas móveis, mas corta o empuxo vertical infinito (Voo Superman)
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -441,25 +405,24 @@ function handlePlayerInput(s, p) {
     
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     
-    // Multiplicador de força das extremidades aumentado para dar arrancada firme nas escaladas (0.038)
     const FORCA_BONECO = 0.038; 
+    let mL = 1.0, mR = 1.0; 
+    if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) { mL = 0.35; mR = 0.35; }
     
     if (pad.leftStick) {
         let fX = pad.leftStick.x * FORCA_BONECO;
         let fY = pad.leftStick.y * FORCA_BONECO;
         
-        // REQUISITO: Se a mão esquerda estiver agarrada a um objeto móvel afetado pela gravidade...
-        if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.isStatic && !p.leftJointTarget.ignoreGravity) {
-            // Impede que o comando empurre o objeto verticalmente contra a gravidade (para cima)
-            if (fY < 0) fY = 0; 
+        // FILTRO ANTI-SUPERMAN: Se a mão esquerda estiver agarrada ao cenário fixo...
+        if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.isStatic) {
+            // Amortece a força vertical para cima para impedir que os dois analógicos sustentem o peso do boneco no ar infinitamente
+            if (fY < 0) fY *= 0.15; 
         }
         
-        // MUDANÇA CORE: O analógico esquerdo comanda SEMPRE a mão esquerda (nunca mais o corpo!)
         s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fX, y: fY });
         
-        // Se a mão estiver cravada, a força de reação empurra o objeto (ou puxa o corpo através da junta)
         if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.isStatic) {
-            s.matter.body.applyForce(p.leftJointTarget, p.leftHand.position, { x: -fX * 0.5, y: -fY * 0.5 });
+            s.matter.body.applyForce(p.leftJointTarget, p.leftHand.position, { x: -fX * 0.5 * mL, y: -fY * 0.5 * mL });
         }
     }
     
@@ -467,17 +430,15 @@ function handlePlayerInput(s, p) {
         let fX = pad.rightStick.x * FORCA_BONECO;
         let fY = pad.rightStick.y * FORCA_BONECO;
         
-        // REQUISITO: Se a mão direita estiver agarrada a um objeto móvel afetado pela gravidade...
-        if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.isStatic && !p.rightJointTarget.ignoreGravity) {
-            // Impede que o comando empurre o objeto verticalmente contra a gravidade (para cima)
-            if (fY < 0) fY = 0; 
+        // FILTRO ANTI-SUPERMAN: Se a mão direita estiver agarrada ao cenário fixo...
+        if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.isStatic) {
+            if (fY < 0) fY *= 0.15; 
         }
         
-        // MUDANÇA CORE: O analógico direito comanda SEMPRE a mão direita
         s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fX, y: fY });
         
         if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.isStatic) {
-            s.matter.body.applyForce(p.rightJointTarget, p.rightHand.position, { x: -fX * 0.5, y: -fY * 0.5 });
+            s.matter.body.applyForce(p.rightJointTarget, p.rightHand.position, { x: -fX * 0.5 * mR, y: -fY * 0.5 * mR });
         }
     }
     
