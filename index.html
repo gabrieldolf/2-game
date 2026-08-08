@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Apoio Omnidirecional Blindado</title>
+    <title>Heave Ho - Força por Vetor de Distância</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -190,6 +190,10 @@ function extrairCamposPainel() {
     };
 }
 
+function executingCriacaoObjeto(scene, x, y) { // Manter nome consistente com chamadas internas
+    executarCriacaoObjeto(scene, x, y);
+}
+
 function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
     if (document.getElementById('prop-snap-active').checked) { let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; }
@@ -371,7 +375,7 @@ function processarToqueParaContato(h, b, pair) {
             if (b.label !== h.label.substring(0, 3) + 'body' && !b.label.includes('braco')) {
                 h.corpoTocadoAgora = b;
                 if (pair.activeContacts && pair.activeContacts.length > 0) {
-                    h.pontoDeContatoGlobal = { x: pair.activeContacts[0].vertex.x, y: pair.activeContacts[0].vertex.y };
+                    h.pontoDeContatoGlobal = { x: pair.activeContacts.vertex.x, y: pair.activeContacts.vertex.y };
                 } else {
                     h.pontoDeContatoGlobal = { x: h.position.x, y: h.position.y };
                 }
@@ -432,7 +436,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// CORREÇÃO CIRÚRGICA: Substituído intersectCircle inválido por busca radial via varredura de corpos do Matter.js
+// ATUALIZAÇÃO CONFORME PEDIDO: Fadiga por solo removida. As mãos movem-se livres no ar. Força calculada dinamicamente com base no distanciamento entre as mãos!
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -441,54 +445,30 @@ function handlePlayerInput(s, p) {
     
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     
-    const BASE_FORCA = 0.038; 
-    let fatorForca = 1.0;
+    const BASE_MAXIMA_FORCA = 0.045; 
     
-    // FIX CORE NATÍSSIMO: Varre todos os corpos rígidos e calcula se a distância até o centro do boneco indica suporte
-    let todosCorposMundo = s.matter.world.localWorld.bodies;
-    let corpoApoiadoValido = false;
+    // CALCULO DO VETOR DE DISTÂNCIA REAL ENTRE AS DUAS LUVAS DO BONECO
+    let dxMãos = p.rightHand.position.x - p.leftHand.position.x;
+    let dyMãos = p.rightHand.position.y - p.leftHand.position.y;
+    let distanciaMãos = Math.sqrt(dxMãos*dxMãos + dyMãos*dyMãos);
     
-    for (let i = 0; i < todosCorposMundo.length; i++) {
-        let b = todosCorposMundo[i];
-        if (!b || b === p.body) continue;
-        
-        // Verifica se é bloco estético/ambiente do editor ou se é o corpo rígido do outro jogador
-        let rotuloValido = b.label === 'ambiente' || (b.label && b.label.startsWith('p') && !b.label.includes(p.id.toString()));
-        if (rotuloValido) {
-            let dx = b.position.x - p.body.position.x;
-            let dy = b.position.y - p.body.position.y;
-            let distCentroSq = dx*dx + dy*dy;
-            
-            // Tolerância radial confortável de apoio omnidirecional (raio do boneco 22 + borda 6 = 28px de alcance)
-            if (distCentroSq <= 28 * 28) {
-                corpoApoiadoValido = true;
-                break;
-            }
-        }
-    }
+    // EQUAÇÃO DE PROPORCIONALIDADE: Braços abertos (distância ~100px) dá força total (1.0). Braços colados ou apontando pra cima cai para quase zero!
+    let multiplicadorEscalarDistancia = Phaser.Math.Clamp((distanciaMãos - 20) / 80, 0.08, 1.0);
+    let forçaMãoDinâmica = BASE_MAXIMA_FORCA * multiplicadorEscalarDistancia;
     
-    // Se o corpo NÃO estiver encostado em nada e também NÃO estiver segurando nada, a força cai para 5% (corta o voo)
-    if (!corpoApoiadoValido && !p.leftJoint && !p.rightJoint) {
-        fatorForca = 0.05;
-    }
-    // Se estiver pendurado pelas duas mãos no mesmo objeto sem apoiar o corpo, amortece para 20%
-    else if (!corpoApoiadoValido && p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) {
-        fatorForca = 0.20;
-    }
-    
-    let forçaCalculada = BASE_FORCA * fatorForca;
     let mL = 1.0, mR = 1.0; 
     if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) { mL = 0.35; mR = 0.35; }
     
-    // O analógico esquerdo empurra o corpo de forma suave apenas se ele tiver suporte físico ativo
-    if (pad.leftStick && corpoApoiadoValido) {
-        s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * 0.003, y: pad.leftStick.y * 0.001 });
+    // Leve empurrão estético no corpo verde baseado no analógico para ajudar a pegar embalo nas correntes humanas
+    if (pad.leftStick) {
+        s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * 0.002, y: pad.leftStick.y * 0.0006 });
     }
     
     if (pad.leftStick) {
-        let fX = pad.leftStick.x * forçaCalculada;
-        let fY = pad.leftStick.y * forçaCalculada;
+        let fX = pad.leftStick.x * forçaMãoDinâmica;
+        let fY = pad.leftStick.y * forçaMãoDinâmica;
         
+        // Bloqueia empuxo contra o cenário estável se as mãos não tiverem distância de alavanca aberta
         if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.isStatic) {
             if (fY < 0) fY *= 0.15; 
         }
@@ -503,8 +483,8 @@ function handlePlayerInput(s, p) {
     }
     
     if (pad.rightStick) {
-        let fX = pad.rightStick.x * forçaCalculada;
-        let fY = pad.rightStick.y * forçaCalculada;
+        let fX = pad.rightStick.x * forçaMãoDinâmica;
+        let fY = pad.rightStick.y * forçaMãoDinâmica;
         
         if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.isStatic) {
             if (fY < 0) fY *= 0.15; 
