@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Sistema de Fadiga de Extremidades</title>
+    <title>Heave Ho - Apoio Corporal Dinâmico</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -432,7 +432,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// ATUALIZAÇÃO REQUISITADA: Sistema de Fadiga. Mãos perdem a tração no ar sem apoio (5%) ou se ambas segurarem o mesmo bloco dinâmico (20%).
+// ATUALIZAÇÃO REQUISITADA: Os braços funcionam normalmente se o corpo verde estiver apoiado ou encostado em cima de blocos ou outros jogadores!
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -444,22 +444,27 @@ function handlePlayerInput(s, p) {
     const BASE_FORCA = 0.038; 
     let fatorForca = 1.0;
     
-    // DETECÇÃO DE SOLO FÍSICO COM ABAIXO DE 2 PIXELS DE TOLERÂNCIA
-    let corposAbaixo = s.matter.intersectRay(p.body.position.x, p.body.position.y, p.body.position.x, p.body.position.y + 26);
-    let noChao = corposAbaixo.some(c => c && c.body && c.body.label === 'ambiente');
+    // SOLUÇÃO OMNIDIRECIONAL: Faz uma varredura radial de 25 pixels ao redor do corpo para detectar contato em qualquer quina ou plataforma
+    let corposEmVolta = s.matter.intersectCircle(p.body.position.x, p.body.position.y, 25);
+    let corpoApoiadoValido = corposEmVolta.some(c => c && c.label === 'ambiente' || (c && c.label && c.label.startsWith('p') && c.label !== p.body.label));
     
-    // REGRA 1: Jogador não está no chão e não está agarrando nada -> Perde 95% da tração (braço vira chicote estético sem empuxo)
-    if (!noChao && !p.leftJoint && !p.rightJoint) {
+    // Se o corpo NÃO estiver encostado em nenhuma plataforma e também NÃO estiver segurando nada, a força das garras desaba para 5% (corta o voo)
+    if (!corpoApoiadoValido && !p.leftJoint && !p.rightJoint) {
         fatorForca = 0.05;
     }
-    // REGRA 2: Jogador não está no chão e está agarrando o MESMO objeto com as duas mãos -> Perde 80% do torque para travar o voo
-    else if (!noChao && p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) {
+    // Se estiver pendurado pelas duas mãos no mesmo objeto sem apoiar o corpo, amortece para 20%
+    else if (!corpoApoiadoValido && p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) {
         fatorForca = 0.20;
     }
     
     let forçaCalculada = BASE_FORCA * fatorForca;
     let mL = 1.0, mR = 1.0; 
     if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) { mL = 0.35; mR = 0.35; }
+    
+    // O analógico esquerdo empurra o corpo de forma suave apenas se ele tiver suporte ou contato físico ativo
+    if (pad.leftStick && corpoApoiadoValido) {
+        s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * 0.003, y: pad.leftStick.y * 0.001 });
+    }
     
     if (pad.leftStick) {
         let fX = pad.leftStick.x * forçaCalculada;
