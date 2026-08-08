@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Estrutura Unificada</title>
+    <title>Heave Ho - Ragdoll Perfeito e Estável</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -432,6 +432,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
+// SOLUÇÃO DEFINITIVA DO VOO: Braços soltos no ar NÃO empurram o corpo para cima. Analógico esquerdo move o corpo de forma suave apenas no chão ou balanço.
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -440,37 +441,45 @@ function handlePlayerInput(s, p) {
     
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     
-    const FORCA_BONECO = 0.038; 
+    const FORCA_BRACOS_LIVRES = 0.038; 
     let mL = 1.0, mR = 1.0; 
     if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) { mL = 0.35; mR = 0.35; }
     
+    // MICRO-IMPULSO CORPORAL: O analógico esquerdo dá uma leve força no corpo para direcionar o balanço, mas sem empuxo vertical infinito
     if (pad.leftStick) {
-        let fX = pad.leftStick.x * FORCA_BONECO;
-        let fY = pad.leftStick.y * FORCA_BONECO;
+        s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * 0.003, y: pad.leftStick.y * 0.001 });
+    }
+    
+    if (pad.leftStick) {
+        let fX = pad.leftStick.x * FORCA_BRACOS_LIVRES;
+        let fY = pad.leftStick.y * FORCA_BRACOS_LIVRES;
         
-        if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.isStatic) {
-            if (fY < 0) fY *= 0.15; 
-        }
-        
+        // CORREÇÃO: Força aplicada exclusivamente na mão. Se não estiver grudado, o corpo sofre ação normal da gravidade.
         s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fX, y: fY });
         
-        if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.isStatic) {
-            s.matter.body.applyForce(p.leftJointTarget, p.leftHand.position, { x: -fX * 0.5 * mL, y: -fY * 0.5 * mL });
+        // Se a mão estiver fixa em parede estável (isStatic), a mola transmite a reação puxando o corpo do Ragdoll
+        if (p.leftJoint && p.leftJointTarget) {
+            if (!p.leftJointTarget.isStatic) {
+                // Se o bloco for móvel, permite empurrar/puxar mas amortece vetores anti-gravidade verticais
+                let forcaReacaoY = -fY * 0.5 * mL;
+                if (!p.leftJointTarget.ignoreGravity && forcaReacaoY < 0) forcaReacaoY *= 0.15;
+                s.matter.body.applyForce(p.leftJointTarget, p.leftHand.position, { x: -fX * 0.5 * mL, y: forcaReacaoY });
+            }
         }
     }
     
     if (pad.rightStick) {
-        let fX = pad.rightStick.x * FORCA_BONECO;
-        let fY = pad.rightStick.y * FORCA_BONECO;
-        
-        if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.isStatic) {
-            if (fY < 0) fY *= 0.15; 
-        }
+        let fX = pad.rightStick.x * FORCA_BRACOS_LIVRES;
+        let fY = pad.rightStick.y * FORCA_BRACOS_LIVRES;
         
         s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fX, y: fY });
         
-        if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.isStatic) {
-            s.matter.body.applyForce(p.rightJointTarget, p.rightHand.position, { x: -fX * 0.5 * mR, y: -fY * 0.5 * mR });
+        if (p.rightJoint && p.rightJointTarget) {
+            if (!p.rightJointTarget.isStatic) {
+                let forcaReacaoY = -fY * 0.5 * mR;
+                if (!p.rightJointTarget.ignoreGravity && forcaReacaoY < 0) forcaReacaoY *= 0.15;
+                s.matter.body.applyForce(p.rightJointTarget, p.rightHand.position, { x: -fX * 0.5 * mR, y: forcaReacaoY });
+            }
         }
     }
     
