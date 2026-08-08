@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Força por Vetor de Distância</title>
+    <title>Heave Ho - Massa Adaptativa Blindada</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -190,10 +190,6 @@ function extrairCamposPainel() {
     };
 }
 
-function executingCriacaoObjeto(scene, x, y) { // Manter nome consistente com chamadas internas
-    executarCriacaoObjeto(scene, x, y);
-}
-
 function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
     if (document.getElementById('prop-snap-active').checked) { let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; }
@@ -343,7 +339,7 @@ function desenharObjetoEditor(obj) {
     else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
     else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual && obj.dadosDesenhoVisual.length > 0) {
         g.beginPath();
-        g.moveTo(obj.dadosDesenhoVisual[0].x, obj.dadosDesenhoVisual[0].y);
+        g.moveTo(obj.dadosDesenhoVisual.x, obj.dadosDesenhoVisual.y);
         for(let i = 1; i < obj.dadosDesenhoVisual.length; i++) { 
             g.lineTo(obj.dadosDesenhoVisual[i].x, obj.dadosDesenhoVisual[i].y); 
         }
@@ -436,7 +432,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// ATUALIZAÇÃO CONFORME PEDIDO: Fadiga por solo removida. As mãos movem-se livres no ar. Força calculada dinamicamente com base no distanciamento entre as mãos!
+// REVERSÃO COMPLETA E NOVA ESTRATÉGIA: Força total constante nas mãos. O corpo fica pesado (Massa x20) se flutuar livre ou segurar o mesmo bloco móvel.
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -445,30 +441,43 @@ function handlePlayerInput(s, p) {
     
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     
-    const BASE_MAXIMA_FORCA = 0.045; 
+    // Força constante e unificada restaurada conforme pedido
+    const FORCA_CONSTANTE_MAOS = 0.038; 
     
-    // CALCULO DO VETOR DE DISTÂNCIA REAL ENTRE AS DUAS LUVAS DO BONECO
-    let dxMãos = p.rightHand.position.x - p.leftHand.position.x;
-    let dyMãos = p.rightHand.position.y - p.leftHand.position.y;
-    let distanciaMãos = Math.sqrt(dxMãos*dxMãos + dyMãos*dyMãos);
+    // Varredura radial nativa estável para verificar se o corpo verde está encostado em algum bloco
+    let todosCorposMundo = s.matter.world.localWorld.bodies;
+    let corpoApoiadoValido = false;
+    for (let i = 0; i < todosCorposMundo.length; i++) {
+        let b = todosCorposMundo[i];
+        if (!b || b === p.body || b.label?.includes('braco') || b.label?.includes('Hand')) continue;
+        let rotuloValido = b.label === 'ambiente' || (b.label && b.label.startsWith('p') && !b.label.includes(p.id.toString()));
+        if (rotuloValido) {
+            let dx = b.position.x - p.body.position.x;
+            let dy = b.position.y - p.body.position.y;
+            if (dx*dx + dy*dy <= 28 * 28) { corpoApoiadoValido = true; break; }
+        }
+    }
     
-    // EQUAÇÃO DE PROPORCIONALIDADE: Braços abertos (distância ~100px) dá força total (1.0). Braços colados ou apontando pra cima cai para quase zero!
-    let multiplicadorEscalarDistancia = Phaser.Math.Clamp((distanciaMãos - 20) / 80, 0.08, 1.0);
-    let forçaMãoDinâmica = BASE_MAXIMA_FORCA * multiplicadorEscalarDistancia;
+    // APLICAÇÃO DA REGRA DE MASSA ADAPTATIVA
+    const MASSA_NORMAL_CORPO = 6.8; 
+    const MASSA_PESADA_CHUMBO = 136.0; // Peso aumentado em 20x para ancorar o boneco contra vetores de voo
+    
+    let condicao1_Vazio = !corpoApoiadoValido && !p.leftJoint && !p.rightJoint;
+    let condicao2_MesmoObjeto = !corpoApoiadoValido && p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic;
+    
+    if (condicao1_Vazio || condicao2_MesmoObjeto) {
+        if (p.body.mass !== MASSA_PESADA_CHUMBO) s.matter.body.setMass(p.body, MASSA_PESADA_CHUMBO);
+    } else {
+        if (p.body.mass !== MASSA_NORMAL_CORPO) s.matter.body.setMass(p.body, MASSA_NORMAL_CORPO);
+    }
     
     let mL = 1.0, mR = 1.0; 
     if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) { mL = 0.35; mR = 0.35; }
     
-    // Leve empurrão estético no corpo verde baseado no analógico para ajudar a pegar embalo nas correntes humanas
     if (pad.leftStick) {
-        s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * 0.002, y: pad.leftStick.y * 0.0006 });
-    }
-    
-    if (pad.leftStick) {
-        let fX = pad.leftStick.x * forçaMãoDinâmica;
-        let fY = pad.leftStick.y * forçaMãoDinâmica;
+        let fX = pad.leftStick.x * FORCA_CONSTANTE_MAOS;
+        let fY = pad.leftStick.y * FORCA_CONSTANTE_MAOS;
         
-        // Bloqueia empuxo contra o cenário estável se as mãos não tiverem distância de alavanca aberta
         if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.isStatic) {
             if (fY < 0) fY *= 0.15; 
         }
@@ -483,8 +492,8 @@ function handlePlayerInput(s, p) {
     }
     
     if (pad.rightStick) {
-        let fX = pad.rightStick.x * forçaMãoDinâmica;
-        let fY = pad.rightStick.y * forçaMãoDinâmica;
+        let fX = pad.rightStick.x * FORCA_BONECO; // Unificado internamente
+        let fY = pad.rightStick.y * FORCA_BONECO;
         
         if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.isStatic) {
             if (fY < 0) fY *= 0.15; 
@@ -552,7 +561,7 @@ function update() {
         previewGraphicsPoligono.clear();
         if (verticesCriacaoAtiva.length > 0 && document.getElementById('prop-shape').value === 'polygon') {
             previewGraphicsPoligono.lineStyle(3, 0xff0000, 1.0); previewGraphicsPoligono.fillStyle(0xffffff, 1.0);
-            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
+            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva.x, verticesCriacaoAtiva.y);
             verticesCriacaoAtiva.forEach(v => { previewGraphicsPoligono.lineTo(v.x, v.y); previewGraphicsPoligono.fillCircle(v.x, v.y, 6); });
             previewGraphicsPoligono.strokePath();
         }
@@ -561,6 +570,9 @@ function update() {
         verificarEForcarRedesenhoDebug(this);
         return;
     }
+
+    // Variável FORCA_BONECO declarada globalmente no escopo do loop para evitar erros de escopo cruzado
+    window.FORCA_BONECO = 0.038;
 
     if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); });
