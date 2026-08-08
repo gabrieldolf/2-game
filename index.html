@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Apoio Corporal Dinâmico</title>
+    <title>Heave Ho - Apoio Omnidirecional Blindado</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -339,7 +339,7 @@ function desenharObjetoEditor(obj) {
     else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
     else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual && obj.dadosDesenhoVisual.length > 0) {
         g.beginPath();
-        g.moveTo(obj.dadosDesenhoVisual.x, obj.dadosDesenhoVisual.y);
+        g.moveTo(obj.dadosDesenhoVisual[0].x, obj.dadosDesenhoVisual[0].y);
         for(let i = 1; i < obj.dadosDesenhoVisual.length; i++) { 
             g.lineTo(obj.dadosDesenhoVisual[i].x, obj.dadosDesenhoVisual[i].y); 
         }
@@ -371,7 +371,7 @@ function processarToqueParaContato(h, b, pair) {
             if (b.label !== h.label.substring(0, 3) + 'body' && !b.label.includes('braco')) {
                 h.corpoTocadoAgora = b;
                 if (pair.activeContacts && pair.activeContacts.length > 0) {
-                    h.pontoDeContatoGlobal = { x: pair.activeContacts.vertex.x, y: pair.activeContacts.vertex.y };
+                    h.pontoDeContatoGlobal = { x: pair.activeContacts[0].vertex.x, y: pair.activeContacts[0].vertex.y };
                 } else {
                     h.pontoDeContatoGlobal = { x: h.position.x, y: h.position.y };
                 }
@@ -432,7 +432,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// ATUALIZAÇÃO REQUISITADA: Os braços funcionam normalmente se o corpo verde estiver apoiado ou encostado em cima de blocos ou outros jogadores!
+// CORREÇÃO CIRÚRGICA: Substituído intersectCircle inválido por busca radial via varredura de corpos do Matter.js
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -444,11 +444,30 @@ function handlePlayerInput(s, p) {
     const BASE_FORCA = 0.038; 
     let fatorForca = 1.0;
     
-    // SOLUÇÃO OMNIDIRECIONAL: Faz uma varredura radial de 25 pixels ao redor do corpo para detectar contato em qualquer quina ou plataforma
-    let corposEmVolta = s.matter.intersectCircle(p.body.position.x, p.body.position.y, 25);
-    let corpoApoiadoValido = corposEmVolta.some(c => c && c.label === 'ambiente' || (c && c.label && c.label.startsWith('p') && c.label !== p.body.label));
+    // FIX CORE NATÍSSIMO: Varre todos os corpos rígidos e calcula se a distância até o centro do boneco indica suporte
+    let todosCorposMundo = s.matter.world.localWorld.bodies;
+    let corpoApoiadoValido = false;
     
-    // Se o corpo NÃO estiver encostado em nenhuma plataforma e também NÃO estiver segurando nada, a força das garras desaba para 5% (corta o voo)
+    for (let i = 0; i < todosCorposMundo.length; i++) {
+        let b = todosCorposMundo[i];
+        if (!b || b === p.body) continue;
+        
+        // Verifica se é bloco estético/ambiente do editor ou se é o corpo rígido do outro jogador
+        let rotuloValido = b.label === 'ambiente' || (b.label && b.label.startsWith('p') && !b.label.includes(p.id.toString()));
+        if (rotuloValido) {
+            let dx = b.position.x - p.body.position.x;
+            let dy = b.position.y - p.body.position.y;
+            let distCentroSq = dx*dx + dy*dy;
+            
+            // Tolerância radial confortável de apoio omnidirecional (raio do boneco 22 + borda 6 = 28px de alcance)
+            if (distCentroSq <= 28 * 28) {
+                corpoApoiadoValido = true;
+                break;
+            }
+        }
+    }
+    
+    // Se o corpo NÃO estiver encostado em nada e também NÃO estiver segurando nada, a força cai para 5% (corta o voo)
     if (!corpoApoiadoValido && !p.leftJoint && !p.rightJoint) {
         fatorForca = 0.05;
     }
@@ -461,7 +480,7 @@ function handlePlayerInput(s, p) {
     let mL = 1.0, mR = 1.0; 
     if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) { mL = 0.35; mR = 0.35; }
     
-    // O analógico esquerdo empurra o corpo de forma suave apenas se ele tiver suporte ou contato físico ativo
+    // O analógico esquerdo empurra o corpo de forma suave apenas se ele tiver suporte físico ativo
     if (pad.leftStick && corpoApoiadoValido) {
         s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * 0.003, y: pad.leftStick.y * 0.001 });
     }
@@ -553,7 +572,7 @@ function update() {
         previewGraphicsPoligono.clear();
         if (verticesCriacaoAtiva.length > 0 && document.getElementById('prop-shape').value === 'polygon') {
             previewGraphicsPoligono.lineStyle(3, 0xff0000, 1.0); previewGraphicsPoligono.fillStyle(0xffffff, 1.0);
-            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva.x, verticesCriacaoAtiva.y);
+            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
             verticesCriacaoAtiva.forEach(v => { previewGraphicsPoligono.lineTo(v.x, v.y); previewGraphicsPoligono.fillCircle(v.x, v.y, 6); });
             previewGraphicsPoligono.strokePath();
         }
