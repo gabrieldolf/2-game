@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Transferência Cinemática de Força</title>
+    <title>Heave Ho - Controle Direto de Extremidades</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -34,7 +34,7 @@
         <div class="prop-row"><label style="color:#55ff55; font-weight:bold;">Alinhamento Ímã:</label><input type="checkbox" id="prop-snap-active" checked></div>
     </div>
     <div class="section">
-        <h3 id="status-modo" style="color:#55ff55;">Criando novos objects</h3>
+        <h3 id="status-modo" style="color:#55ff55;">Criando novos objetos</h3>
         <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option></select></div>
         
         <div class="prop-row" style="background:#2c3e50; padding:6px; border-radius:4px;"><label style="color:#00ff00; font-weight:bold;">Ativar Física:</label><input type="checkbox" id="prop-physics-active" checked onchange="atualizarObjetoExistente()"></div>
@@ -432,7 +432,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// ATUALIZAÇÃO CONTEXTUAL: Se o objeto agarrado for móvel, o analógico empurra o objeto através da mão em vez de puxar o corpo!
+// ATUALIZAÇÃO REVOLUCIONÁRIA: Os analógicos controlam exclusivamente as MÃOS. Força aumentada (m=0.038) e blindagem contra tração anti-gravidade para blocos pesados.
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -441,34 +441,46 @@ function handlePlayerInput(s, p) {
     
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     
-    let mL = 1.0, mR = 1.0; 
-    if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) { mL = 0.35; mR = 0.35; }
+    // Multiplicador de força das extremidades aumentado para dar arrancada firme nas escaladas (0.038)
+    const FORCA_BONECO = 0.038; 
     
     if (pad.leftStick) {
-        // DETECÇÃO DA SUA IDEIA: Verifica se a mão esquerda está ativamente presa a um bloco dinâmico móvel
-        let segurandoMovelEsq = p.leftJoint && p.leftJointTarget && !p.leftJointTarget.isStatic && !p.leftJointTarget.label?.startsWith('p');
+        let fX = pad.leftStick.x * FORCA_BONECO;
+        let fY = pad.leftStick.y * FORCA_BONECO;
         
-        // Se for móvel, a força vai para a mão/objeto. Se for fixo ou livre, empurra o corpo do jogador!
-        let alvoEsquerdo = segurandoMovelEsq ? p.leftHand : (p.leftJoint ? p.body : p.leftHand); 
-        let m = p.leftJoint ? 0.032 : 0.018; 
-        s.matter.body.applyForce(alvoEsquerdo, alvoEsquerdo.position, { x: pad.leftStick.x * m, y: pad.leftStick.y * m });
+        // REQUISITO: Se a mão esquerda estiver agarrada a um objeto móvel afetado pela gravidade...
+        if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.isStatic && !p.leftJointTarget.ignoreGravity) {
+            // Impede que o comando empurre o objeto verticalmente contra a gravidade (para cima)
+            if (fY < 0) fY = 0; 
+        }
         
+        // MUDANÇA CORE: O analógico esquerdo comanda SEMPRE a mão esquerda (nunca mais o corpo!)
+        s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fX, y: fY });
+        
+        // Se a mão estiver cravada, a força de reação empurra o objeto (ou puxa o corpo através da junta)
         if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.isStatic) {
-            s.matter.body.applyForce(p.leftJointTarget, p.leftHand.position, { x: -pad.leftStick.x * m * 0.5 * mL, y: -pad.leftStick.y * m * 0.5 * mL });
+            s.matter.body.applyForce(p.leftJointTarget, p.leftHand.position, { x: -fX * 0.5, y: -fY * 0.5 });
         }
     }
+    
     if (pad.rightStick) {
-        // DETECÇÃO DA SUA IDEIA: Verifica se a mão direita está ativamente presa a um bloco dinâmico móvel
-        let segurandoMovelDir = p.rightJoint && p.rightJointTarget && !p.rightJointTarget.isStatic && !p.rightJointTarget.label?.startsWith('p');
+        let fX = pad.rightStick.x * FORCA_BONECO;
+        let fY = pad.rightStick.y * FORCA_BONECO;
         
-        let alvoDireito = segurandoMovelDir ? p.rightHand : (p.rightJoint ? p.body : p.rightHand); 
-        let m = p.rightJoint ? 0.032 : 0.018; 
-        s.matter.body.applyForce(alvoDireito, alvoDireito.position, { x: pad.rightStick.x * m, y: pad.rightStick.y * m });
+        // REQUISITO: Se a mão direita estiver agarrada a um objeto móvel afetado pela gravidade...
+        if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.isStatic && !p.rightJointTarget.ignoreGravity) {
+            // Impede que o comando empurre o objeto verticalmente contra a gravidade (para cima)
+            if (fY < 0) fY = 0; 
+        }
+        
+        // MUDANÇA CORE: O analógico direito comanda SEMPRE a mão direita
+        s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fX, y: fY });
         
         if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.isStatic) {
-            s.matter.body.applyForce(p.rightJointTarget, p.rightHand.position, { x: -pad.rightStick.x * m * 0.5 * mR, y: -pad.rightStick.y * m * 0.5 * mR });
+            s.matter.body.applyForce(p.rightJointTarget, p.rightHand.position, { x: -fX * 0.5, y: -fY * 0.5 });
         }
     }
+    
     processarGarra(s, p, p.leftHand, 'leftJoint', lL, enemy); 
     processarGarra(s, p, p.rightHand, 'rightJoint', rR, enemy);
 }
@@ -522,7 +534,7 @@ function update() {
         previewGraphicsPoligono.clear();
         if (verticesCriacaoAtiva.length > 0 && document.getElementById('prop-shape').value === 'polygon') {
             previewGraphicsPoligono.lineStyle(3, 0xff0000, 1.0); previewGraphicsPoligono.fillStyle(0xffffff, 1.0);
-            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
+            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva.x, verticesCriacaoAtiva.y);
             verticesCriacaoAtiva.forEach(v => { previewGraphicsPoligono.lineTo(v.x, v.y); previewGraphicsPoligono.fillCircle(v.x, v.y, 6); });
             previewGraphicsPoligono.strokePath();
         }
