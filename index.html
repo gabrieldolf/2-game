@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Ragdoll Perfeito e Estável</title>
+    <title>Heave Ho - Sistema de Fadiga de Extremidades</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -339,7 +339,7 @@ function desenharObjetoEditor(obj) {
     else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
     else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual && obj.dadosDesenhoVisual.length > 0) {
         g.beginPath();
-        g.moveTo(obj.dadosDesenhoVisual[0].x, obj.dadosDesenhoVisual[0].y);
+        g.moveTo(obj.dadosDesenhoVisual.x, obj.dadosDesenhoVisual.y);
         for(let i = 1; i < obj.dadosDesenhoVisual.length; i++) { 
             g.lineTo(obj.dadosDesenhoVisual[i].x, obj.dadosDesenhoVisual[i].y); 
         }
@@ -432,7 +432,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// SOLUÇÃO DEFINITIVA DO VOO: Braços soltos no ar NÃO empurram o corpo para cima. Analógico esquerdo move o corpo de forma suave apenas no chão ou balanço.
+// ATUALIZAÇÃO REQUISITADA: Sistema de Fadiga. Mãos perdem a tração no ar sem apoio (5%) ou se ambas segurarem o mesmo bloco dinâmico (20%).
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -441,45 +441,57 @@ function handlePlayerInput(s, p) {
     
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     
-    const FORCA_BRACOS_LIVRES = 0.038; 
+    const BASE_FORCA = 0.038; 
+    let fatorForca = 1.0;
+    
+    // DETECÇÃO DE SOLO FÍSICO COM ABAIXO DE 2 PIXELS DE TOLERÂNCIA
+    let corposAbaixo = s.matter.intersectRay(p.body.position.x, p.body.position.y, p.body.position.x, p.body.position.y + 26);
+    let noChao = corposAbaixo.some(c => c && c.body && c.body.label === 'ambiente');
+    
+    // REGRA 1: Jogador não está no chão e não está agarrando nada -> Perde 95% da tração (braço vira chicote estético sem empuxo)
+    if (!noChao && !p.leftJoint && !p.rightJoint) {
+        fatorForca = 0.05;
+    }
+    // REGRA 2: Jogador não está no chão e está agarrando o MESMO objeto com as duas mãos -> Perde 80% do torque para travar o voo
+    else if (!noChao && p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) {
+        fatorForca = 0.20;
+    }
+    
+    let forçaCalculada = BASE_FORCA * fatorForca;
     let mL = 1.0, mR = 1.0; 
     if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) { mL = 0.35; mR = 0.35; }
     
-    // MICRO-IMPULSO CORPORAL: O analógico esquerdo dá uma leve força no corpo para direcionar o balanço, mas sem empuxo vertical infinito
     if (pad.leftStick) {
-        s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * 0.003, y: pad.leftStick.y * 0.001 });
-    }
-    
-    if (pad.leftStick) {
-        let fX = pad.leftStick.x * FORCA_BRACOS_LIVRES;
-        let fY = pad.leftStick.y * FORCA_BRACOS_LIVRES;
+        let fX = pad.leftStick.x * forçaCalculada;
+        let fY = pad.leftStick.y * forçaCalculada;
         
-        // CORREÇÃO: Força aplicada exclusivamente na mão. Se não estiver grudado, o corpo sofre ação normal da gravidade.
+        if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.isStatic) {
+            if (fY < 0) fY *= 0.15; 
+        }
+        
         s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fX, y: fY });
         
-        // Se a mão estiver fixa em parede estável (isStatic), a mola transmite a reação puxando o corpo do Ragdoll
-        if (p.leftJoint && p.leftJointTarget) {
-            if (!p.leftJointTarget.isStatic) {
-                // Se o bloco for móvel, permite empurrar/puxar mas amortece vetores anti-gravidade verticais
-                let forcaReacaoY = -fY * 0.5 * mL;
-                if (!p.leftJointTarget.ignoreGravity && forcaReacaoY < 0) forcaReacaoY *= 0.15;
-                s.matter.body.applyForce(p.leftJointTarget, p.leftHand.position, { x: -fX * 0.5 * mL, y: forcaReacaoY });
-            }
+        if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.isStatic) {
+            let forcaReacaoY = -fY * 0.5 * mL;
+            if (!p.leftJointTarget.ignoreGravity && forcaReacaoY < 0) forcaReacaoY *= 0.15;
+            s.matter.body.applyForce(p.leftJointTarget, p.leftHand.position, { x: -fX * 0.5 * mL, y: forcaReacaoY });
         }
     }
     
     if (pad.rightStick) {
-        let fX = pad.rightStick.x * FORCA_BRACOS_LIVRES;
-        let fY = pad.rightStick.y * FORCA_BRACOS_LIVRES;
+        let fX = pad.rightStick.x * forçaCalculada;
+        let fY = pad.rightStick.y * forçaCalculada;
+        
+        if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.isStatic) {
+            if (fY < 0) fY *= 0.15; 
+        }
         
         s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fX, y: fY });
         
-        if (p.rightJoint && p.rightJointTarget) {
-            if (!p.rightJointTarget.isStatic) {
-                let forcaReacaoY = -fY * 0.5 * mR;
-                if (!p.rightJointTarget.ignoreGravity && forcaReacaoY < 0) forcaReacaoY *= 0.15;
-                s.matter.body.applyForce(p.rightJointTarget, p.rightHand.position, { x: -fX * 0.5 * mR, y: forcaReacaoY });
-            }
+        if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.isStatic) {
+            let forcaReacaoY = -fY * 0.5 * mR;
+            if (!p.rightJointTarget.ignoreGravity && forcaReacaoY < 0) forcaReacaoY *= 0.15;
+            s.matter.body.applyForce(p.rightJointTarget, p.rightHand.position, { x: -fX * 0.5 * mR, y: forcaReacaoY });
         }
     }
     
@@ -536,7 +548,7 @@ function update() {
         previewGraphicsPoligono.clear();
         if (verticesCriacaoAtiva.length > 0 && document.getElementById('prop-shape').value === 'polygon') {
             previewGraphicsPoligono.lineStyle(3, 0xff0000, 1.0); previewGraphicsPoligono.fillStyle(0xffffff, 1.0);
-            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
+            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva.x, verticesCriacaoAtiva.y);
             verticesCriacaoAtiva.forEach(v => { previewGraphicsPoligono.lineTo(v.x, v.y); previewGraphicsPoligono.fillCircle(v.x, v.y, 6); });
             previewGraphicsPoligono.strokePath();
         }
