@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Perda de Força por Estiramento</title>
+    <title>Heave Ho - Filtro Dinâmico de Ângulo Morto</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -45,7 +45,7 @@
         
         <div class="prop-row"><label style="color:#3498db; font-weight:bold;">Fixar Posição (Eixo X/Y):</label><input type="checkbox" id="prop-lock-pos" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row"><label>Bloquear Rotação:</label><input type="checkbox" id="prop-lock-rot" onchange="atualizarObjetoExistente()"></div>
-        <div class="prop-row"><label style="color:#aaa;">Resistência a Rotação:</label><input type="number" id="prop-inertia-mult" value="1.0" step="0.2" min="0.1" max="50.0" onchange="atualizarObjetoExistente()"></div>
+        <div class="prop-row"><label style="color:#aaa;">Resistência a Rotação:</label><input type="number" id="prop-inertia-mult" value="1.0" step="0.2" min="0.1" max="50.0" onchange="alternarVisibilidadeGrade()"></div>
         
         <div class="prop-row"><label>Massa (Peso):</label><input type="number" id="prop-mass" value="1.0" step="0.1" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row"><label>Arrasto Ar:</label><input type="number" id="prop-air" value="0.02" step="0.01" onchange="atualizarObjetoExistente()"></div>
@@ -432,7 +432,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// ATUALIZAÇÃO SOLICITADA: Fadiga e massa adaptativa removidas. As mãos movem-se livres no ar. A força gerada cai à medida que a mão se afasta do corpo (braço esticado).
+// ATUALIZAÇÃO MESTRA: Força total constante nas mãos, mas com corte matemático absoluto (0.0) se o braço esticar e o comando insistir em esticá-lo mais.
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -441,34 +441,31 @@ function handlePlayerInput(s, p) {
     
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     
-    // Força máxima nominal padrão restaurada de forma sólida (6.8 de massa normal estável fixa)
-    if (p.body.mass !== 6.8) s.matter.body.setMass(p.body, 6.8);
-    const FORCA_MAX_NOMINAL = 0.038; 
-    
-    // CALCULO DE DISTÂNCIA DAS EXTREMIDADES EM RELAÇÃO AO CENTRO CORPORAL DO RAGDOLL
-    let dxEsq = p.leftHand.position.x - p.body.position.x;
-    let dyEsq = p.leftHand.position.y - p.body.position.y;
-    let distEsq = Math.sqrt(dxEsq*dxEsq + dyEsq*dyEsq);
-    
-    let dxDir = p.rightHand.position.x - p.body.position.x;
-    let dyDir = p.rightHand.position.y - p.body.position.y;
-    let distDir = Math.sqrt(dxDir*dxDir + dyDir*dyDir);
-    
-    // EQUAÇÃO DE PERDA DE FORÇA: Perto do corpo (dist < 50px) multiplicador é 1.0. Braço esticado perto do limite (dist > 120px) cai linearmente até 10%
-    let multEsq = 1.0 - Phaser.Math.Clamp((distEsq - 50) / 90, 0.0, 0.90);
-    let multDir = 1.0 - Phaser.Math.Clamp((distDir - 50) / 90, 0.0, 0.90);
-    
+    const FORCA_NOMINAL_MAOS = 0.038; 
     let mL = 1.0, mR = 1.0; 
     if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget && !p.leftJointTarget.isStatic) { mL = 0.35; mR = 0.35; }
     
-    // Pequeno torque corporal auxiliar ativo para direcionar o pulo ou balanço
+    // Leve auxílio corporal fixo estável para ajudar no direcionamento de saltos
     if (pad.leftStick) {
         s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * 0.002, y: pad.leftStick.y * 0.0006 });
     }
     
     if (pad.leftStick) {
-        let fX = pad.leftStick.x * FORCA_MAX_NOMINAL * multEsq;
-        let fY = pad.leftStick.y * FORCA_MAX_NOMINAL * multEsq;
+        let fX = pad.leftStick.x * FORCA_NOMINAL_MAOS;
+        let fY = pad.leftStick.y * FORCA_NOMINAL_MAOS;
+        
+        // CALCULO DO VETOR DO BRAÇO ESQUERDO (Do corpo até a mão)
+        let bX = p.leftHand.position.x - p.body.position.x;
+        let bY = p.leftHand.position.y - p.body.position.y;
+        let distEsq = Math.sqrt(bX*bX + bY*bY);
+        
+        // FILTRO DE ÂNGULO MORTO: Se o braço esquerdo já estiver esticado no limite (>130 pixels)...
+        if (distEsq > 130 && (pad.leftStick.x !== 0 || pad.leftStick.y !== 0)) {
+            // Calcula o cosseno do ângulo entre o vetor do braço atual e o vetor do analógico
+            let dotProduct = (bX * pad.leftStick.x + bY * pad.leftStick.y) / distEsq;
+            // Se o jogador apontar o analógico na mesma direção em que o braço já está estendido (dot > 0.4), ZERA a força para cortar a tração infinita!
+            if (dotProduct > 0.4) { fX = 0; fY = 0; }
+        }
         
         if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.isStatic) {
             if (fY < 0) fY *= 0.15; 
@@ -484,8 +481,20 @@ function handlePlayerInput(s, p) {
     }
     
     if (pad.rightStick) {
-        let fX = pad.rightStick.x * FORCA_MAX_NOMINAL * multDir;
-        let fY = pad.rightStick.y * FORCA_MAX_NOMINAL * multDir;
+        let fX = pad.rightStick.x * FORCA_NOMINAL_MAOS;
+        let fY = pad.rightStick.y * FORCA_NOMINAL_MAOS;
+        
+        // CALCULO DO VETOR DO BRAÇO DIREITO
+        let bX = p.rightHand.position.x - p.body.position.x;
+        let bY = p.rightHand.position.y - p.body.position.y;
+        let distDir = Math.sqrt(bX*bX + bY*bY);
+        
+        // FILTRO DE ÂNGULO MORTO: Se o braço direito estiver no limite esticado...
+        if (distDir > 130 && (pad.rightStick.x !== 0 || pad.rightStick.y !== 0)) {
+            let dotProduct = (bX * pad.rightStick.x + bY * pad.rightStick.y) / distDir;
+            // Se insistir em forçar o analógico para esticar mais, corta a energia (0.0) na hora!
+            if (dotProduct > 0.4) { fX = 0; fY = 0; }
+        }
         
         if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.isStatic) {
             if (fY < 0) fY *= 0.15; 
