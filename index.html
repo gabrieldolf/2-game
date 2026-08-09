@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Efeito de Partículas Direcionado</title>
+    <title>FX de Partículas Direcionado</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -573,19 +573,15 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
     
-    // Configuração para fumaça realista em tons de cinza que expande enquanto some
+    // Configuração blindada para fumaça opaca em tons de cinza (sem herdar o verde)
     let manager = scene.add.particles(0, 0, 'spark', {
         speed: { min: 80, max: 250 },
         angle: { min: 80, max: 100 }, 
         lifespan: 800, 
-        scale: { start: 0.5, end: 2.5 }, // A fumaça começa pequena e expande no ar
-        alpha: { start: 0.5, end: 0.0 }, // Desbota suavemente até sumir
-        tint: function() {
-            // Gera tons aleatórios de cinza (escuro, médio e claro)
-            let tons = [0x666666, 0x888888, 0xaaaaaa, 0xcccccc];
-            return tons[Math.floor(Math.random() * tons.length)];
-        },
-        blendMode: 'NORMAL', // Modo normal faz a fumaça parecer opaca e não brilhante
+        scale: { start: 0.6, end: 2.8 }, // Expandindo a fumaça no ar
+        alpha: { start: 0.5, end: 0.0 }, // Desbotando suavemente
+        tint: { min: 0x777777, max: 0xaaaaaa }, // Força o Phaser a sortear apenas tons de cinza entre escuro e claro
+        blendMode: 'NORMAL', // Garante que a fumaça seja opaca e não brilhe como fogo
         depth: 9
     });
     
