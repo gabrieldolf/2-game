@@ -211,25 +211,53 @@ function extrairCamposPainel() {
 
 function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
-    if (document.getElementById('prop-snap-active').checked) { let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; }
+    if (document.getElementById('prop-snap-active').checked && c.shape !== 'polygon') { 
+        let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; 
+    }
     
+    // CORREÇÃO: Objetos não manuseáveis que podem rodar NÃO usam isStatic direto, usam restrição de gravidade ou fixação
     let conf = { 
-        isStatic: !c.manuseavel && c.lockPos, 
+        isStatic: false, // Permite simulação física de forças e rotações
         label: 'ambiente', 
         ignoreGravity: !c.gravity, 
         mass: c.mass, 
         friction: 0.8, 
         frictionAir: c.air, 
         restitution: c.bounce, 
-        collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE | CAT_MANUSEAVEL_CARREGADO } 
+        collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } 
     };
     
+    // Se o objeto NÃO for manuseável E tiver "Fixar Posição" ativado, ele fingirá ser estático no eixo X/Y, mas rodará livremente se LockRot estiver falso
+    if (!c.manuseavel && !c.lockPos) {
+        // Se não manuseável e sem trava de posição, age como um bloco pesado afetado ou não pela gravidade
+    }
+    
     let body = (c.shape === 'box') ? scene.matter.add.rectangle(ax, ay, c.w, c.h, conf) : scene.matter.add.circle(ax, ay, c.w, conf);
-    body.manuseavel = c.manuseavel; body.gravidadeOriginal = c.gravity; body.massaOriginal = c.mass; body.grupoOriginal = 0;
-    if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
+    body.manuseavel = c.manuseavel;
+    
+    if (c.lockRot) { 
+        scene.matter.body.setInertia(body, Infinity); 
+    } else {
+        // Calcula a inércia rotacional real baseada na massa para permitir que ele rode ao sofrer torque das mãos do jogador
+        let inertiaReal = (c.shape === 'box') ? (c.mass * (c.w*c.w + c.h*c.h)) / 12 : (c.mass * c.w * c.w) / 2;
+        scene.matter.body.setInertia(body, inertiaReal);
+    }
+    
+    // Se for um bloco do cenário fixado que DEVE rodar no próprio eixo, criamos uma junta pivô central invisível se lockPos estiver ativo
+    if (!c.manuseavel && c.lockPos) {
+        body.constraintPivoCenario = scene.matter.add.constraint(body, scene.matter.add.pointerPivor?, 0, 1, {
+            pointA: { x: 0, y: 0 },
+            pointB: { x: ax, y: ay },
+            stiffness: 1.0,
+            length: 0
+        });
+    } else if (!c.manuseavel && !c.lockPos && !c.gravity) {
+        // Caso queira um bloco flutuante que se move e roda ao ser empurrado
+    }
     
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel });
 }
+
 
 function finalizarCriacaoPoligono(scene) {
     if (verticesCriacaoAtiva.length < 3) { alert("Polígonos precisam de pelo menos 3 vértices!"); return; }
@@ -310,39 +338,48 @@ function atualizarObjetoExistente() {
     let px = obj.body ? obj.body.position.x : obj.visualX; let py = obj.body ? obj.body.position.y : obj.visualY;
     let anguloSalvo = obj.body ? obj.body.angle : 0;
     
-    if (obj.body) scene.matter.world.remove(obj.body); obj.body = null;
+    if (obj.body) {
+        if (obj.body.constraintPivoCenario) scene.matter.world.remove(obj.body.constraintPivoCenario);
+        scene.matter.world.remove(obj.body);
+    }
+    obj.body = null;
     obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity; obj.lockPos = c.lockPos; obj.lockRot = c.lockRot; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce; obj.visualX = px; obj.visualY = py; obj.manuseavel = c.manuseavel;
     
     let conf = { 
-        isStatic: !c.manuseavel && c.lockPos, 
+        isStatic: false, // Forçado false para permitir rotação via torque físico das garras do jogador
         label: 'ambiente', 
         ignoreGravity: !obj.gravity, 
-        mass: obj.mass / (obj.dadosDesenhoVisual ? obj.dadosDesenhoVisual.length : 1), 
+        mass: obj.mass, 
         friction: 0.8, 
         frictionAir: c.air, 
         restitution: c.bounce, 
-        collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE | CAT_MANUSEAVEL_CARREGADO } 
+        collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } 
     };
     
     if (obj.shape === 'box') obj.body = scene.matter.add.rectangle(px, py, obj.w, obj.h, conf);
     else if (obj.shape === 'circle') obj.body = scene.matter.add.circle(px, py, obj.w, conf);
-    else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual) {
-        let partesFisicasTriangulares = [];
-        for (let i = 0; i < obj.dadosDesenhoVisual.length; i++) {
-            let p1 = obj.dadosDesenhoVisual[i]; let p2 = obj.dadosDesenhoVisual[(i + 1) % obj.dadosDesenhoVisual.length];
-            let trianguloVertices = [{ x: 0, y: 0 }, { x: p1.x, y: p1.y }, { x: p2.x, y: p2.y }];
-            let corpoFatiaPuro = Phaser.Physics.Matter.Matter.Bodies.fromVertices(px + (p1.x + p2.x)/3, py + (p1.y + p2.y)/3, trianguloVertices, conf);
-            if (corpoFatiaPuro) partesFisicasTriangulares.push(corpoFatiaPuro);
-        }
-        obj.body = scene.matter.body.create({ parts: partesFisicasTriangulares, isStatic: !c.manuseavel && c.lockPos, label: 'ambiente', ignoreGravity: !obj.gravity });
-        scene.matter.world.add(obj.body); scene.matter.body.setPosition(obj.body, { x: px, y: py });
-    }
     
     if (obj.body) {
-        obj.body.manuseavel = c.manuseavel; obj.body.gravidadeOriginal = c.gravity; obj.body.massaOriginal = c.mass; obj.body.grupoOriginal = 0;
-        if (!obj.body.isStatic) { scene.matter.body.setInertia(obj.body, obj.lockRot ? Infinity : obj.body.inertia); scene.matter.body.setAngle(obj.body, anguloSalvo); }
+        obj.body.manuseavel = c.manuseavel;
+        
+        if (obj.lockRot) { 
+            scene.matter.body.setInertia(obj.body, Infinity); 
+        } else {
+            let inertiaReal = (obj.shape === 'box') ? (obj.mass * (obj.w*obj.w + obj.h*obj.h)) / 12 : (obj.mass * obj.w * obj.w) / 2;
+            scene.matter.body.setInertia(obj.body, inertiaReal);
+        }
+        
+        // RECONSTRUÇÃO DO PIVÔ: Se for objeto do cenário com Fixar Posição ligado, prende o centro dele no mapa para girar como hélice
+        if (!obj.manuseavel && obj.lockPos) {
+            obj.body.constraintPivoCenario = scene.matter.add.worldConstraint(obj.body, 0, 1, {
+                pointA: { x: 0, y: 0 }, pointB: { x: px, y: py }, stiffness: 1.0, length: 0
+            });
+        }
+        
+        scene.matter.body.setAngle(obj.body, anguloSalvo);
     }
 }
+
 
 function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorpo) {
     let finalX = x, finalY = y; const DISTANCIA_IMA = 20, corpos = scene.matter.world.localWorld.bodies;
