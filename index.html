@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Peso por Comando na Queda</title>
+    <title>Novo/title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -475,34 +475,22 @@ function handlePlayerInput(s, p) {
     let MASSA_PADRAO = 6.8;
     let massaCalculadaCorpo = MASSA_PADRAO;
     
-    // REQUISITOS DE VALIDAÇÃO REVISADOS:
     let totalmenteLivreNoVazio = (!p.leftJoint && !p.rightJoint);
     let estaCaindo = (p.body.velocity.y > 0.5);
     
-    // REQUISITO: Detecção anatômica correta da inversão do motor (Eixo Y negativo = Analógico empurrado para CIMA)
     const ZONA_MORTA_CIMA = -0.15;
     let esquerdoParaCima = pad.leftStick && (pad.leftStick.y < ZONA_MORTA_CIMA);
     let direitoParaCima = pad.rightStick && (pad.rightStick.y < ZONA_MORTA_CIMA);
     let algumAnalogicoParaCima = (esquerdoParaCima || direitoParaCima);
     
-    // CONDIÇÃO ATUALIZADA: Caindo AND Algum analógico para cima além da zona morta AND Sem agarrar nada
     if (estaCaindo && algumAnalogicoParaCima && totalmenteLivreNoVazio) {
-        let pesoExtraEsq = 0;
-        let pesoExtraDir = 0;
-        
+        let pesoExtraEsq = 0; let pesoExtraDir = 0;
         let deltaYEsq = p.body.position.y - p.leftHand.position.y;
-        if (deltaYEsq > 0) {
-            pesoExtraEsq = deltaYEsq * valorModificador * 0.1; 
-        }
-        
+        if (deltaYEsq > 0) { pesoExtraEsq = deltaYEsq * valorModificador * 0.1; }
         let deltaYDir = p.body.position.y - p.rightHand.position.y;
-        if (deltaYDir > 0) {
-            pesoExtraDir = deltaYDir * valorModificador * 0.1;
-        }
-        
+        if (deltaYDir > 0) { pesoExtraDir = deltaYDir * valorModificador * 0.1; }
         massaCalculadaCorpo += (pesoExtraEsq + pesoExtraDir);
     }
-    
     if (p.body.mass !== massaCalculadaCorpo) { s.matter.body.setMass(p.body, massaCalculadaCorpo); }
     
     const FORCA_ESCALADA_CENARIO = 0.045; 
@@ -516,48 +504,53 @@ function handlePlayerInput(s, p) {
         p.particleEmitter.explode(3, p.body.position.x, p.body.position.y + 0);
     }
     
-    // CONTROLADOR CONTEXTUAL: MÃO ESQUERDA
+    // ----------------------------------------------------
+    // CORREÇÃO ANATÔMICA: MÃO ESQUERDA
+    // ----------------------------------------------------
     let segurandoNaoManuseavelEsq = p.leftJoint && p.leftJointTarget && (p.leftJointTarget.manuseavel === false || p.leftJointTarget.isStatic);
     let segurandoManuseavelEsq = p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel === true;
     
-    if (pad.leftStick) {
-        let hX = pad.leftStick.x; let hY = pad.leftStick.y; let distAnalogoSq = hX*hX + hY*hY;
-        if (segurandoNaoManuseavelEsq) {
-            s.matter.body.applyForce(p.body, p.body.position, { x: hX * FORCA_ESCALADA_CENARIO, y: hY * FORCA_ESCALADA_CENARIO });
-        } 
-        else if (segurandoManuseavelEsq) {
-            s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: hX * FORCA_MOVER_CAIXA, y: hY * FORCA_MOVER_CAIXA });
-        } 
-        else {
-            if (distAnalogoSq > 0.15 * 0.15) {
-                let anguloAnalogo = Math.atan2(hY, hX);
-                let posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
-                let posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * RAIO_ORBITA_BRACO;
-                s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x) * 0.25, y: (posYAlvo - p.leftHand.position.y) * 0.25 });
-            }
+    if (segurandoNaoManuseavelEsq) {
+        if (pad.leftStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * FORCA_ESCALADA_CENARIO, y: pad.leftStick.y * FORCA_ESCALADA_CENARIO });
+    } 
+    else if (segurandoManuseavelEsq) {
+        if (pad.leftStick) s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: pad.leftStick.x * FORCA_MOVER_CAIXA, y: pad.leftStick.y * FORCA_MOVER_CAIXA });
+    } 
+    else {
+        // Se o analógico estiver ativo, obedece o jogador. Se estiver solto, força a abertura lateral anatômica
+        let posXAlvo = p.body.position.x - 45; // Abre naturalmente para a esquerda do corpo
+        let posYAlvo = p.body.position.y + 40; // Mantém levemente abaixo do nível do ombro
+        
+        if (movendoEsquerdo) {
+            let anguloAnalogo = Math.atan2(pad.leftStick.y, pad.leftStick.x);
+            posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
+            posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * RAIO_ORBITA_BRACO;
         }
+        s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x) * 0.22, y: (posYAlvo - p.leftHand.position.y) * 0.22 });
     }
     
-    // CONTROLADOR CONTEXTUAL: MÃO DIREITA
+    // ----------------------------------------------------
+    // CORREÇÃO ANATÔMICA: MÃO DIREITA
+    // ----------------------------------------------------
     let segurandoNaoManuseavelDir = p.rightJoint && p.rightJointTarget && (p.rightJointTarget.manuseavel === false || p.rightJointTarget.isStatic);
     let segurandoManuseavelDir = p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel === true;
     
-    if (pad.rightStick) {
-        let hX = pad.rightStick.x; let hY = pad.rightStick.y; let distAnalogoSq = hX*hX + hY*hY;
-        if (segurandoNaoManuseavelDir) {
-            s.matter.body.applyForce(p.body, p.body.position, { x: hX * FORCA_ESCALADA_CENARIO, y: hY * FORCA_ESCALADA_CENARIO });
-        } 
-        else if (segurandoManuseavelDir) {
-            s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: hX * FORCA_MOVER_CAIXA, y: hY * FORCA_MOVER_CAIXA });
-        } 
-        else {
-            if (distAnalogoSq > 0.15 * 0.15) {
-                let anguloAnalogo = Math.atan2(hY, hX);
-                let posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
-                let posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * RAIO_ORBITA_BRACO;
-                s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x) * 0.25, y: (posYAlvo - p.rightHand.position.y) * 0.25 });
-            }
+    if (segurandoNaoManuseavelDir) {
+        if (pad.rightStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.rightStick.x * FORCA_ESCALADA_CENARIO, y: pad.rightStick.y * FORCA_ESCALADA_CENARIO });
+    } 
+    else if (segurandoManuseavelDir) {
+        if (pad.rightStick) s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: pad.rightStick.x * FORCA_MOVER_CAIXA, y: pad.rightStick.y * FORCA_MOVER_CAIXA });
+    } 
+    else {
+        let posXAlvo = p.body.position.x + 45; // Abre naturalmente para a direita do corpo
+        let posYAlvo = p.body.position.y + 40;
+        
+        if (movendoDireito) {
+            let anguloAnalogo = Math.atan2(pad.rightStick.y, pad.rightStick.x);
+            posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
+            posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * RAIO_ORBITA_BRACO;
         }
+        s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x) * 0.22, y: (posYAlvo - p.rightHand.position.y) * 0.22 });
     }
     
     processarGarra(s, p, p.leftHand, 'leftJoint', lL, enemy); 
