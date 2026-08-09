@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Controle Total de isStatic e Física</title>
+    <title>Heave Ho - Correção de Escopo Sem Erros</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -46,7 +46,6 @@
         
         <div class="prop-row" style="background:#27ae60; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Objeto Manuseável:</label><input type="checkbox" id="prop-manuseavel" checked onchange="atualizarObjetoExistente()"></div>
         
-        <!-- NOVO CAMPO: Permite forçar isStatic verdadeiro ou falso independente do tipo do objeto -->
         <div class="prop-row" style="background:#2980b9; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Fixar no Ar (isStatic):</label><input type="checkbox" id="prop-is-static" onchange="atualizarObjetoExistente()"></div>
 
         <div class="prop-row" id="row-w"><label id="label-w">Largura (px):</label><input type="number" id="prop-w" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
@@ -99,7 +98,6 @@ function create() {
     previewGraphicsPoligono = this.add.graphics().setDepth(15);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
     
-    // As bordas externas do mapa continuam sendo estáticas absolutas
     const ambConf = { isStatic:true, label:'ambiente', friction:0.8, restitution:0.1, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     const borda = (s, x, y, w, h) => {
         let b = s.matter.add.rectangle(x, y, w, h, ambConf); 
@@ -216,7 +214,7 @@ function extrairCamposPainel() {
     return {
         shape: document.getElementById('prop-shape').value,
         manuseavel: document.getElementById('prop-manuseavel').checked,
-        isStatic: document.getElementById('prop-is-static').checked, // Extrai o novo estado do checkbox
+        isStatic: document.getElementById('prop-is-static').checked, 
         w: parseFloat(document.getElementById('prop-w').value) || 50, h: parseFloat(document.getElementById('prop-h').value) || 50,
         gravity: document.getElementById('prop-gravity').checked, lockPos: document.getElementById('prop-lock-pos').checked, lockRot: document.getElementById('prop-lock-rot').checked,
         mass: parseFloat(document.getElementById('prop-mass').value) || 1, air: parseFloat(document.getElementById('prop-air').value) || 0.02, bounce: parseFloat(document.getElementById('prop-bounce').value) || 0
@@ -228,7 +226,7 @@ function executarCriacaoObjeto(scene, x, y) {
     if (document.getElementById('prop-snap-active').checked && c.shape !== 'polygon') { let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; }
     
     let conf = { 
-        isStatic: c.isStatic, // Aplica dinamicamente true ou false conforme configurado
+        isStatic: c.isStatic, 
         label: 'ambiente', 
         ignoreGravity: !c.gravity, 
         mass: c.mass, 
@@ -312,7 +310,7 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('prop-shape').value = obj.shape; document.getElementById('prop-w').value = obj.w; document.getElementById('prop-h').value = obj.h;
     document.getElementById('prop-gravity').checked = obj.gravity; document.getElementById('prop-lock-pos').checked = obj.lockPos;
     document.getElementById('prop-lock-rot').checked = obj.lockRot; document.getElementById('prop-manuseavel').checked = obj.manuseavel;
-    document.getElementById('prop-is-static').checked = obj.body ? obj.body.isStatic : obj.isStatic; // Carrega o estado no painel
+    document.getElementById('prop-is-static').checked = obj.body ? obj.body.isStatic : obj.isStatic; 
     document.getElementById('prop-mass').value = obj.body ? obj.body.mass.toFixed(1) : obj.mass; document.getElementById('prop-air').value = obj.air;
     document.getElementById('prop-bounce').value = obj.bounce;
     atualizarInterfaceForma();
@@ -328,7 +326,7 @@ function atualizarObjetoExistente() {
     obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity; obj.lockPos = c.lockPos; obj.lockRot = c.lockRot; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce; obj.visualX = px; obj.visualY = py; obj.manuseavel = c.manuseavel; obj.isStatic = c.isStatic;
     
     let conf = { 
-        isStatic: c.isStatic, // Aplica a nova configuração manual do usuário
+        isStatic: c.isStatic, 
         label: 'ambiente', 
         ignoreGravity: !obj.gravity, 
         mass: obj.mass / (obj.dadosDesenhoVisual ? obj.dadosDesenhoVisual.length : 1), 
@@ -415,7 +413,7 @@ function processarToqueParaContato(h, b, pair) {
             if (b.label !== h.label.substring(0, 3) + 'body' && !b.label.includes('braco')) {
                 h.corpoTocadoAgora = b;
                 if (pair.activeContacts && pair.activeContacts.length > 0) {
-                    h.pontoDeContatoGlobal = { x: pair.activeContacts[0].vertex.x, y: pair.activeContacts[0].vertex.y };
+                    h.pontoDeContatoGlobal = { x: pair.activeContacts.vertex.x, y: pair.activeContacts.vertex.y };
                 } else {
                     h.pontoDeContatoGlobal = { x: h.position.x, y: h.position.y };
                 }
@@ -453,31 +451,22 @@ function processarGarra(s, p, h, jKey, grab) {
         let corpoTocado = h.corpoTocadoAgora;
         if (corpoTocado) {
             let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
-            
-            // REGRA ATUALIZADA: Se for item MANUSEÁVEL, "cola" desativando colisão e gravidade para carregar sem peso
             if (alvoValido.manuseavel === true) {
                 p[jKey + 'SalvaStatic'] = alvoValido.isStatic;
                 p[jKey + 'SalvaFilter'] = JSON.parse(JSON.stringify(alvoValido.collisionFilter));
-                
                 s.matter.body.setStatic(alvoValido, false);
                 alvoValido.ignoreGravity = true;
-                alvoValido.collisionFilter.mask = 0; // Desativa colisões inteiramente
-                
+                alvoValido.collisionFilter.mask = 0; 
                 let pivotLeve = s.matter.add.circle(h.position.x, h.position.y, 4, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
                 p[jKey] = s.matter.add.constraint(h, pivotLeve, 1, 1.0);
-                p[jKey + 'Target'] = alvoValido;
-                p[jKey + 'PivotBody'] = pivotLeve;
-                
+                p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = pivotLeve;
                 let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
                 let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
                 p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
             } else {
-                // REGRA ATUALIZADA: Se for NÃO MANUSEÁVEL (cenário), cria mola rígida. Ele pode se mover e rodar normalmente!
                 let pivotLeve = s.matter.add.circle(h.position.x, h.position.y, 4, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
                 p[jKey] = s.matter.add.constraint(h, pivotLeve, 1, 0.85);
-                p[jKey + 'Target'] = alvoValido;
-                p[jKey + 'PivotBody'] = pivotLeve;
-                
+                p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = pivotLeve;
                 let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
                 let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
                 p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
@@ -485,17 +474,28 @@ function processarGarra(s, p, h, jKey, grab) {
         }
     } else if (!grab && p[jKey]) {
         let alvoValido = p[jKey + 'Target'];
-        // Restaura as propriedades normais de física ao soltar o item manuseável
         if (alvoValido && alvoValido.manuseavel === true) {
             alvoValido.ignoreGravity = false;
             if (p[jKey + 'SalvaFilter']) alvoValido.collisionFilter = p[jKey + 'SalvaFilter'];
             s.matter.body.setStatic(alvoValido, p[jKey + 'SalvaStatic'] || false);
         }
-        if (p[jKey]) s.matter.world.remove(p[jKey]);
-        if (p[jKey + 'PivotBody']) s.matter.world.remove(p[jKey + 'PivotBody']);
+        if (p[jKey]) s.matter.world.remove(p[jKey]); if (p[jKey + 'PivotBody']) s.matter.world.remove(p[jKey + 'PivotBody']);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
+// RECONSTRUIDO: A função de segurança anti-clipping aplicarLimiteFrame foi reposicionada corretamente no escopo global
+function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
+    if (!body || !body.position || body.isStatic) return;
+    if (body.ultimaPos) {
+        let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y, distSq = dx*dx + dy*dy;
+        if (distSq > maxDist * maxDist) {
+            let dist = Math.sqrt(distSq);
+            scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx / dist) * maxDist, y: body.ultimaPos.y + (dy / dist) * maxDist });
+        }
+    }
+    body.ultimaPos = { x: body.position.x, y: body.position.y }; body.ultimaRot = body.angle;
+}
+
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -587,7 +587,6 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
     
-    // REQUISITO: Forçado cor branca pura (0xffffff) sem misturar tons coloridos ou herdar cor do player
     let manager = scene.add.particles(0, 0, 'spark', {
         speed: { min: 200, max: 450 }, angle: { min: 80, max: 100 }, lifespan: 600, 
         scale: { start: 0.9, end: 0.0 }, alpha: { start: 0.7, end: 0.0 },
@@ -654,7 +653,6 @@ function update() {
                 let mundoX = target.position.x + (offset.x * cos - offset.y * sin);
                 let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
                 
-                // REQUISITO INTERFACE: Se for item manuseável agarrado, move o objeto forçadamente com a mão anulando a física linear
                 if (target.manuseavel === true) {
                     sAct.matter.body.setPosition(target, { x: mundoX, y: mundoY });
                     sAct.matter.body.setVelocity(target, { x: 0, y: 0 });
