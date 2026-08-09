@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Correção de Escopo Sem Erros</title>
+    <title>Heave Ho - Código Blindado Sem Erros</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -80,7 +80,46 @@ let clickOffsetX = 0, clickOffsetY = 0;
 
 let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
+// CORREÇÃO DE ESCOPO: Todas as funções de limpeza e seleção declaradas no topo para evitar ReferenceError
+function desmarcarObjetoDoEditor() { 
+    objetoSelecionado = null; 
+    document.getElementById('btn-delete').style.display = 'none'; 
+    clickOffsetX = 0; 
+    clickOffsetY = 0; 
+}
 
+function setFerramenta(f) { 
+    ferramentaAtual = f; 
+    document.getElementById('btn-create').className = f==='create'?'active':''; 
+    document.getElementById('btn-select').className = f==='select'?'active':''; 
+}
+
+function alternarModoEditor(scene) {
+    modoEditorAtivo = !modoEditorAtivo;
+    const panel = document.getElementById('sidebar');
+    const aviso = document.getElementById('aviso-modo');
+    verticesCriacaoAtiva = []; 
+    if (previewGraphicsPoligono) previewGraphicsPoligono.clear();
+    
+    if (modoEditorAtivo) {
+        cameraSalvaX = scene.cameras.main.scrollX; cameraSalvaY = scene.cameras.main.scrollY; cameraSalvaZoom = scene.cameras.main.zoom;
+        scene.cameras.main.setZoom(1.0); scene.matter.world.pause();
+        panel.style.display = 'flex'; aviso.innerText = "Modo Editor Ativo - Aperte [E] para Jogar"; aviso.style.color = "#00ff00";
+    } else {
+        desmarcarObjetoDoEditor(); 
+        scene.cameras.main.scrollX = cameraSalvaX; scene.cameras.main.scrollY = cameraSalvaY; scene.cameras.main.setZoom(cameraSalvaZoom);
+        scene.matter.world.resume(); panel.style.display = 'none'; aviso.innerText = "Aperte [E] para abrir o Editor"; aviso.style.color = "#fff";
+    }
+    alternarVisibilidadeGrade();
+}
+
+function alternarVisibilidadeGrade() {
+    if (!gridGraphics) return;
+    gridGraphics.clear(); if (!modoEditorAtivo || !document.getElementById('prop-grid-active').checked) return;
+    const gSize = parseInt(document.getElementById('prop-grid-size').value) || 64; gridGraphics.lineStyle(1, 0xffffff, 0.15);
+    for (let x = 0; x < WORLD_WIDTH; x += gSize) gridGraphics.lineBetween(x, 0, x, WORLD_HEIGHT);
+    for (let y = 0; y < WORLD_HEIGHT; y += gSize) gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
+}
 function preload() {
     let canvas = document.createElement('canvas'); canvas.width = 16; canvas.height = 16;
     let ctx = canvas.getContext('2d');
@@ -154,6 +193,7 @@ function create() {
             objetoSelecionado.posicaoTravadaX = pos.x; objetoSelecionado.posicaoTravadaY = pos.y;
         }
     }, this);
+
     this.input.keyboard.on('keydown-E', () => { alternarModoEditor(this); });
     
     this.input.keyboard.on('keydown-ENTER', () => {
@@ -168,41 +208,6 @@ function create() {
     });
     atualizarInterfaceForma(); alternarVisibilidadeGrade();
 }
-
-function alternarModoEditor(scene) {
-    modoEditorAtivo = !modoEditorAtivo;
-    const panel = document.getElementById('sidebar');
-    const aviso = document.getElementById('aviso-modo');
-    verticesCriacaoAtiva = []; previewGraphicsPoligono.clear();
-    
-    if (modoEditorAtivo) {
-        cameraSalvaX = scene.cameras.main.scrollX; cameraSalvaY = scene.cameras.main.scrollY; cameraSalvaZoom = scene.cameras.main.zoom;
-        scene.cameras.main.setZoom(1.0); scene.matter.world.pause();
-        panel.style.display = 'flex'; aviso.innerText = "Modo Editor Ativo - Aperte [E] para Jogar"; aviso.style.color = "#00ff00";
-    } else {
-        desmarcarObjetoDoEditor(); scene.cameras.main.scrollX = cameraSalvaX; scene.cameras.main.scrollY = cameraSalvaY; scene.cameras.main.setZoom(cameraSalvaZoom);
-        scene.matter.world.resume(); panel.style.display = 'none'; aviso.innerText = "Aperte [E] para abrir o Editor"; aviso.style.color = "#fff";
-    }
-    alternarVisibilidadeGrade();
-}
-
-function alternarVisibilidadeGrade() {
-    gridGraphics.clear(); if (!modoEditorAtivo || !document.getElementById('prop-grid-active').checked) return;
-    const gSize = parseInt(document.getElementById('prop-grid-size').value) || 64; gridGraphics.lineStyle(1, 0xffffff, 0.15);
-    for (let x = 0; x < WORLD_WIDTH; x += gSize) gridGraphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    for (let y = 0; y < WORLD_HEIGHT; y += gSize) gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
-}
-function setFerramenta(f) { ferramentaAtual = f; document.getElementById('btn-create').className = f==='create'?'active':''; document.getElementById('btn-select').className = f==='select'?'active':''; }
-
-function deletarObjetoSelecionado() {
-    if (!objetoSelecionado) return;
-    let scene = game.scene.getScene('default');
-    if (objetoSelecionado.body) scene.matter.world.remove(objetoSelecionado.body);
-    objetoSelecionado.gfx.clear(); objetoSelecionado.gfx.destroy();
-    listaObjetosEditaveis = listaObjetosEditaveis.filter(o => o !== objetoSelecionado);
-    desmarcarObjetoDoEditor();
-}
-
 function atualizarInterfaceForma() {
     const s = document.getElementById('prop-shape').value;
     document.getElementById('row-h').style.display = (s === 'circle' || s === 'polygon') ? 'none' : 'flex';
@@ -242,6 +247,7 @@ function executarCriacaoObjeto(scene, x, y) {
     
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel, isStatic: c.isStatic });
 }
+
 function finalizarCriacaoPoligono(scene) {
     if (verticesCriacaoAtiva.length < 3) { alert("Polígonos precisam de pelo menos 3 vértices!"); return; }
     const c = extrairCamposPainel();
@@ -277,6 +283,14 @@ function finalizarCriacaoPoligono(scene) {
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: verticesLocaisRelativos, manuseavel: c.manuseavel, isStatic: c.isStatic });
     verticesCriacaoAtiva = []; previewGraphicsPoligono.clear();
 }
+function deletarObjetoSelecionado() {
+    if (!objetoSelecionado) return;
+    let scene = game.scene.getScene('default');
+    if (objetoSelecionado.body) scene.matter.world.remove(objetoSelecionado.body);
+    objetoSelecionado.gfx.clear(); objetoSelecionado.gfx.destroy();
+    listaObjetosEditaveis = listaObjetosEditaveis.filter(o => o !== objetoSelecionado);
+    desmarcarObjetoDoEditor();
+}
 
 function executarSelecaoObjeto(scene, x, y, pointer) {
     let prox = null, mDist = Infinity;
@@ -304,6 +318,7 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
         clickOffsetX = x - posX; clickOffsetY = y - posY;
     } else if (!pointer.leftButtonDown()) { desmarcarObjetoDoEditor(); }
 }
+
 function selecionarObjetoDoEditor(obj) {
     objetoSelecionado = obj; document.getElementById('btn-delete').style.display = 'block';
     let s = document.getElementById('status-modo'); s.innerText = "Editando selecionado"; s.style.color = "#ffea00";
@@ -413,7 +428,7 @@ function processarToqueParaContato(h, b, pair) {
             if (b.label !== h.label.substring(0, 3) + 'body' && !b.label.includes('braco')) {
                 h.corpoTocadoAgora = b;
                 if (pair.activeContacts && pair.activeContacts.length > 0) {
-                    h.pontoDeContatoGlobal = { x: pair.activeContacts.vertex.x, y: pair.activeContacts.vertex.y };
+                    h.pontoDeContatoGlobal = { x: pair.activeContacts[0].vertex.x, y: pair.activeContacts[0].vertex.y };
                 } else {
                     h.pontoDeContatoGlobal = { x: h.position.x, y: h.position.y };
                 }
@@ -483,7 +498,6 @@ function processarGarra(s, p, h, jKey, grab) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// RECONSTRUIDO: A função de segurança anti-clipping aplicarLimiteFrame foi reposicionada corretamente no escopo global
 function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
     if (!body || !body.position || body.isStatic) return;
     if (body.ultimaPos) {
@@ -631,7 +645,7 @@ function update() {
         previewGraphicsPoligono.clear();
         if (verticesCriacaoAtiva.length > 0 && document.getElementById('prop-shape').value === 'polygon') {
             previewGraphicsPoligono.lineStyle(3, 0xff0000, 1.0); previewGraphicsPoligono.fillStyle(0xffffff, 1.0);
-            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
+            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva.x, verticesCriacaoAtiva.y);
             verticesCriacaoAtiva.forEach(v => { previewGraphicsPoligono.lineTo(v.x, v.y); previewGraphicsPoligono.fillCircle(v.x, v.y, 6); });
             previewGraphicsPoligono.strokePath();
         }
