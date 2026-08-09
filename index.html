@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Rastro de Partículas Dinâmico</title>
+    <title>Heave Ho - Rastro Expandido Sem Erros</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -73,7 +73,6 @@ let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
 
 function preload() {
-    // Cria uma textura circular branca em tempo de execução para servir como a partícula do rastro
     let canvas = document.createElement('canvas'); canvas.width = 16; canvas.height = 16;
     let ctx = canvas.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(8, 8, 8, 0, Math.PI * 2); ctx.fill();
     this.textures.addCanvas('spark', canvas);
@@ -128,7 +127,7 @@ function create() {
     });
     
     this.input.on('pointermove', function(p) {
-        if (modoEditorAtivo && herramientaAtual === 'select' && objetoSelecionado && p.isDown) {
+        if (modoEditorAtivo && ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
             let pos = { x: p.worldX - clickOffsetX, y: p.worldY - clickOffsetY };
             if (document.getElementById('prop-snap-active').checked && objetoSelecionado.shape !== 'polygon') {
                 pos = calcularAlinhamentoPorProximidade(this, pos.x, pos.y, objetoSelecionado.w, objetoSelecionado.h, objetoSelecionado.shape, objetoSelecionado.body);
@@ -456,6 +455,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
+// ATUALIZAÇÃO REQUISITADA: Erros de console corrigidos usando o método blindado .explode(). Alcance e espalhamento das partículas ampliado significativamente.
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -469,14 +469,13 @@ function handlePlayerInput(s, p) {
     const FORCA_MOVER_CAIXA = 0.038;
     const RAIO_ORBITA_BRACO = 75;
     
-    // VERIFICAÇÃO PARA O RASTRO: Analógicos ativamente empurrados fora da zona morta de 15%
     let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.15*0.15);
     let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.15*0.15);
     
-    // CONDIÇÃO CHAVE: Caindo (velocidade vertical Y > 0.5) E movendo qualquer analógico
+    // CONDIÇÃO DO RASTRO: Se estiver caindo (Y > 0.5) E movimentando qualquer um dos analógicos...
     if (p.body.velocity.y > 0.5 && (movendoEsquerdo || movendoDireito)) {
-        // Explode uma onda concentrada de pequenas fagulhas na posição do corpo verde
-        p.particleEmitter.emitParticle(2, p.body.position.x, p.body.position.y);
+        // CORREÇÃO: Uso do método estável .explode(quantidade, x, y) elimina os erros de console do Phaser!
+        p.particleEmitter.explode(2, p.body.position.x, p.body.position.y);
     }
     
     // ----------------------------------------------------
@@ -566,10 +565,10 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
     
-    // CONFIGURAÇÃO DO EMISSOR DE PARTICULAS: Cria o gerenciador estético atrelado ao personagem
+    // EXPANSÃO REQUISITADA: Velocidade expandida (60 a 180) e tempo de vida aumentado (750ms) fazem as fagulhas viajarem muito mais longe!
     let manager = scene.add.particles(0, 0, 'spark', {
-        speed: { min: 10, max: 40 }, lifespan: 450, scale: { start: 0.7, end: 0.0 },
-        alpha: { start: 0.6, end: 0.0 }, tint: col, blendMode: 'ADD', depth: 9
+        speed: { min: 60, max: 180 }, lifespan: 750, scale: { start: 0.8, end: 0.0 },
+        alpha: { start: 0.7, end: 0.0 }, tint: col, blendMode: 'ADD', depth: 9
     });
     
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null, particleEmitter: manager };
@@ -579,7 +578,7 @@ function executarRespawnIndividual(scene, pNum) {
     const cList = scene.matter.world.localWorld.constraints; const pref = `p${pNum}_`;
     const p = (pNum === 0) ? player1 : player2; if (!p) return;
     limparGarrasAntesDoRespawn(scene, p);
-    if (p.particleEmitter) { p.particleEmitter.destroy(); } // Limpa o emissor antigo do mapa
+    if (p.particleEmitter) { p.particleEmitter.destroy(); } 
     for (let i = cList.length - 1; i >= 0; i--) { 
         let c = cList[i]; 
         if (c && ((c.bodyA?.label?.includes(pref)) || (c.bodyB?.label?.includes(pref)))) scene.matter.world.remove(c); 
