@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Flacidez por Gravidade Realista</title>
+    <title>Heave Ho - Rastro de Partículas Dinâmico</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -61,7 +61,7 @@ const SCREEN_WIDTH = 1024, SCREEN_HEIGHT = 768, WORLD_WIDTH = 3000, WORLD_HEIGHT
 const config = {
     type: Phaser.AUTO, width: SCREEN_WIDTH, height: SCREEN_HEIGHT, parent: 'canvas-container', backgroundColor: '#4488aa',
     physics: { default: 'matter', matter: { gravity: { y:1.5 }, debug: true } },
-    input: { gamepad: true }, scene: { preload: function(){}, create: create, update: update }
+    input: { gamepad: true }, scene: { preload: preload, create: create, update: update }
 };
 const game = new Phaser.Game(config);
 let player1, player2, ferramentaAtual = 'create', objetoSelecionado = null, listaObjetosEditaveis = [];
@@ -71,6 +71,13 @@ let clickOffsetX = 0, clickOffsetY = 0;
 
 let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
+
+function preload() {
+    // Cria uma textura circular branca em tempo de execução para servir como a partícula do rastro
+    let canvas = document.createElement('canvas'); canvas.width = 16; canvas.height = 16;
+    let ctx = canvas.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(8, 8, 8, 0, Math.PI * 2); ctx.fill();
+    this.textures.addCanvas('spark', canvas);
+}
 
 function create() {
     this.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 100, true, true, true, true);
@@ -121,7 +128,7 @@ function create() {
     });
     
     this.input.on('pointermove', function(p) {
-        if (modoEditorAtivo && ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
+        if (modoEditorAtivo && herramientaAtual === 'select' && objetoSelecionado && p.isDown) {
             let pos = { x: p.worldX - clickOffsetX, y: p.worldY - clickOffsetY };
             if (document.getElementById('prop-snap-active').checked && objetoSelecionado.shape !== 'polygon') {
                 pos = calcularAlinhamentoPorProximidade(this, pos.x, pos.y, objetoSelecionado.w, objetoSelecionado.h, objetoSelecionado.shape, objetoSelecionado.body);
@@ -449,7 +456,6 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// ATUALIZAÇÃO REQUISITADA: Quando o analógico é solto, a atração cinemática é completamente desligada (0.0). A mão cai e balança puramente por gravidade!
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -463,8 +469,18 @@ function handlePlayerInput(s, p) {
     const FORCA_MOVER_CAIXA = 0.038;
     const RAIO_ORBITA_BRACO = 75;
     
+    // VERIFICAÇÃO PARA O RASTRO: Analógicos ativamente empurrados fora da zona morta de 15%
+    let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.15*0.15);
+    let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.15*0.15);
+    
+    // CONDIÇÃO CHAVE: Caindo (velocidade vertical Y > 0.5) E movendo qualquer analógico
+    if (p.body.velocity.y > 0.5 && (movendoEsquerdo || movendoDireito)) {
+        // Explode uma onda concentrada de pequenas fagulhas na posição do corpo verde
+        p.particleEmitter.emitParticle(2, p.body.position.x, p.body.position.y);
+    }
+    
     // ----------------------------------------------------
-    // PROCESSAMENTO CONTEXTUAL: MÃO ESQUERDA
+    // PROCESSAMENTO CONTEXTUAL: MÃO ESQUERDA (Velocidades originais mantidas)
     // ----------------------------------------------------
     let segurandoNaoManuseavelEsq = p.leftJoint && p.leftJointTarget && (p.leftJointTarget.manuseavel === false || p.leftJointTarget.isStatic);
     let segurandoManuseavelEsq = p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel === true;
@@ -481,9 +497,7 @@ function handlePlayerInput(s, p) {
             s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: hX * FORCA_MOVER_CAIXA, y: hY * FORCA_MOVER_CAIXA });
         } 
         else {
-            // SE A MÃO ESQUERDA ESTIVER SOLTA NO AR:
             if (distAnalogoSq > 0.15 * 0.15) {
-                // Analógico Ativo: Ativa a mira cinemática orbital estável
                 let anguloAnalogo = Math.atan2(hY, hX);
                 let posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
                 let posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * RAIO_ORBITA_BRACO;
@@ -492,9 +506,6 @@ function handlePlayerInput(s, p) {
                     x: (posXAlvo - p.leftHand.position.x) * 0.25, 
                     y: (posYAlvo - p.leftHand.position.y) * 0.25 
                 });
-            } else {
-                // ANALÓGICO SOLTO: A força cinemática é zerada (0.0). A mão cai e balança livremente sob a gravidade pura do motor!
-                // Deixa o motor físico Matter guiar livremente a junta mecânica
             }
         }
     }
@@ -526,8 +537,6 @@ function handlePlayerInput(s, p) {
                     x: (posXAlvo - p.rightHand.position.x) * 0.25, 
                     y: (posYAlvo - p.rightHand.position.y) * 0.25 
                 });
-            } else {
-                // Analógico solto -> Gravidade pura e balanço flácido anatômico ativado
             }
         }
     }
@@ -556,13 +565,21 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     lH.corpoTocadoAgora = null; lH.pontoDeContatoGlobal = null; rH.corpoTocadoAgora = null; rH.pontoDeContatoGlobal = null;
     b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
-    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
+    
+    // CONFIGURAÇÃO DO EMISSOR DE PARTICULAS: Cria o gerenciador estético atrelado ao personagem
+    let manager = scene.add.particles(0, 0, 'spark', {
+        speed: { min: 10, max: 40 }, lifespan: 450, scale: { start: 0.7, end: 0.0 },
+        alpha: { start: 0.6, end: 0.0 }, tint: col, blendMode: 'ADD', depth: 9
+    });
+    
+    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null, particleEmitter: manager };
 }
 
 function executarRespawnIndividual(scene, pNum) {
     const cList = scene.matter.world.localWorld.constraints; const pref = `p${pNum}_`;
     const p = (pNum === 0) ? player1 : player2; if (!p) return;
     limparGarrasAntesDoRespawn(scene, p);
+    if (p.particleEmitter) { p.particleEmitter.destroy(); } // Limpa o emissor antigo do mapa
     for (let i = cList.length - 1; i >= 0; i--) { 
         let c = cList[i]; 
         if (c && ((c.bodyA?.label?.includes(pref)) || (c.bodyB?.label?.includes(pref)))) scene.matter.world.remove(c); 
