@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Garras Firme e Filtros de Colisão</title>
+    <title>Heave Ho - Limite de Força nas Mãos</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -215,7 +215,7 @@ function extrairCamposPainel() {
     };
 }
 
-function executarCriacaoObjeto(scene, x, y) {
+function ejecutarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
     if (document.getElementById('prop-snap-active').checked && c.shape !== 'polygon') { let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; }
     
@@ -456,7 +456,6 @@ function processarGarra(s, p, h, jKey, grab) {
         if (corpoTocado) {
             let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
             
-            // REQUISITO: Itens MANUSEÁVEIS ignoram colisão apenas com quem o está carregando (usa o group negativo do player)
             if (alvoValido.manuseavel === true) {
                 p[jKey + 'SalvaStatic'] = alvoValido.isStatic;
                 p[jKey + 'SalvaFilter'] = JSON.parse(JSON.stringify(alvoValido.collisionFilter));
@@ -464,7 +463,6 @@ function processarGarra(s, p, h, jKey, grab) {
                 s.matter.body.setStatic(alvoValido, false);
                 alvoValido.ignoreGravity = true;
                 
-                // Puxa o grupo físico do colisor do próprio braço do jogador para travar imunidade de toque interna
                 if (h.collisionFilter && h.collisionFilter.group) {
                     alvoValido.collisionFilter.group = h.collisionFilter.group;
                 }
@@ -475,7 +473,6 @@ function processarGarra(s, p, h, jKey, grab) {
                 });
                 p[jKey + 'Target'] = alvoValido;
             } else {
-                // Objetos não manuseáveis (cenário dinâmico/móvel ou estático) preparam pivô local
                 let pivotLeve = s.matter.add.circle(h.position.x, h.position.y, 4, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
                 p[jKey] = s.matter.add.constraint(h, pivotLeve, 1, 1.0);
                 p[jKey + 'Target'] = alvoValido; 
@@ -543,13 +540,13 @@ function handlePlayerInput(s, p) {
     if (p.body.mass !== massaCalculadaCorpo) { s.matter.body.setMass(p.body, massaCalculadaCorpo); }
     
     const FORCA_ESCALADA_CENARIO = 0.045; 
-    const FORCA_MOVER_CAIXA = 0.038;
     const RAIO_ORBITA_BRACO = 75;
+    
+    // REQUISITO EXIGIDO: Limite de torque e força real que as mãos livres conseguem exercer no ar contra objetos pesados
+    const LIMITE_FORCA_MAXIMA_MAO = 0.0035; 
     
     let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.15*0.15);
     let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.15*0.15);
-    
-    // REQUISITO EXIGIDO: Remoção absoluta de peidos ou qualquer injeção gráfica de partículas
     
     // MÃO ESQUERDA
     let segurandoNaoManuseavelEsq = p.leftJoint && p.leftJointTarget && (p.leftJointTarget.manuseavel === false);
@@ -562,8 +559,14 @@ function handlePlayerInput(s, p) {
             let anguloAnalogo = Math.atan2(pad.leftStick.y, pad.leftStick.x);
             posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
             posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * RAIO_ORBITA_BRACO;
+            
+            // CORREÇÃO: Mão livre aplica força vetorial em vez de setVelocity direto. Se colidir com algo pesado, ela rebate e para!
+            let forcaX = (posXAlvo - p.leftHand.position.x) * LIMITE_FORCA_MAXIMA_MAO;
+            let forcaY = (posYAlvo - p.leftHand.position.y) * LIMITE_FORCA_MAXIMA_MAO;
+            s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: forcaX, y: forcaY });
+        } else {
+            s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x) * 0.22, y: (posYAlvo - p.leftHand.position.y) * 0.22 });
         }
-        s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x) * 0.22, y: (posYAlvo - p.leftHand.position.y) * 0.22 });
     }
     
     // MÃO DIREITA
@@ -572,13 +575,19 @@ function handlePlayerInput(s, p) {
     if (segurandoNaoManuseavelDir) {
         if (pad.rightStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.rightStick.x * FORCA_ESCALADA_CENARIO, y: pad.rightStick.y * FORCA_ESCALADA_CENARIO });
     } else {
-        let posXAlvo = p.body.position.x - 45; let posYAlvo = p.body.position.y + 40;
+        let posXAlvo = p.body.position.x + 45; let posYAlvo = p.body.position.y + 40;
         if (movendoDireito) {
             let anguloAnalogo = Math.atan2(pad.rightStick.y, pad.rightStick.x);
             posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
             posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * RAIO_ORBITA_BRACO;
+            
+            // CORREÇÃO: Aplicação de força em vez de velocidade forçada na órbita livre
+            let forcaX = (posXAlvo - p.rightHand.position.x) * LIMITE_FORCA_MAXIMA_MAO;
+            let forcaY = (posYAlvo - p.rightHand.position.y) * LIMITE_FORCA_MAXIMA_MAO;
+            s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: forcaX, y: forcaY });
+        } else {
+            s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x) * 0.22, y: (posYAlvo - p.rightHand.position.y) * 0.22 });
         }
-        s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x) * 0.22, y: (posYAlvo - p.rightHand.position.y) * 0.22 });
     }
     
     processarGarra(s, p, p.leftHand, 'leftJoint', lL); 
@@ -664,7 +673,6 @@ function update() {
                 if (target.manuseavel === true) {
                     // Itens manuseáveis seguem a mão de perto respeitando a física linear
                 } else {
-                    // REQUISITO EXIGIDO: Força a luva a ficar RIGIDAMENTE CRAVADA no píxel tocado do objeto não manuseável
                     sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY });
                     sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y });
                     
