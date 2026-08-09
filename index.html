@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Novo</title>
+    <title>Heave Ho - Acoplamento Manuseável e Fumaça Branca</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -26,7 +26,6 @@
         <h3 style="color:#3498db; font-weight:bold;">Ajuste do Ragdoll</h3>
         <div class="prop-row">
             <label style="color:#fff; font-size:11px;">Modificador Peso Queda:</label>
-            <!-- REQUISITO: Valor inicial alterado para 10.0 -->
             <input type="number" id="prop-fall-weight-mod" value="10.0" min="0.0" step="0.1" onchange="if(this.value<0)this.value=0;">
         </div>
     </div>
@@ -226,6 +225,8 @@ function executarCriacaoObjeto(scene, x, y) {
     
     let body = (c.shape === 'box') ? scene.matter.add.rectangle(ax, ay, c.w, c.h, conf) : scene.matter.add.circle(ax, ay, c.w, conf);
     body.manuseavel = c.manuseavel;
+    // Salva as configurações físicas originais para restauração pós-soltura posterior
+    body.configOriginaisAtributos = { isStatic: !c.manuseavel, ignoreGravity: !c.gravity, mass: c.mass, frictionAir: c.air };
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
     
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel });
@@ -234,7 +235,6 @@ function executarCriacaoObjeto(scene, x, y) {
 function finalizarCriacaoPoligono(scene) {
     if (verticesCriacaoAtiva.length < 3) { alert("Polígonos precisam de pelo menos 3 vértices!"); return; }
     const c = extrairCamposPainel();
-    
     let somatorioX = 0, somatorioY = 0; verticesCriacaoAtiva.forEach(v => { somatorioX += v.x; somatorioY += v.y; });
     let centroX = somatorioX / verticesCriacaoAtiva.length; let centroY = somatorioY / verticesCriacaoAtiva.length;
     
@@ -259,6 +259,7 @@ function finalizarCriacaoPoligono(scene) {
     
     let body = scene.matter.body.create({ parts: partesFisicasTriangulares, isStatic: !c.manuseavel, label: 'ambiente', ignoreGravity: !c.gravity });
     body.manuseavel = c.manuseavel;
+    body.configOriginaisAtributos = { isStatic: !c.manuseavel, ignoreGravity: !c.gravity, mass: c.mass, frictionAir: c.air };
     scene.matter.world.add(body); scene.matter.body.setPosition(body, { x: centroX, y: centroY });
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
     
@@ -340,6 +341,7 @@ function atualizarObjetoExistente() {
     
     if (obj.body) {
         obj.body.manuseavel = c.manuseavel;
+        obj.body.configOriginaisAtributos = { isStatic: !c.manuseavel, ignoreGravity: !obj.gravity, mass: obj.mass, frictionAir: c.air };
         if (!obj.body.isStatic) { scene.matter.body.setInertia(obj.body, obj.lockRot ? Infinity : obj.body.inertia); scene.matter.body.setAngle(obj.body, anguloSalvo); }
     }
 }
@@ -366,24 +368,19 @@ function desenharObjetoEditor(obj) {
     if (!obj) return; let g = obj.gfx; g.clear();
     let posX = obj.body ? obj.body.position.x : obj.visualX; let posY = obj.body ? obj.body.position.y : obj.visualY;
     let angulo = obj.body ? obj.body.angle : 0;
-    
     g.x = posX; g.y = posY; g.rotation = angulo;
     
-    let colOrObjeto = obj.manuseavel ? 0x8b5a2b : 0x2c3e50;
-    if (obj === objetoSelecionado) colOrObjeto = 0xffea00;
-    else if (obj.lockPos) colOrObjeto = 0xf1c40f;
+    let corObjeto = obj.manuseavel ? 0x8b5a2b : 0x2c3e50;
+    if (obj === objetoSelecionado) corObjeto = 0xffea00;
+    else if (obj.lockPos) corObjeto = 0xf1c40f;
     
-    g.fillStyle(colOrObjeto, 1.0);
-    g.lineStyle(2, obj.manuseavel ? 0xffffff : 0x111111, 0.8);
+    g.fillStyle(corObjeto, 1.0); g.lineStyle(2, obj.manuseavel ? 0xffffff : 0x111111, 0.8);
     
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
     else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual && obj.dadosDesenhoVisual.length > 0) {
-        g.beginPath();
-        g.moveTo(obj.dadosDesenhoVisual.x, obj.dadosDesenhoVisual.y);
-        for(let i = 1; i < obj.dadosDesenhoVisual.length; i++) { 
-            g.lineTo(obj.dadosDesenhoVisual[i].x, obj.dadosDesenhoVisual[i].y); 
-        }
+        g.beginPath(); g.moveTo(obj.dadosDesenhoVisual[0].x, obj.dadosDesenhoVisual[0].y);
+        for(let i = 1; i < obj.dadosDesenhoVisual.length; i++) { g.lineTo(obj.dadosDesenhoVisual[i].x, obj.dadosDesenhoVisual[i].y); }
         g.closePath(); g.fill(); g.strokePath();
     }
 }
@@ -392,14 +389,12 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
     let last = bA;
     for (let i = 0; i < num; i++) {
         const lastLink = (i === num - 1);
-        // Alterado frictionAir para 0.01 para igualar a resistência à queda
         let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 10, len, { density: 0.005, frictionAir: 0.01, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
         if (!lastLink) list.push(link);
         scene.matter.add.constraint(last, link, len, 1.0, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 } });
         last = link;
     }
 }
-
 function processarToqueParaContato(h, b, pair) {
     if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
         if (b.label === 'ambiente' || b.label.startsWith('p0_') || b.label.startsWith('p1_')) {
@@ -444,17 +439,34 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         let corpoTocado = h.corpoTocadoAgora; let pontoGlobal = h.pontoDeContatoGlobal;
         if (corpoTocado && pontoGlobal) {
             let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
-            let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.85;
+            
+            // REQUISITO ATUALIZADO: Se o item for manuseável, desliga completamente a sua simulação física cinemática/estática
+            if (alvoValido.manuseavel === true) {
+                s.matter.body.setStatic(alvoValido, true); 
+                alvoValido.ignoreGravity = true; s.matter.body.setVelocity(alvoValido, { x: 0, y: 0 });
+            }
+            
             let pivotLeveCinematico = s.matter.add.circle(h.position.x, h.position.y, 6, { 
                 isStatic: false, isSensor: true, ignoreGravity: true, mass: 0, visible: false
             });
-            p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 1, rigidezConexao, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
+            
+            p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 1, 1.0, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
             p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = pivotLeveCinematico;
+            
             let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
             let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
             p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
         }
     } else if (!grab && p[jKey]) {
+        let alvoValido = p[jKey + 'Target'];
+        
+        // REQUISITO ATUALIZADO: Ao soltar o gatilho, restaura instantaneamente os atributos do motor físico nativo
+        if (alvoValido && alvoValido.manuseavel === true && alvoValido.configOriginaisAtributos) {
+            s.matter.body.setStatic(alvoValido, alvoValido.configOriginaisAtributos.isStatic);
+            alvoValido.ignoreGravity = alvoValido.configOriginaisAtributos.ignoreGravity;
+            s.matter.body.setMass(alvoValido, alvoValido.configOriginaisAtributos.mass);
+        }
+        
         if (p[jKey] && typeof p[jKey] === 'object') { s.matter.world.remove(p[jKey]); }
         if (p[jKey + 'PivotBody']) { s.matter.world.remove(p[jKey + 'PivotBody']); }
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
@@ -472,11 +484,8 @@ function handlePlayerInput(s, p) {
     let valorModificador = campoMod ? parseFloat(campoMod.value) : 10.0;
     if (isNaN(valorModificador) || valorModificador < 0) { valorModificador = 0; if(campoMod) campoMod.value = 0; }
     
-    let MASSA_PADRAO = 6.8;
-    let massaCalculadaCorpo = MASSA_PADRAO;
-    
-    let totalmenteLivreNoVazio = (!p.leftJoint && !p.rightJoint);
-    let estaCaindo = (p.body.velocity.y > 0.5);
+    let MASSA_PADRAO = 6.8; let massaCalculadaCorpo = MASSA_PADRAO;
+    let totalmenteLivreNoVazio = (!p.leftJoint && !p.rightJoint); let estaCaindo = (p.body.velocity.y > 0.5);
     
     const ZONA_MORTA_CIMA = -0.15;
     let esquerdoParaCima = pad.leftStick && (pad.leftStick.y < ZONA_MORTA_CIMA);
@@ -493,9 +502,7 @@ function handlePlayerInput(s, p) {
     }
     if (p.body.mass !== massaCalculadaCorpo) { s.matter.body.setMass(p.body, massaCalculadaCorpo); }
     
-    const FORCA_ESCALADA_CENARIO = 0.045; 
-    const FORCA_MOVER_CAIXA = 0.038;
-    const RAIO_ORBITA_BRACO = 75;
+    const FORCA_ESCALADA_CENARIO = 0.045; const FORCA_MOVER_CAIXA = 0.038; const RAIO_ORBITA_BRACO = 75;
     
     let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.15*0.15);
     let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.15*0.15);
@@ -504,9 +511,7 @@ function handlePlayerInput(s, p) {
         p.particleEmitter.explode(3, p.body.position.x, p.body.position.y + 0);
     }
     
-    // ----------------------------------------------------
-    // CORREÇÃO ANATÔMICA: MÃO ESQUERDA
-    // ----------------------------------------------------
+    // CONTROLADOR: MÃO ESQUERDA
     let segurandoNaoManuseavelEsq = p.leftJoint && p.leftJointTarget && (p.leftJointTarget.manuseavel === false || p.leftJointTarget.isStatic);
     let segurandoManuseavelEsq = p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel === true;
     
@@ -517,10 +522,7 @@ function handlePlayerInput(s, p) {
         if (pad.leftStick) s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: pad.leftStick.x * FORCA_MOVER_CAIXA, y: pad.leftStick.y * FORCA_MOVER_CAIXA });
     } 
     else {
-        // Se o analógico estiver ativo, obedece o jogador. Se estiver solto, força a abertura lateral anatômica
-        let posXAlvo = p.body.position.x - 45; // Abre naturalmente para a esquerda do corpo
-        let posYAlvo = p.body.position.y + 40; // Mantém levemente abaixo do nível do ombro
-        
+        let posXAlvo = p.body.position.x - 45; let posYAlvo = p.body.position.y + 40;
         if (movendoEsquerdo) {
             let anguloAnalogo = Math.atan2(pad.leftStick.y, pad.leftStick.x);
             posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
@@ -529,9 +531,7 @@ function handlePlayerInput(s, p) {
         s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x) * 0.22, y: (posYAlvo - p.leftHand.position.y) * 0.22 });
     }
     
-    // ----------------------------------------------------
-    // CORREÇÃO ANATÔMICA: MÃO DIREITA
-    // ----------------------------------------------------
+    // CONTROLADOR: MÃO DIREITA
     let segurandoNaoManuseavelDir = p.rightJoint && p.rightJointTarget && (p.rightJointTarget.manuseavel === false || p.rightJointTarget.isStatic);
     let segurandoManuseavelDir = p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel === true;
     
@@ -542,9 +542,7 @@ function handlePlayerInput(s, p) {
         if (pad.rightStick) s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: pad.rightStick.x * FORCA_MOVER_CAIXA, y: pad.rightStick.y * FORCA_MOVER_CAIXA });
     } 
     else {
-        let posXAlvo = p.body.position.x + 45; // Abre naturalmente para a direita do corpo
-        let posYAlvo = p.body.position.y + 40;
-        
+        let posXAlvo = p.body.position.x + 45; let posYAlvo = p.body.position.y + 40;
         if (movendoDireito) {
             let anguloAnalogo = Math.atan2(pad.rightStick.y, pad.rightStick.x);
             posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
@@ -571,19 +569,17 @@ function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
 function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const grp = scene.matter.world.nextGroup(true), flt = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp };
     const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
-    
-    // Alterado: density para 0.02 e frictionAir travado em 0.01 para acompanhar o corpo perfeitamente
     const lH = scene.matter.add.circle(x - 50, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
     const rH = scene.matter.add.circle(x + 50, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
-    
     lH.corpoTocadoAgora = null; lH.pontoDeContatoGlobal = null; rH.corpoTocadoAgora = null; rH.pontoDeContatoGlobal = null;
     b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
     
+    // REQUISITO ATUALIZADO: Emissor configurado para fumaça branco puro absoluto (0xffffff), sem misturar com a cor do personagem
     let manager = scene.add.particles(0, 0, 'spark', {
-        speed: { min: 80, max: 250 }, angle: { min: 80, max: 100 }, lifespan: 800, 
-        scale: { start: 0.6, end: 2.8 }, alpha: { start: 0.5, end: 0.0 },
-        tint: { min: 0x777777, max: 0xaaaaaa }, blendMode: 'NORMAL', depth: 9
+        speed: { min: 200, max: 450 }, angle: { min: 80, max: 100 }, lifespan: 600, 
+        scale: { start: 0.8, end: 2.9 }, alpha: { start: 0.6, end: 0.0 },
+        tint: 0xffffff, blendMode: 'NORMAL', depth: 9
     });
     
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null, particleEmitter: manager };
@@ -604,6 +600,20 @@ function executarRespawnIndividual(scene, pNum) {
     else player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, p.pad, 1, 0xffff00);
 }
 
+function limparGarrasAntesDoRespawn(scene, p) {
+    ['leftJoint', 'rightJoint'].forEach(jKey => {
+        if (p[jKey]) {
+            let alvoValido = p[jKey + 'Target'];
+            if (alvoValido && alvoValido.manuseavel === true && alvoValido.configOriginaisAtributos) {
+                scene.matter.body.setStatic(alvoValido, alvoValido.configOriginaisAtributos.isStatic);
+                alvoValido.ignoreGravity = alvoValido.configOriginaisAtributos.ignoreGravity;
+            }
+            if (p[jKey + 'PivotBody']) scene.matter.world.remove(p[jKey + 'PivotBody']);
+            p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null;
+        }
+    });
+}
+
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
     
@@ -617,14 +627,13 @@ function update() {
         previewGraphicsPoligono.clear();
         if (verticesCriacaoAtiva.length > 0 && document.getElementById('prop-shape').value === 'polygon') {
             previewGraphicsPoligono.lineStyle(3, 0xff0000, 1.0); previewGraphicsPoligono.fillStyle(0xffffff, 1.0);
-            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva.x, verticesCriacaoAtiva.y);
+            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
             verticesCriacaoAtiva.forEach(v => { previewGraphicsPoligono.lineTo(v.x, v.y); previewGraphicsPoligono.fillCircle(v.x, v.y, 6); });
             previewGraphicsPoligono.strokePath();
         }
         listaObjetosEditaveis.forEach(obj => { desenharObjetoEditor(obj); });
         if (player1) { player1.gfx.clear(); } if (player2) { player2.gfx.clear(); }
-        verificarEForcarRedesenhoDebug(this);
-        return;
+        verificarEForcarRedesenhoDebug(this); return;
     }
 
     if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
@@ -636,13 +645,23 @@ function update() {
             if (p[jKey] && p[jKey + 'PivotBody'] && p[jKey + 'Target']) {
                 let target = p[jKey + 'Target']; let pivot = p[jKey + 'PivotBody']; let offset = p[jKey + 'LocalOffset'];
                 let cos = Math.cos(target.angle), sin = Math.sin(target.angle);
-                let mundoX = target.position.x + (offset.x * cos - offset.y * sin);
-                let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
-                sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
-                sAct.matter.body.setVelocity(pivot, { x: target.velocity.x, y: target.velocity.y });
+                
+                // Força o pivô a seguir as coordenadas globais da mão
                 let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
-                if (target.manuseavel !== true) {
-                    sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY }); sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y });
+                sAct.matter.body.setPosition(pivot, { x: hand.position.x, y: hand.position.y });
+                
+                // REQUISITO ATUALIZADO: O item manuseável segue rigidamente a mão, desconsiderando completamente a física vetorial
+                if (target.manuseavel === true) {
+                    let rad = target.angle;
+                    let mX = hand.position.x - (offset.x * Math.cos(rad) - offset.y * Math.sin(rad));
+                    let mY = hand.position.y - (offset.x * Math.sin(rad) + offset.y * Math.cos(rad));
+                    sAct.matter.body.setPosition(target, { x: mX, y: mY });
+                    sAct.matter.body.setVelocity(target, { x: hand.velocity.x, y: hand.velocity.y });
+                } else {
+                    let mundoX = target.position.x + (offset.x * cos - offset.y * sin);
+                    let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
+                    sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY });
+                    sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y });
                 }
             }
         });
@@ -651,14 +670,14 @@ function update() {
         let distDirSq = (p.rightHand.position.x - p.body.position.x)**2 + (p.rightHand.position.y - p.body.position.y)**2;
         const LIMITE_ESTIRAMENTO_MAXIMO = 185; 
         if (p.leftJoint && distEsqSq > LIMITE_ESTIRAMENTO_MAXIMO * LIMITE_ESTIRAMENTO_MAXIMO) {
-            if (p.leftJoint && typeof p.leftJoint === 'object') { sAct.matter.world.remove(p.leftJoint); }
-            if (p.leftJointPivotBody) { sAct.matter.world.remove(p.leftJointPivotBody); }
-            p.leftJoint = null; p.leftJointTarget = null; p.leftJointPivotBody = null; p.leftJointLocalOffset = null;
+            let t = p.leftJointTarget; if(t&&t.manuseavel===true&&t.configOriginaisAtributos) sAct.matter.body.setStatic(t, t.configOriginaisAtributos.isStatic);
+            if (p.leftJointPivotBody) sAct.matter.world.remove(p.leftJointPivotBody);
+            p.leftJoint = null; p.leftJointTarget = null; p.leftJointPivotBody = null;
         }
         if (p.rightJoint && distDirSq > LIMITE_ESTIRAMENTO_MAXIMO * LIMITE_ESTIRAMENTO_MAXIMO) {
-            if (p.rightJoint && typeof p.rightJoint === 'object') { sAct.matter.world.remove(p.rightJoint); }
-            if (p.rightJointPivotBody) { sAct.matter.world.remove(p.rightJointPivotBody); }
-            p.rightJoint = null; p.rightJointTarget = null; p.rightJointPivotBody = null; p.rightJointLocalOffset = null;
+            let t = p.rightJointTarget; if(t&&t.manuseavel===true&&t.configOriginaisAtributos) sAct.matter.body.setStatic(t, t.configOriginaisAtributos.isStatic);
+            if (p.rightJointPivotBody) sAct.matter.world.remove(p.rightJointPivotBody);
+            p.rightJoint = null; p.rightJointTarget = null; p.rightJointPivotBody = null;
         }
         if (p.body.position.x < -120 || p.body.position.x > WORLD_WIDTH + 120 || p.body.position.y < -120 || p.body.position.y > WORLD_HEIGHT + 120) {
             executarRespawnIndividual(sAct, p.id); return;
