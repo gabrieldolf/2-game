@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Massa Extrema Contextual</title>
+    <title>Heave Ho - Correção Definitiva de Voo</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -317,7 +317,7 @@ function atualizarObjetoExistente() {
             if (corpoFatiaPuro) partesFisicasTriangulares.push(corpoFatiaPuro);
         }
         obj.body = scene.matter.body.create({ parts: partesFisicasTriangulares, isStatic: !c.manuseavel, label: 'ambiente', ignoreGravity: !obj.gravity });
-        scene.matter.world.add(body); scene.matter.body.setPosition(obj.body, { x: px, y: py });
+        scene.matter.world.add(obj.body); scene.matter.body.setPosition(obj.body, { x: px, y: py });
     }
     
     if (obj.body) {
@@ -449,6 +449,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
+// SOLUÇÃO ABSOLUTA: Mãos soltas no ar NÃO geram força inercial para arrastar o corpo. O peso do corpo está fixo e equilibrado.
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -457,48 +458,49 @@ function handlePlayerInput(s, p) {
     
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     
-    // REQUISITO: Varredura radial nativa para verificar se o corpo está apoiado em cenário fixo (Não Manuseável)
-    let todosCorposMundo = s.matter.world.localWorld.bodies;
-    let apoiadoNoCenarioFixo = false;
-    for (let i = 0; i < todosCorposMundo.length; i++) {
-        let b = todosCorposMundo[i];
-        if (!b || b === p.body || b.label?.includes('braco') || b.label?.includes('Hand')) continue;
-        if (b.manuseavel === false || b.isStatic === true) {
-            let dx = b.position.x - p.body.position.x;
-            let dy = b.position.y - p.body.position.y;
-            if (dx*dx + dy*dy <= 28 * 28) { apoiadoNoCenarioFixo = true; break; }
-        }
-    }
+    // Peso normal fixo e equilibrado do Matter.js
+    if (p.body.mass !== 6.8) { s.matter.body.setMass(p.body, 6.8); }
+    const FORCA_NOMINAL_MAOS = 0.038; 
     
-    // MODIFICAÇÃO SOLICITADA: Contraste radical de peso. Escalada super leve (5.0), voo/pendurado vira chumbo de 25.0 (Aumento de 500%)
-    let massaCalculadaCorpo = apoiadoNoCenarioFixo ? 5.0 : 25.0;
-    if (p.body.mass !== massaCalculadaCorpo) { s.matter.body.setMass(p.body, massaCalculadaCorpo); }
-    
-    const MULT_FORCA_JOGO = 0.038; 
-    
+    // CONTROLADOR CONTEXTUAL - MÃO ESQUERDA
     if (pad.leftStick) {
-        let fX = pad.leftStick.x * MULT_FORCA_JOGO;
-        let fY = pad.leftStick.y * MULT_FORCA_JOGO;
+        let fX = pad.leftStick.x * FORCA_NOMINAL_MAOS;
+        let fY = pad.leftStick.y * FORCA_NOMINAL_MAOS;
         
-        let segurandoNaoManuseavelEsq = p.leftJoint && p.leftJointTarget && (p.leftJointTarget.manuseavel === false || p.leftJointTarget.isStatic);
+        let segurandoNaoManuseavel = p.leftJoint && p.leftJointTarget && (p.leftJointTarget.manuseavel === false || p.leftJointTarget.isStatic);
+        let segurandoManuseavel = p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel === true;
         
-        if (segurandoNaoManuseavelEsq) {
+        if (segurandoNaoManuseavel) {
+            // Se grudado na parede/cenário fixo, a força puxa o CORPO (escalada firme)
             s.matter.body.applyForce(p.body, p.body.position, { x: fX * 1.2, y: fY * 1.2 });
-        } else {
+        } 
+        else if (segurandoManuseavel) {
+            // Se segurando uma caixa manuseável móvel, a força move a MÃO (e a caixa vai junto)
             s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fX, y: fY });
+        } 
+        else {
+            // CORREÇÃO: Se a mão estiver SOLTA no ar, a força do analógico cai 98%. 
+            // Serve apenas para você girar e apontar a luva, sem puxar o Ragdoll ou fazê-lo voar!
+            s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fX * 0.02, y: fY * 0.02 });
         }
     }
     
+    // CONTROLADOR CONTEXTUAL - MÃO DIREITA
     if (pad.rightStick) {
-        let fX = pad.rightStick.x * MULT_FORCA_JOGO;
-        let fY = pad.rightStick.y * MULT_FORCA_JOGO;
+        let fX = pad.rightStick.x * FORCA_NOMINAL_MAOS;
+        let fY = pad.rightStick.y * FORCA_NOMINAL_MAOS;
         
-        let segurandoNaoManuseavelDir = p.rightJoint && p.rightJointTarget && (p.rightJointTarget.manuseavel === false || p.rightJointTarget.isStatic);
+        let segurandoNaoManuseavel = p.rightJoint && p.rightJointTarget && (p.rightJointTarget.manuseavel === false || p.rightJointTarget.isStatic);
+        let segurandoManuseavel = p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel === true;
         
-        if (segurandoNaoManuseavelDir) {
+        if (segurandoNaoManuseavel) {
             s.matter.body.applyForce(p.body, p.body.position, { x: fX * 1.2, y: fY * 1.2 });
-        } else {
+        } 
+        else if (segurandoManuseavel) {
             s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fX, y: fY });
+        } 
+        else {
+            s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fX * 0.02, y: fY * 0.02 });
         }
     }
     
