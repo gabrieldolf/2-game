@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Massa Base Pesada Estabilizada</title>
+    <title>Heave Ho - Física Pura Sem Voo</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -449,7 +449,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// SOLUÇÃO REALISTA DO VOO: O corpo nasce e permanece pesadíssimo (25.0 kg). Bater as mãos soltas no ar não gera empuxo suficiente para erguer o chumbo.
+// SOLUÇÃO ABSOLUTA: Quando soltas no ar, as mãos seguem uma órbita cinemática pura ao redor do corpo. Nenhuma força linear é aplicada no vazio!
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -458,50 +458,59 @@ function handlePlayerInput(s, p) {
     
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     
-    // ANCORA DE PESO FIXED DESDE O INICIO: Corpo central rígido pesado em 25.0 kg impede flutuação de braço
-    if (p.body.mass !== 25.0) { s.matter.body.setMass(p.body, 25.0); }
+    // Peso padrão unificado
+    if (p.body.mass !== 6.8) { s.matter.body.setMass(p.body, 6.8); }
+    const FORCA_ESCALADA_CENARIO = 0.045; 
+    const FORCA_MOVER_CAIXA = 0.038;
     
-    // Força nominal padrão e limpa mantida nas extremidades para controle 360 fluido
-    const FORCA_NOMINAL_MAOS = 0.038; 
+    // ----------------------------------------------------
+    // PROCESSAMENTO CONTEXTUAL: MÃO ESQUERDA
+    // ----------------------------------------------------
+    let segurandoNaoManuseavelEsq = p.leftJoint && p.leftJointTarget && (p.leftJointTarget.manuseavel === false || p.leftJointTarget.isStatic);
+    let segurandoManuseavelEsq = p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel === true;
     
-    // PROCESSAMENTO DA MÃO ESQUERDA
     if (pad.leftStick) {
-        let fX = pad.leftStick.x * FORCA_NOMINAL_MAOS;
-        let fY = pad.leftStick.y * FORCA_NOMINAL_MAOS;
-        
-        let segurandoNaoManuseavel = p.leftJoint && p.leftJointTarget && (p.leftJointTarget.manuseavel === false || p.leftJointTarget.isStatic);
-        let segurandoManuseavel = p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel === true;
-        
-        if (segurandoNaoManuseavel) {
-            // Se grudado no cenário fixo, o analógico muda de foco e empurra o corpo (ganha força de alavanca 1.5x para içar os 25kg)
-            s.matter.body.applyForce(p.body, p.body.position, { x: fX * 1.5, y: fY * 1.5 });
+        if (segurandoNaoManuseavelEsq) {
+            // Se grudado na parede fixa: Aplica a força diretamente no corpo verde para içá-lo
+            s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * FORCA_ESCALADA_CENARIO, y: pad.leftStick.y * FORCA_ESCALADA_CENARIO });
         } 
-        else if (segurandoManuseavel) {
-            // Se segurando caixa móvel, move a mão e o objeto livremente no espaço
-            s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fX, y: fY });
+        else if (segurandoManuseavelEsq) {
+            // Se segurando uma caixa móvel manuseável: Aplica força na mão para arrastar o bloco dinamicamente
+            s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: pad.leftStick.x * FORCA_MOVER_CAIXA, y: pad.leftStick.y * FORCA_MOVER_CAIXA });
         } 
         else {
-            // Mão solta no ar: Força 100% pura para mover e rotacionar os braços livremente sem restrições ou molezas!
-            s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fX, y: fY });
+            // SE SOLTA NO AR: FORÇA DE TRANSMISSÃO LINEAR É EXATAMENTE ZERO!
+            // Em vez de empurrar linearmente, posicionamos a luva de forma cinemática orbital ao redor do corpo baseado na direção do stick
+            let anguloAnalogo = Math.atan2(pad.leftStick.y, pad.leftStick.x);
+            let raioBraçoAlvo = 75; // Distância confortável de órbita
+            let posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * raioBraçoAlvo;
+            let posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * raioBraçoAlvo;
+            
+            // Move a mão suavemente via velocidade em direção à órbita do analógico, sem gerar empuxo linear no corpo!
+            s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x) * 0.25, y: (posYAlvo - p.leftHand.position.y) * 0.25 });
         }
     }
     
-    // PROCESSAMENTO DA MÃO DIREITA
+    // ----------------------------------------------------
+    // PROCESSAMENTO CONTEXTUAL: MÃO DIREITA
+    // ----------------------------------------------------
+    let segurandoNaoManuseavelDir = p.rightJoint && p.rightJointTarget && (p.rightJointTarget.manuseavel === false || p.rightJointTarget.isStatic);
+    let segurandoManuseavelDir = p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel === true;
+    
     if (pad.rightStick) {
-        let fX = pad.rightStick.x * FORCA_NOMINAL_MAOS;
-        let fY = pad.rightStick.y * FORCA_NOMINAL_MAOS;
-        
-        let segurandoNaoManuseavel = p.rightJoint && p.rightJointTarget && (p.rightJointTarget.manuseavel === false || p.rightJointTarget.isStatic);
-        let segurandoManuseavel = p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel === true;
-        
-        if (segurandoNaoManuseavel) {
-            s.matter.body.applyForce(p.body, p.body.position, { x: fX * 1.5, y: fY * 1.5 });
+        if (segurandoNaoManuseavelDir) {
+            s.matter.body.applyForce(p.body, p.body.position, { x: pad.rightStick.x * FORCA_ESCALADA_CENARIO, y: pad.rightStick.y * FORCA_ESCALADA_CENARIO });
         } 
-        else if (segurandoManuseavel) {
-            s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fX, y: fY });
+        else if (segurandoManuseavelDir) {
+            s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: pad.rightStick.x * FORCA_MOVER_CAIXA, y: pad.rightStick.y * FORCA_MOVER_CAIXA });
         } 
         else {
-            s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fX, y: fY });
+            let anguloAnalogo = Math.atan2(pad.rightStick.y, pad.rightStick.x);
+            let raioBraçoAlvo = 75;
+            let posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * raioBraçoAlvo;
+            let posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * raioBraçoAlvo;
+            
+            s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x) * 0.25, y: (posYAlvo - p.rightHand.position.y) * 0.25 });
         }
     }
     
@@ -599,13 +608,6 @@ function update() {
                 }
             }
         });
-        
-        if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget) {
-            let objB = p.leftJointTarget;
-            if (!objB.isStatic && !objB.label?.startsWith('p0_') && !objB.label?.startsWith('p1_')) {
-                // Amortecimento inercial padrão do motor Matter nativo
-            }
-        }
         
         let distEsqSq = (p.leftHand.position.x - p.body.position.x)**2 + (p.leftHand.position.y - p.body.position.y)**2;
         let distDirSq = (p.rightHand.position.x - p.body.position.x)**2 + (p.rightHand.position.y - p.body.position.y)**2;
