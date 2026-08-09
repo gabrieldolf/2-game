@@ -521,20 +521,35 @@ function processarGarra(s, p, hand, jointProp, isGrabbing) {
     let joint = p[jointProp];
 
     // --- SOLTAR A MÃO ---
-    if (!isGrabbing && joint) {
-        // Remove a constraint física de agarrar
-        s.matter.world.remove(joint);
-        p[jointProp] = null;
-        if (p[jointProp + 'Target']) p[jointProp + 'Target'] = null;
+if (!isGrabbing && joint) {
+    // 1. Remove a constraint física
+    s.matter.world.remove(joint);
+    p[jointProp] = null;
+    if (p[jointProp + 'Target']) p[jointProp + 'Target'] = null;
 
-        // Limita picos de velocidade no corpo para evitar que ele seja lançado a velocidades infinitas
-        const MAX_IMPULSO_SOLTURA = 18;
-        let vx = Phaser.Math.Clamp(p.body.velocity.x, -MAX_IMPULSO_SOLTURA, MAX_IMPULSO_SOLTURA);
-        let vy = Phaser.Math.Clamp(p.body.velocity.y, -MAX_IMPULSO_SOLTURA, MAX_IMPULSO_SOLTURA);
+    // 2. Limita a MAGNITUDE da velocidade (Vetor Total)
+    const VELOCIDADE_MAXIMA_LANCAMENTO = 12; // Ajuste conforme o impulso desejado para o pulo
+
+    // Obtém a velocidade atual nos dois eixos
+    let vx = p.body.velocity.x;
+    let vy = p.body.velocity.y;
+
+    // Calcula a velocidade real total (hipotenusa do vetor)
+    let velocidadeAtual = Math.sqrt(vx * vx + vy * vy);
+
+    // Se a velocidade diagonal ultrapassar o limite, normaliza mantendo a direção correta
+    if (velocidadeAtual > VELOCIDADE_MAXIMA_LANCAMENTO) {
+        let fatorDeReducao = VELOCIDADE_MAXIMA_LANCAMENTO / velocidadeAtual;
+        vx *= fatorDeReducao;
+        vy *= fatorDeReducao;
         
         s.matter.body.setVelocity(p.body, { x: vx, y: vy });
-        return;
     }
+
+    // 3. Aplica Damping temporário (amortecimento) no corpo para matar o efeito estilingue
+    p.body.angularVelocity *= 0.2; // Evita rotações malucas ao soltar na diagonal
+    return;
+}
 
     // --- TENTAR AGARRAR ---
     if (isGrabbing && !joint) {
