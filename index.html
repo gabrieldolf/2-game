@@ -73,8 +73,15 @@ let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
 
 function preload() {
-    let canvas = document.createElement('canvas'); canvas.width = 16; canvas.height = 16;
-    let ctx = canvas.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(8, 8, 8, 0, Math.PI * 2); ctx.fill();
+    // Cria uma textura de fumaça com bordas suaves e esfumaçadas
+    let canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 16;
+    let ctx = canvas.getContext('2d');
+    
+    let grad = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 1)'); // Centro totalmente visível
+    grad.addColorStop(1, 'rgba(255, 255, 255, 0)'); // Borda esfumaçada sumindo no ar
+    
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(8, 8, 8, 0, Math.PI * 2); ctx.fill();
     this.textures.addCanvas('spark', canvas);
 }
 
@@ -475,7 +482,7 @@ function handlePlayerInput(s, p) {
     if (p.body.velocity.y > 0.5 && (movendoEsquerdo || movendoDireito)) {
         // REQUISITO: Partículas saem exatamente 24px abaixo do centro do corpo verde
         let pontoDeSaidaX = p.body.position.x;
-        let pontoDeSaidaY = p.body.position.y + 12;
+        let pontoDeSaidaY = p.body.position.y + 6;
         p.particleEmitter.explode(3, pontoDeSaidaX, pontoDeSaidaY);
     }
     
@@ -566,15 +573,19 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
     
-    // REQUISITO: Velocidade focada (200 a 450) arremessada com força para longe, com ângulo travado em 90 graus (para baixo)
+    // Configuração para fumaça realista em tons de cinza que expande enquanto some
     let manager = scene.add.particles(0, 0, 'spark', {
-        speed: { min: 200, max: 450 },
-        angle: { min: 80, max: 100 }, // Leve abertura cônica para baixo para dar volume ao peido
-        lifespan: 600, 
-        scale: { start: 0.9, end: 0.0 },
-        alpha: { start: 0.7, end: 0.0 }, 
-        tint: col, 
-        blendMode: 'ADD', 
+        speed: { min: 80, max: 250 },
+        angle: { min: 80, max: 100 }, 
+        lifespan: 800, 
+        scale: { start: 0.5, end: 2.5 }, // A fumaça começa pequena e expande no ar
+        alpha: { start: 0.5, end: 0.0 }, // Desbota suavemente até sumir
+        tint: function() {
+            // Gera tons aleatórios de cinza (escuro, médio e claro)
+            let tons = [0x666666, 0x888888, 0xaaaaaa, 0xcccccc];
+            return tons[Math.floor(Math.random() * tons.length)];
+        },
+        blendMode: 'NORMAL', // Modo normal faz a fumaça parecer opaca e não brilhante
         depth: 9
     });
     
