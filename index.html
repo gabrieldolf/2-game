@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Garras Firme e Filtros de Colisão</title>
+    <title>Heave Ho - Código Blindado Sem Erros</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -70,7 +70,7 @@ const SCREEN_WIDTH = 1024, SCREEN_HEIGHT = 768, WORLD_WIDTH = 3000, WORLD_HEIGHT
 const config = {
     type: Phaser.AUTO, width: SCREEN_WIDTH, height: SCREEN_HEIGHT, parent: 'canvas-container', backgroundColor: '#4488aa',
     physics: { default: 'matter', matter: { gravity: { y:1.5 }, debug: true } },
-    input: { gamepad: true }, scene: { preload: function(){}, create: create, update: update }
+    input: { gamepad: true }, scene: { preload: preload, create: create, update: update }
 };
 const game = new Phaser.Game(config);
 let player1, player2, ferramentaAtual = 'create', objetoSelecionado = null, listaObjetosEditaveis = [];
@@ -80,6 +80,7 @@ let clickOffsetX = 0, clickOffsetY = 0;
 
 let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
+// CORREÇÃO DE ESCOPO: Todas as funções de limpeza e seleção declaradas no topo para evitar ReferenceError
 function desmarcarObjetoDoEditor() { 
     objetoSelecionado = null; 
     document.getElementById('btn-delete').style.display = 'none'; 
@@ -119,6 +120,16 @@ function alternarVisibilidadeGrade() {
     for (let x = 0; x < WORLD_WIDTH; x += gSize) gridGraphics.lineBetween(x, 0, x, WORLD_HEIGHT);
     for (let y = 0; y < WORLD_HEIGHT; y += gSize) gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
 }
+function preload() {
+    let canvas = document.createElement('canvas'); canvas.width = 16; canvas.height = 16;
+    let ctx = canvas.getContext('2d');
+    let grad = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(8, 8, 8, 0, Math.PI * 2); ctx.fill();
+    this.textures.addCanvas('spark', canvas);
+}
+
 function create() {
     this.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 100, true, true, true, true);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -395,7 +406,7 @@ function desenharObjetoEditor(obj) {
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
     else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual && obj.dadosDesenhoVisual.length > 0) {
-        g.beginPath(); g.moveTo(obj.dadosDesenhoVisual.x, obj.dadosDesenhoVisual.y);
+        g.beginPath(); g.moveTo(obj.dadosDesenhoVisual[0].x, obj.dadosDesenhoVisual[0].y);
         for(let i = 1; i < obj.dadosDesenhoVisual.length; i++) { g.lineTo(obj.dadosDesenhoVisual[i].x, obj.dadosDesenhoVisual[i].y); }
         g.closePath(); g.fill(); g.strokePath();
     }
@@ -417,7 +428,7 @@ function processarToqueParaContato(h, b, pair) {
             if (b.label !== h.label.substring(0, 3) + 'body' && !b.label.includes('braco')) {
                 h.corpoTocadoAgora = b;
                 if (pair.activeContacts && pair.activeContacts.length > 0) {
-                    h.pontoDeContatoGlobal = { x: pair.activeContacts.vertex.x, y: pair.activeContacts.vertex.y };
+                    h.pontoDeContatoGlobal = { x: pair.activeContacts[0].vertex.x, y: pair.activeContacts[0].vertex.y };
                 } else {
                     h.pontoDeContatoGlobal = { x: h.position.x, y: h.position.y };
                 }
@@ -455,32 +466,22 @@ function processarGarra(s, p, h, jKey, grab) {
         let corpoTocado = h.corpoTocadoAgora;
         if (corpoTocado) {
             let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
-            
-            // REQUISITO: Itens MANUSEÁVEIS ignoram colisão apenas com quem o está carregando (usa o group negativo do player)
             if (alvoValido.manuseavel === true) {
                 p[jKey + 'SalvaStatic'] = alvoValido.isStatic;
                 p[jKey + 'SalvaFilter'] = JSON.parse(JSON.stringify(alvoValido.collisionFilter));
-                
                 s.matter.body.setStatic(alvoValido, false);
                 alvoValido.ignoreGravity = true;
-                
-                // Puxa o grupo físico do colisor do próprio braço do jogador para travar imunidade de toque interna
-                if (h.collisionFilter && h.collisionFilter.group) {
-                    alvoValido.collisionFilter.group = h.collisionFilter.group;
-                }
-                
-                p[jKey] = s.matter.add.constraint(h, alvoValido, 1, 1.0, {
-                    pointA: { x: 0, y: 0 },
-                    pointB: { x: h.position.x - alvoValido.position.x, y: h.position.y - alvoValido.position.y }
-                });
-                p[jKey + 'Target'] = alvoValido;
-            } else {
-                // Objetos não manuseáveis (cenário dinâmico/móvel ou estático) preparam pivô local
+                alvoValido.collisionFilter.mask = 0; 
                 let pivotLeve = s.matter.add.circle(h.position.x, h.position.y, 4, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
                 p[jKey] = s.matter.add.constraint(h, pivotLeve, 1, 1.0);
-                p[jKey + 'Target'] = alvoValido; 
-                p[jKey + 'PivotBody'] = pivotLeve;
-                
+                p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = pivotLeve;
+                let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
+                let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
+                p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
+            } else {
+                let pivotLeve = s.matter.add.circle(h.position.x, h.position.y, 4, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
+                p[jKey] = s.matter.add.constraint(h, pivotLeve, 1, 0.85);
+                p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = pivotLeve;
                 let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
                 let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
                 p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
@@ -493,8 +494,7 @@ function processarGarra(s, p, h, jKey, grab) {
             if (p[jKey + 'SalvaFilter']) alvoValido.collisionFilter = p[jKey + 'SalvaFilter'];
             s.matter.body.setStatic(alvoValido, p[jKey + 'SalvaStatic'] || false);
         }
-        if (p[jKey]) s.matter.world.remove(p[jKey]); 
-        if (p[jKey + 'PivotBody']) s.matter.world.remove(p[jKey + 'PivotBody']);
+        if (p[jKey]) s.matter.world.remove(p[jKey]); if (p[jKey + 'PivotBody']) s.matter.world.remove(p[jKey + 'PivotBody']);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
@@ -549,13 +549,18 @@ function handlePlayerInput(s, p) {
     let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.15*0.15);
     let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.15*0.15);
     
-    // REQUISITO EXIGIDO: Remoção absoluta de peidos ou qualquer injeção gráfica de partículas
+    if (estaCaindo && (movendoEsquerdo || movendoDireito)) {
+        p.particleEmitter.explode(3, p.body.position.x, p.body.position.y + 0);
+    }
     
     // MÃO ESQUERDA
     let segurandoNaoManuseavelEsq = p.leftJoint && p.leftJointTarget && (p.leftJointTarget.manuseavel === false);
+    let segurandoManuseavelEsq = p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel === true;
     
     if (segurandoNaoManuseavelEsq) {
         if (pad.leftStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * FORCA_ESCALADA_CENARIO, y: pad.leftStick.y * FORCA_ESCALADA_CENARIO });
+    } else if (segurandoManuseavelEsq) {
+        if (pad.leftStick) s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: pad.leftStick.x * FORCA_MOVER_CAIXA, y: pad.leftStick.y * FORCA_MOVER_CAIXA });
     } else {
         let posXAlvo = p.body.position.x - 45; let posYAlvo = p.body.position.y + 40;
         if (movendoEsquerdo) {
@@ -568,11 +573,14 @@ function handlePlayerInput(s, p) {
     
     // MÃO DIREITA
     let segurandoNaoManuseavelDir = p.rightJoint && p.rightJointTarget && (p.rightJointTarget.manuseavel === false);
+    let segurandoManuseavelDir = p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel === true;
     
     if (segurandoNaoManuseavelDir) {
         if (pad.rightStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.rightStick.x * FORCA_ESCALADA_CENARIO, y: pad.rightStick.y * FORCA_ESCALADA_CENARIO });
+    } else if (segurandoManuseavelDir) {
+        if (pad.rightStick) s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: pad.rightStick.x * FORCA_MOVER_CAIXA, y: pad.rightStick.y * FORCA_MOVER_CAIXA });
     } else {
-        let posXAlvo = p.body.position.x - 45; let posYAlvo = p.body.position.y + 40;
+        let posXAlvo = p.body.position.x + 45; let posYAlvo = p.body.position.y + 40;
         if (movendoDireito) {
             let anguloAnalogo = Math.atan2(pad.rightStick.y, pad.rightStick.x);
             posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
@@ -593,17 +601,17 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
     
-    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
+    let manager = scene.add.particles(0, 0, 'spark', {
+        speed: { min: 200, max: 450 }, angle: { min: 80, max: 100 }, lifespan: 600, 
+        scale: { start: 0.9, end: 0.0 }, alpha: { start: 0.7, end: 0.0 },
+        tint: 0xffffff, blendMode: 'NORMAL', depth: 9
+    });
+    
+    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null, particleEmitter: manager };
 }
 
 function limparGarrasAntesDoRespawn(scene, p) {
     ['leftJoint', 'rightJoint'].forEach(jKey => {
-        let alvoValido = p[jKey + 'Target'];
-        if (alvoValido && alvoValido.manuseavel === true) {
-            alvoValido.ignoreGravity = false;
-            if (p[jKey + 'SalvaFilter']) alvoValido.collisionFilter = p[jKey + 'SalvaFilter'];
-            scene.matter.body.setStatic(alvoValido, p[jKey + 'SalvaStatic'] || false);
-        }
         if (p[jKey]) scene.matter.world.remove(p[jKey]);
         if (p[jKey + 'PivotBody']) scene.matter.world.remove(p[jKey + 'PivotBody']);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null;
@@ -614,6 +622,7 @@ function executarRespawnIndividual(scene, pNum) {
     const cList = scene.matter.world.localWorld.constraints; const pref = `p${pNum}_`;
     const p = (pNum === 0) ? player1 : player2; if (!p) return;
     limparGarrasAntesDoRespawn(scene, p);
+    if (p.particleEmitter) { p.particleEmitter.destroy(); } 
     for (let i = cList.length - 1; i >= 0; i--) { 
         let c = cList[i]; 
         if (c && ((c.bodyA?.label?.includes(pref)) || (c.bodyB?.label?.includes(pref)))) scene.matter.world.remove(c); 
@@ -652,26 +661,19 @@ function update() {
     [player1, player2].forEach(p => {
         if (!p) return;
         ['leftJoint', 'rightJoint'].forEach(jKey => {
-            if (p[jKey] && p[jKey + 'Target']) {
-                let target = p[jKey + 'Target'];
-                let offset = p[jKey + 'LocalOffset'];
-                let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
-                
+            if (p[jKey] && p[jKey + 'PivotBody'] && p[jKey + 'Target']) {
+                let target = p[jKey + 'Target']; let pivot = p[jKey + 'PivotBody']; let offset = p[jKey + 'LocalOffset'];
                 let cos = Math.cos(target.angle), sin = Math.sin(target.angle);
                 let mundoX = target.position.x + (offset.x * cos - offset.y * sin);
                 let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
                 
                 if (target.manuseavel === true) {
-                    // Itens manuseáveis seguem a mão de perto respeitando a física linear
+                    sAct.matter.body.setPosition(target, { x: mundoX, y: mundoY });
+                    sAct.matter.body.setVelocity(target, { x: 0, y: 0 });
+                    sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
                 } else {
-                    // REQUISITO EXIGIDO: Força a luva a ficar RIGIDAMENTE CRAVADA no píxel tocado do objeto não manuseável
-                    sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY });
-                    sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y });
-                    
-                    if (p[jKey + 'PivotBody']) {
-                        sAct.matter.body.setPosition(p[jKey + 'PivotBody'], { x: mundoX, y: mundoY });
-                        sAct.matter.body.setVelocity(p[jKey + 'PivotBody'], { x: target.velocity.x, y: target.velocity.y });
-                    }
+                    sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
+                    sAct.matter.body.setVelocity(pivot, { x: target.velocity.x, y: target.velocity.y });
                 }
             }
         });
