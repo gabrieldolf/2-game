@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Memória de Braços e Física de Repouso</title>
+    <title>Heave Ho - Flacidez por Gravidade Realista</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -449,7 +449,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// ATUALIZAÇÃO DEFINITIVA: Armazena o último ângulo válido do analógico para evitar que os braços deem trancos ao soltar os direcionais!
+// ATUALIZAÇÃO REQUISITADA: Quando o analógico é solto, a atração cinemática é completamente desligada (0.0). A mão cai e balança puramente por gravidade!
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -481,22 +481,21 @@ function handlePlayerInput(s, p) {
             s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: hX * FORCA_MOVER_CAIXA, y: hY * FORCA_MOVER_CAIXA });
         } 
         else {
-            // MÃO LIVRE: Se passar da zona morta de 15%, grava o novo ângulo. Se soltar, mantém o anterior!
+            // SE A MÃO ESQUERDA ESTIVER SOLTA NO AR:
             if (distAnalogoSq > 0.15 * 0.15) {
-                p.anguloAlvoEsq = Math.atan2(hY, hX);
-                p.forcaAtracaoEsq = 0.25; // Força ativa esticada para mirar
+                // Analógico Ativo: Ativa a mira cinemática orbital estável
+                let anguloAnalogo = Math.atan2(hY, hX);
+                let posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
+                let posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * RAIO_ORBITA_BRACO;
+                
+                s.matter.body.setVelocity(p.leftHand, { 
+                    x: (posXAlvo - p.leftHand.position.x) * 0.25, 
+                    y: (posYAlvo - p.leftHand.position.y) * 0.25 
+                });
             } else {
-                p.forcaAtracaoEsq = 0.04; // Força reduzida para dar flacidez natural ao soltar o direcional
+                // ANALÓGICO SOLTO: A força cinemática é zerada (0.0). A mão cai e balança livremente sob a gravidade pura do motor!
+                // Deixa o motor físico Matter guiar livremente a junta mecânica
             }
-            
-            let posXAlvo = p.body.position.x + Math.cos(p.anguloAlvoEsq) * RAIO_ORBITA_BRACO;
-            let posYAlvo = p.body.position.y + Math.sin(p.anguloAlvoEsq) * RAIO_ORBITA_BRACO;
-            
-            // Atração orbital suave via velocidade nativa que zera voos e preserva a última posição estável
-            s.matter.body.setVelocity(p.leftHand, { 
-                x: (posXAlvo - p.leftHand.position.x) * p.forcaAtracaoEsq, 
-                y: (posYAlvo - p.leftHand.position.y) * p.forcaAtracaoEsq 
-            });
         }
     }
     
@@ -519,19 +518,17 @@ function handlePlayerInput(s, p) {
         } 
         else {
             if (distAnalogoSq > 0.15 * 0.15) {
-                p.anguloAlvoDir = Math.atan2(hY, hX);
-                p.forcaAtracaoDir = 0.25;
+                let anguloAnalogo = Math.atan2(hY, hX);
+                let posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
+                let posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * RAIO_ORBITA_BRACO;
+                
+                s.matter.body.setVelocity(p.rightHand, { 
+                    x: (posXAlvo - p.rightHand.position.x) * 0.25, 
+                    y: (posYAlvo - p.rightHand.position.y) * 0.25 
+                });
             } else {
-                p.forcaAtracaoDir = 0.04;
+                // Analógico solto -> Gravidade pura e balanço flácido anatômico ativado
             }
-            
-            let posXAlvo = p.body.position.x + Math.cos(p.anguloAlvoDir) * RAIO_ORBITA_BRACO;
-            let posYAlvo = p.body.position.y + Math.sin(p.anguloAlvoDir) * RAIO_ORBITA_BRACO;
-            
-            s.matter.body.setVelocity(p.rightHand, { 
-                x: (posXAlvo - p.rightHand.position.x) * p.forcaAtracaoDir, 
-                y: (posYAlvo - p.rightHand.position.y) * p.forcaAtracaoDir 
-            });
         }
     }
     
@@ -559,11 +556,7 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     lH.corpoTocadoAgora = null; lH.pontoDeContatoGlobal = null; rH.corpoTocadoAgora = null; rH.pontoDeContatoGlobal = null;
     b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
-    
-    // Inicialização dos vetores estáveis de memória dos braços (Esquerdo aponta para a esquerda, Direito para a direita)
-    let charObj = { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
-    charObj.anguloAlvoEsq = Math.PI; charObj.anguloAlvoDir = 0; charObj.forcaAtracaoEsq = 0.04; charObj.forcaAtracaoDir = 0.04;
-    return charObj;
+    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
 }
 
 function executarRespawnIndividual(scene, pNum) {
