@@ -601,129 +601,50 @@ function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
     body.ultimaPos = { x: body.position.x, y: body.position.y }; body.ultimaRot = body.angle;
 }
 
-function handlePlayerInput(s, p) {
-    const pad = p.pad;
-    let stickLeft = { x: 0, y: 0 }, stickRight = { x: 0, y: 0 };
-    let lL = false, rR = false;
+// Constantes de Escalada (Ajuste esses valores para calibrar o peso)
+const FORCA_ESCALADA_BASE = 0.008; // Reduzido drasticamente (era 0.045)
+const VELOCIDADE_MAX_AGARRADO = 6.0; // Teto rígido de velocidade ao escalar
+const RAIO_MAXIMO_BRACO = 60; // Distância limite para o braço não esticar
 
-    // 1. Leitura de Controles (Gamepad / Teclado)
-    if (pad) {
-        lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
-        rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
-        if (pad.leftStick) stickLeft = pad.leftStick;
-        if (pad.rightStick) stickRight = pad.rightStick;
+function aplicarMovimentoMaoAgarrada(s, p, stick) {
+    if (Math.abs(stick.x) < 0.1 && Math.abs(stick.y) < 0.1) return;
 
-        if (isButtonPressed(pad, 8)) { 
-            executarRespawnIndividual(s, p.id); 
-            return; 
-        }
-    } 
-    else if (p.id === 0 && keyControls) {
-        if (keyControls.left.isDown) stickLeft.x = -1;
-        if (keyControls.right.isDown) stickLeft.x = 1;
-        if (keyControls.up.isDown) stickLeft.y = -1;
-        if (keyControls.down.isDown) stickLeft.y = 1;
+    // 1. Normalizar o vetor do analógico para evitar super-força nas diagonais
+    let magnitude = Math.sqrt(stick.x * stick.x + stick.y * stick.y);
+    let dirX = stick.x / (magnitude || 1);
+    let dirY = stick.y / (magnitude || 1);
+    
+    // Normaliza intensidade para no máximo 1.0
+    let intensidade = Math.min(magnitude, 1.0);
 
-        stickRight = { ...stickLeft };
-        lL = keyControls.grabLeft.isDown;
-        rR = keyControls.grabRight.isDown;
+    // 2. Trava de distância física (impede que o corpo se afaste mais do que o braço permite)
+    // Identifica qual mão está presa para calcular a distância
+    let hand = (p.leftJoint ? p.leftHand : p.rightHand);
+    if (!hand) return;
 
-        if (Phaser.Input.Keyboard.JustDown(keyControls.respawn)) {
-            executarRespawnIndividual(s, p.id);
-            return;
-        }
+    let dist = Phaser.Math.Distance.Between(p.body.position.x, p.body.position.y, hand.position.x, hand.position.y);
+
+    // Se o corpo tentar ir além do comprimento do braço na direção do analógico, bloqueia a força nessa direção
+    if (dist >= RAIO_MAXIMO_BRACO) {
+        // Reduz a força proporcionalmente à distância para criar resistência
+        intensidade *= Math.max(0, 1 - (dist - RAIO_MAXIMO_BRACO) / 20);
     }
-    
-    // 2. Ajuste Dinâmico do Peso na Queda
-    let campoMod = document.getElementById('prop-fall-weight-mod');
-    let valorModificador = campoMod ? parseFloat(campoMod.value) : 10.0;
-    if (isNaN(valorModificador) || valorModificador < 0) { valorModificador = 0; if(campoMod) campoMod.value = 0; }
-    
-    let MASSA_PADRAO = 6.8;
-    let massaCalculadaCorpo = MASSA_PADRAO;
-    
-    let totalmenteLivreNoVazio = (!p.leftJoint && !p.rightJoint);
-    let estaCaindo = (p.body.velocity.y > 0.5);
-    
-    const ZONA_MORTA_CIMA = -0.15;
-    let esquerdoParaCima = (stickLeft.y < ZONA_MORTA_CIMA);
-    let direitoParaCima = (stickRight.y < ZONA_MORTA_CIMA);
-    
-    if (estaCaindo && (esquerdoParaCima || direitoParaCima) && totalmenteLivreNoVazio) {
-        let pesoExtraEsq = 0, pesoExtraDir = 0;
-        let deltaYEsq = p.body.position.y - p.leftHand.position.y;
-        if (deltaYEsq > 0) pesoExtraEsq = deltaYEsq * valorModificador * 0.1;
-        let deltaYDir = p.body.position.y - p.rightHand.position.y;
-        if (deltaYDir > 0) pesoExtraDir = deltaYDir * valorModificador * 0.1;
-        massaCalculadaCorpo += (pesoExtraEsq + pesoExtraDir);
+
+    // 3. Aplicar força suave
+    let forcaX = dirX * FORCA_ESCALADA_BASE * intensidade;
+    let forcaY = dirY * FORCA_ESCALADA_BASE * intensidade;
+
+    s.matter.body.applyForce(p.body, p.body.position, { x: forcaX, y: forcaY });
+
+    // 4. Clampar a velocidade MAXIMA do corpo enquanto preso
+    let vx = p.body.velocity.x;
+    let vy = p.body.velocity.y;
+    let velAtual = Math.sqrt(vx * vx + vy * vy);
+
+    if (velAtual > VELOCIDADE_MAX_AGARRADO) {
+        let fator = VELOCIDADE_MAX_AGARRADO / velAtual;
+        s.matter.body.setVelocity(p.body, { x: vx * fator, y: vy * fator });
     }
-    if (p.body.mass !== massaCalculadaCorpo) { s.matter.body.setMass(p.body, massaCalculadaCorpo); }
-    
-    // 3. Constantes de Movimento
-    const FORCA_ESCALADA_CENARIO = 0.045; 
-    const RAIO_ORBITA_BRACO = 65;
-    
-    let movendoEsquerdo = (stickLeft.x*stickLeft.x + stickLeft.y*stickLeft.y > 0.15*0.15);
-    let movendoDireito = (stickRight.x*stickRight.x + stickRight.y*stickRight.y > 0.15*0.15);
-    
-    // 4. LÓGICA DA MÃO ESQUERDA
-    let segurandoNaoManuseavelEsq = p.leftJoint && p.leftJointTarget && (p.leftJointTarget.manuseavel === false);
-    
-    if (segurandoNaoManuseavelEsq) {
-        // Se a mão está presa em algo estático, a força move o corpo!
-        if (movendoEsquerdo) {
-            s.matter.body.applyForce(p.body, p.body.position, { 
-                x: stickLeft.x * FORCA_ESCALADA_CENARIO, 
-                y: stickLeft.y * FORCA_ESCALADA_CENARIO 
-            });
-        }
-    } else {
-        // Se a mão está livre no ar, mover apenas por ajuste de velocidade (não puxa o corpo)
-        let posXAlvo = p.body.position.x - 35; 
-        let posYAlvo = p.body.position.y + 30;
-        
-        if (movendoEsquerdo) {
-            let anguloAnalogo = Math.atan2(stickLeft.y, stickLeft.x);
-            posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
-            posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * RAIO_ORBITA_BRACO;
-        }
-        
-        // Em vez de applyForce, usamos posicionamento/velocidade cinemática suave
-        let velX = (posXAlvo - p.leftHand.position.x) * 0.25;
-        let velY = (posYAlvo - p.leftHand.position.y) * 0.25;
-        s.matter.body.setVelocity(p.leftHand, { x: velX + p.body.velocity.x, y: velY + p.body.velocity.y });
-    }
-    
-    // 5. LÓGICA DA MÃO DIREITA
-    let segurandoNaoManuseavelDir = p.rightJoint && p.rightJointTarget && (p.rightJointTarget.manuseavel === false);
-    
-    if (segurandoNaoManuseavelDir) {
-        // Se a mão está presa em algo estático, a força move o corpo!
-        if (movendoDireito) {
-            s.matter.body.applyForce(p.body, p.body.position, { 
-                x: stickRight.x * FORCA_ESCALADA_CENARIO, 
-                y: stickRight.y * FORCA_ESCALADA_CENARIO 
-            });
-        }
-    } else {
-        // Se a mão está livre no ar, mover apenas por ajuste de velocidade (não puxa o corpo)
-        let posXAlvo = p.body.position.x + 35; 
-        let posYAlvo = p.body.position.y + 30;
-        
-        if (movendoDireito) {
-            let anguloAnalogo = Math.atan2(stickRight.y, stickRight.x);
-            posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
-            posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * RAIO_ORBITA_BRACO;
-        }
-        
-        let velX = (posXAlvo - p.rightHand.position.x) * 0.25;
-        let velY = (posYAlvo - p.rightHand.position.y) * 0.25;
-        s.matter.body.setVelocity(p.rightHand, { x: velX + p.body.velocity.x, y: velY + p.body.velocity.y });
-    }
-    
-    // 6. Processar Agarre das Mãos
-    processarGarra(s, p, p.leftHand, 'leftJoint', lL); 
-    processarGarra(s, p, p.rightHand, 'rightJoint', rR);
 }
 
 function createHeaveHoCharacter(scene, x, y, pad, id, col) {
