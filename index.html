@@ -506,49 +506,71 @@ function desenharJogador(p) {
     g.fillStyle(grabDir ? 0x00b894 : 0x74b9ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
-function processarGarra(s, p, h, jKey, grab) {
-    if (grab && !p[jKey]) {
-        let corpoTocado = h.corpoTocadoAgora;
-        if (corpoTocado) {
-            let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
-            
-            if (alvoValido.manuseavel === true) {
-                p[jKey + 'SalvaStatic'] = alvoValido.isStatic;
-                p[jKey + 'SalvaFilter'] = JSON.parse(JSON.stringify(alvoValido.collisionFilter));
-                
-                s.matter.body.setStatic(alvoValido, false);
-                alvoValido.ignoreGravity = true;
-                
-                if (h.collisionFilter && h.collisionFilter.group) {
-                    alvoValido.collisionFilter.group = h.collisionFilter.group;
+// 1. Ao criar as constraints dos braços (no seu init/create do player):
+// Garanta que o stiffness seja alto e defina damping para evitar oscilação infinita.
+/*
+  s.matter.add.constraint(body, hand, length, stiffness, {
+      stiffness: 0.9,      // Mais rígido para não esticar tanto
+      damping: 0.1,        // Amortecimento de vibração
+      length: 50           // Tamanho fixo do braço
+  });
+*/
+
+// 2. Atualização da Lógica de Agarre/Soltura (processarGarra):
+function processarGarra(s, p, hand, jointProp, isGrabbing) {
+    let joint = p[jointProp];
+
+    // --- SOLTAR A MÃO ---
+    if (!isGrabbing && joint) {
+        // Remove a constraint física de agarrar
+        s.matter.world.remove(joint);
+        p[jointProp] = null;
+        if (p[jointProp + 'Target']) p[jointProp + 'Target'] = null;
+
+        // Limita picos de velocidade no corpo para evitar que ele seja lançado a velocidades infinitas
+        const MAX_IMPULSO_SOLTURA = 18;
+        let vx = Phaser.Math.Clamp(p.body.velocity.x, -MAX_IMPULSO_SOLTURA, MAX_IMPULSO_SOLTURA);
+        let vy = Phaser.Math.Clamp(p.body.velocity.y, -MAX_IMPULSO_SOLTURA, MAX_IMPULSO_SOLTURA);
+        
+        s.matter.body.setVelocity(p.body, { x: vx, y: vy });
+        return;
+    }
+
+    // --- TENTAR AGARRAR ---
+    if (isGrabbing && !joint) {
+        // Encontrar objetos próximos da mão para ancorar
+        let corposProximos = s.matter.intersectBody(hand);
+        
+        for (let target of corposProximos) {
+            // Ignorar partes do próprio player
+            if (target === p.body || target === p.leftHand || target === p.rightHand) continue;
+
+            // Criar joint rígida de agarre (com stiffness alto para não esticar)
+            p[jointProp] = s.matter.add.constraint(hand, target, 0, 0.95, {
+                pointA: { x: 0, y: 0 },
+                pointB: { 
+                    x: hand.position.x - target.position.x, 
+                    y: hand.position.y - target.position.y 
                 }
-                
-                p[jKey] = s.matter.add.constraint(h, alvoValido, 1, 1.0, {
-                    pointA: { x: 0, y: 0 },
-                    pointB: { x: h.position.x - alvoValido.position.x, y: h.position.y - alvoValido.position.y }
-                });
-                p[jKey + 'Target'] = alvoValido;
-            } else {
-                let pivotLeve = s.matter.add.circle(h.position.x, h.position.y, 4, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
-                p[jKey] = s.matter.add.constraint(h, pivotLeve, 1, 1.0);
-                p[jKey + 'Target'] = alvoValido; 
-                p[jKey + 'PivotBody'] = pivotLeve;
-                
-                let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
-                let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
-                p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
-            }
+            });
+            p[jointProp + 'Target'] = target;
+            break;
         }
-    } else if (!grab && p[jKey]) {
-        let alvoValido = p[jKey + 'Target'];
-        if (alvoValido && alvoValido.manuseavel === true) {
-            alvoValido.ignoreGravity = false;
-            if (p[jKey + 'SalvaFilter']) alvoValido.collisionFilter = p[jKey + 'SalvaFilter'];
-            s.matter.body.setStatic(alvoValido, p[jKey + 'SalvaStatic'] || false);
-        }
-        if (p[jKey]) s.matter.world.remove(p[jKey]); 
-        if (p[jKey + 'PivotBody']) s.matter.world.remove(p[jKey + 'PivotBody']);
-        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
+    }
+
+    // --- SEGURANÇA: LIMITE FÍSICO DE ESTICAMENTO (CLAMPER DA DISTÂNCIA) ---
+    // Se por algum motivo o corpo se afastar mais do que o tamanho máximo do braço, puxa ele de volta à força
+    let dist = Phaser.Math.Distance.Between(p.body.position.x, p.body.position.y, hand.position.x, hand.position.y);
+    const MAX_DISTANCIA_BRACO = 75; // Distância máxima permitida antes de travar
+
+    if (dist > MAX_DISTANCIA_BRACO) {
+        let angle = Phaser.Math.Angle.Between(hand.position.x, hand.position.y, p.body.position.x, p.body.position.y);
+        
+        // Reposiciona o corpo no limite máximo do braço para não esticar como um elástico gigante
+        let correctX = hand.position.x + Math.cos(angle) * MAX_DISTANCIA_BRACO;
+        let correctY = hand.position.y + Math.sin(angle) * MAX_DISTANCIA_BRACO;
+        
+        s.matter.body.setPosition(p.body, { x: correctX, y: correctY });
     }
 }
 
