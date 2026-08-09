@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Sistema Contextual de Objetos Manuseáveis</title>
+    <title>Heave Ho - Conexão Rígida e Massa Inercial</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -37,7 +37,6 @@
         <h3 id="status-modo" style="color:#55ff55;">Criando novos objetos</h3>
         <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option></select></div>
         
-        <!-- PROPRIEDADE CHAVE: Define se o bloco é feito para carregar/arremessar ou se é cenário estático -->
         <div class="prop-row" style="background:#27ae60; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Objeto Manuseável:</label><input type="checkbox" id="prop-manuseavel" checked onchange="atualizarObjetoExistente()"></div>
         
         <div class="prop-row" id="row-w"><label id="label-w">Largura (px):</label><input type="number" id="prop-w" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
@@ -80,7 +79,6 @@ function create() {
     previewGraphicsPoligono = this.add.graphics().setDepth(15);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
     
-    // Bordas limites do cenário são consideradas nativamente NÃO manuseáveis (isStatic: true)
     const ambConf = { isStatic:true, label:'ambiente', friction:0.8, restitution:0.1, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     const borda = (s, x, y, w, h) => {
         let b = s.matter.add.rectangle(x, y, w, h, ambConf); 
@@ -197,7 +195,6 @@ function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
     if (document.getElementById('prop-snap-active').checked) { let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; }
     
-    // Objetos não manuseáveis (Chão/Paredes) são criados como corpos estáticos (isStatic: true)
     let conf = { 
         isStatic: !c.manuseavel, 
         label: 'ambiente', 
@@ -329,12 +326,6 @@ function atualizarObjetoExistente() {
     }
 }
 
-function deletarObjetoSelecionado() {
-    if (!objetoSelecionado) return; let scene = game.scene.getScene('default');
-    if (objetoSelecionado.body) scene.matter.world.remove(objetoSelecionado.body);
-    objetoSelecionado.gfx.clear(); listaObjetosEditaveis = listaObjetosEditaveis.filter(o => o !== objetoSelecionado); desmarcarObjetoDoEditor();
-}
-
 function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorpo) {
     let finalX = x, finalY = y; const DISTANCIA_IMA = 20, corpos = scene.matter.world.localWorld.bodies;
     const r = w, mE = x - r, mD = x + r;
@@ -353,11 +344,6 @@ function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorp
     }
     return { x: finalX, y: finalY };
 }
-function setFerramenta(tipo) {
-    ferramentaAtual = tipo; document.getElementById('btn-select').classList.remove('active'); document.getElementById('btn-create').classList.remove('active');
-    document.getElementById(tipo === 'select' ? 'btn-select' : 'btn-create').classList.add('active'); desmarcarObjetoDoEditor();
-    let s = document.getElementById('status-modo'); s.innerText = tipo === 'create' ? "Criando objetos" : "Nenhum selecionado"; s.style.color = tipo === 'create' ? "#55ff55" : "#aaa";
-}
 function desenharObjetoEditor(obj) {
     if (!obj) return; let g = obj.gfx; g.clear();
     let posX = obj.body ? obj.body.position.x : obj.visualX; let posY = obj.body ? obj.body.position.y : obj.visualY;
@@ -365,21 +351,18 @@ function desenharObjetoEditor(obj) {
     
     g.x = posX; g.y = posY; g.rotation = angulo;
     
-    // Cor de acordo com o status: Objetos manuseáveis ganham tom marrom clássico, paredes fixas ficam cinza escuro
     let corObjeto = obj.manuseavel ? 0x8b5a2b : 0x2c3e50;
     if (obj === objetoSelecionado) corObjeto = 0xffea00;
     else if (obj.lockPos) corObjeto = 0xf1c40f;
     
     g.fillStyle(corObjeto, 1.0);
-    
-    // Feedback estético: Objetos Manuseáveis ganham uma borda branca pontilhada/suave, paredes ficam sólidas
     g.lineStyle(2, obj.manuseavel ? 0xffffff : 0x111111, 0.8);
     
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
     else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual && obj.dadosDesenhoVisual.length > 0) {
         g.beginPath();
-        g.moveTo(obj.dadosDesenhoVisual[0].x, obj.dadosDesenhoVisual[0].y);
+        g.moveTo(obj.dadosDesenhoVisual.x, obj.dadosDesenhoVisual.y);
         for(let i = 1; i < obj.dadosDesenhoVisual.length; i++) { 
             g.lineTo(obj.dadosDesenhoVisual[i].x, obj.dadosDesenhoVisual[i].y); 
         }
@@ -396,14 +379,6 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
         scene.matter.add.constraint(last, link, len, 1.0, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 } });
         last = link;
     }
-}
-function limparGarrasAntesDoRespawn(scene, p) {
-    if (!p) return;
-    if (p.leftJoint && typeof p.leftJoint === 'object') { scene.matter.world.remove(p.leftJoint); }
-    if (p.rightJoint && typeof p.rightJoint === 'object') { scene.matter.world.remove(p.rightJoint); }
-    if (p.leftJointPivotBody) { scene.matter.world.remove(p.leftJointPivotBody); }
-    if (p.rightJointPivotBody) { scene.matter.world.remove(p.rightJointPivotBody); }
-    p.leftJoint = null; p.rightJoint = null; p.leftJointPivotBody = null; p.rightJointPivotBody = null;
 }
 function processarToqueParaContato(h, b, pair) {
     if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
@@ -450,6 +425,9 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         if (corpoTocado && pontoGlobal) {
             let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
             
+            // REQUISITO: Se for um objeto Manuseável, a mola vira uma conexão rígida indestrutível com rigidez máxima absoluta (1.0)
+            let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.85;
+            
             let pivotLeveCinematico = s.matter.add.circle(h.position.x, h.position.y, 6, { 
                 isStatic: false, 
                 isSensor: true, 
@@ -458,7 +436,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
                 visible: false
             });
             
-            p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 1, 0.85, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
+            p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 1, rigidezConexao, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
             p[jKey + 'Target'] = alvoValido;
             p[jKey + 'PivotBody'] = pivotLeveCinematico;
             
@@ -472,7 +450,6 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// ATUALIZAÇÃO CONCEITUAL CHAVE: Filtro de ângulo morto removido. Direcionamento dinâmico baseado no tipo de objeto agarrado.
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -481,26 +458,38 @@ function handlePlayerInput(s, p) {
     
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     
+    // REQUISITO: Varredura radial estável para verificar se o corpo está apoiado em cenário fixo (Não Manuseável)
+    let todosCorposMundo = s.matter.world.localWorld.bodies;
+    let apoiadoNoCenarioFixo = false;
+    for (let i = 0; i < todosCorposMundo.length; i++) {
+        let b = todosCorposMundo[i];
+        if (!b || b === p.body || b.label?.includes('braco') || b.label?.includes('Hand')) continue;
+        if (b.manuseavel === false || b.isStatic === true) {
+            let dx = b.position.x - p.body.position.x;
+            let dy = b.position.y - p.body.position.y;
+            if (dx*dx + dy*dy <= 28 * 28) { apoiadoNoCenarioFixo = true; break; }
+        }
+    }
+    
+    // REQUISITO: Aumenta em 30% a massa do corpo central (de 6.8 para 8.84) se ele estiver voando/pendurado fora do cenário fixo
+    let massaCalculadaCorpo = apoiadoNoCenarioFixo ? 6.8 : 8.84;
+    if (p.body.mass !== massaCalculadaCorpo) { s.matter.body.setMass(p.body, massaCalculadaCorpo); }
+    
     const MULT_FORCA_JOGO = 0.038; 
     
-    // PROCESSAMENTO DO ANALÓGICO ESQUERDO (MÃO ESQUERDA)
     if (pad.leftStick) {
         let fX = pad.leftStick.x * MULT_FORCA_JOGO;
         let fY = pad.leftStick.y * MULT_FORCA_JOGO;
         
-        // Verifica se a mão esquerda está ativamente presa a um objeto NÃO manuseável (cenário fixo)
         let segurandoNaoManuseavelEsq = p.leftJoint && p.leftJointTarget && (p.leftJointTarget.manuseavel === false || p.leftJointTarget.isStatic);
         
         if (segurandoNaoManuseavelEsq) {
-            // REGRA CONTEXTUAL: Se agarrou parede/chão, a força do analógico empurra diretamente o círculo verde do corpo para escalar!
             s.matter.body.applyForce(p.body, p.body.position, { x: fX * 1.2, y: fY * 1.2 });
         } else {
-            // REGRA CONTEXTUAL: Mão livre ou segurando item manuseável -> O analógico move exclusivamente a mão, e o item móvel vai junto
             s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fX, y: fY });
         }
     }
     
-    // PROCESSAMENTO DO ANALÓGICO DIREITO (MÃO DIREITA)
     if (pad.rightStick) {
         let fX = pad.rightStick.x * MULT_FORCA_JOGO;
         let fY = pad.rightStick.y * MULT_FORCA_JOGO;
@@ -577,6 +566,8 @@ function update() {
         return;
     }
 
+    window.FORCA_BONECO = 0.038;
+
     if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); });
     
@@ -598,16 +589,21 @@ function update() {
                 
                 let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
                 
-                // DINÂMICA DE ATRELAÇÃO: Se for manuseável, o analógico continua movendo a mão de forma livre, arrastando o objeto junto
                 if (target.manuseavel === true) {
-                    // O objeto acompanha orbitalmente a translação do braço guiado pela luva
+                    // O item móvel atrelado rigidamente segue o vetor translacional da luva livre em órbita
                 } else {
-                    // Se for parede estática, a mão trava fixamente no colisor global
                     sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY });
                     sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y });
                 }
             }
         });
+        
+        if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget) {
+            let objB = p.leftJointTarget;
+            if (!objB.isStatic && !objB.label?.startsWith('p0_') && !objB.label?.startsWith('p1_')) {
+                // Amortecimento inercial padrão do motor Matter nativo
+            }
+        }
         
         let distEsqSq = (p.leftHand.position.x - p.body.position.x)**2 + (p.leftHand.position.y - p.body.position.y)**2;
         let distDirSq = (p.rightHand.position.x - p.body.position.x)**2 + (p.rightHand.position.y - p.body.position.y)**2;
