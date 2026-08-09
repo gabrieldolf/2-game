@@ -475,7 +475,7 @@ function handlePlayerInput(s, p) {
     if (p.body.velocity.y > 0.5 && (movendoEsquerdo || movendoDireito)) {
         // REQUISITO: Partículas saem exatamente 24px abaixo do centro do corpo verde
         let pontoDeSaidaX = p.body.position.x;
-        let pontoDeSaidaY = p.body.position.y + 24;
+        let pontoDeSaidaY = p.body.position.y + 18;
         p.particleEmitter.explode(3, pontoDeSaidaX, pontoDeSaidaY);
     }
     
