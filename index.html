@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Física Pura Sem Voo</title>
+    <title>Heave Ho - Memória de Braços e Física de Repouso</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -449,7 +449,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// SOLUÇÃO ABSOLUTA: Quando soltas no ar, as mãos seguem uma órbita cinemática pura ao redor do corpo. Nenhuma força linear é aplicada no vazio!
+// ATUALIZAÇÃO DEFINITIVA: Armazena o último ângulo válido do analógico para evitar que os braços deem trancos ao soltar os direcionais!
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -458,10 +458,10 @@ function handlePlayerInput(s, p) {
     
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     
-    // Peso padrão unificado
     if (p.body.mass !== 6.8) { s.matter.body.setMass(p.body, 6.8); }
     const FORCA_ESCALADA_CENARIO = 0.045; 
     const FORCA_MOVER_CAIXA = 0.038;
+    const RAIO_ORBITA_BRACO = 75;
     
     // ----------------------------------------------------
     // PROCESSAMENTO CONTEXTUAL: MÃO ESQUERDA
@@ -470,24 +470,33 @@ function handlePlayerInput(s, p) {
     let segurandoManuseavelEsq = p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel === true;
     
     if (pad.leftStick) {
+        let hX = pad.leftStick.x;
+        let hY = pad.leftStick.y;
+        let distAnalogoSq = hX*hX + hY*hY;
+        
         if (segurandoNaoManuseavelEsq) {
-            // Se grudado na parede fixa: Aplica a força diretamente no corpo verde para içá-lo
-            s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * FORCA_ESCALADA_CENARIO, y: pad.leftStick.y * FORCA_ESCALADA_CENARIO });
+            s.matter.body.applyForce(p.body, p.body.position, { x: hX * FORCA_ESCALADA_CENARIO, y: hY * FORCA_ESCALADA_CENARIO });
         } 
         else if (segurandoManuseavelEsq) {
-            // Se segurando uma caixa móvel manuseável: Aplica força na mão para arrastar o bloco dinamicamente
-            s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: pad.leftStick.x * FORCA_MOVER_CAIXA, y: pad.leftStick.y * FORCA_MOVER_CAIXA });
+            s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: hX * FORCA_MOVER_CAIXA, y: hY * FORCA_MOVER_CAIXA });
         } 
         else {
-            // SE SOLTA NO AR: FORÇA DE TRANSMISSÃO LINEAR É EXATAMENTE ZERO!
-            // Em vez de empurrar linearmente, posicionamos a luva de forma cinemática orbital ao redor do corpo baseado na direção do stick
-            let anguloAnalogo = Math.atan2(pad.leftStick.y, pad.leftStick.x);
-            let raioBraçoAlvo = 75; // Distância confortável de órbita
-            let posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * raioBraçoAlvo;
-            let posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * raioBraçoAlvo;
+            // MÃO LIVRE: Se passar da zona morta de 15%, grava o novo ângulo. Se soltar, mantém o anterior!
+            if (distAnalogoSq > 0.15 * 0.15) {
+                p.anguloAlvoEsq = Math.atan2(hY, hX);
+                p.forcaAtracaoEsq = 0.25; // Força ativa esticada para mirar
+            } else {
+                p.forcaAtracaoEsq = 0.04; // Força reduzida para dar flacidez natural ao soltar o direcional
+            }
             
-            // Move a mão suavemente via velocidade em direção à órbita do analógico, sem gerar empuxo linear no corpo!
-            s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x) * 0.25, y: (posYAlvo - p.leftHand.position.y) * 0.25 });
+            let posXAlvo = p.body.position.x + Math.cos(p.anguloAlvoEsq) * RAIO_ORBITA_BRACO;
+            let posYAlvo = p.body.position.y + Math.sin(p.anguloAlvoEsq) * RAIO_ORBITA_BRACO;
+            
+            // Atração orbital suave via velocidade nativa que zera voos e preserva a última posição estável
+            s.matter.body.setVelocity(p.leftHand, { 
+                x: (posXAlvo - p.leftHand.position.x) * p.forcaAtracaoEsq, 
+                y: (posYAlvo - p.leftHand.position.y) * p.forcaAtracaoEsq 
+            });
         }
     }
     
@@ -498,19 +507,31 @@ function handlePlayerInput(s, p) {
     let segurandoManuseavelDir = p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel === true;
     
     if (pad.rightStick) {
+        let hX = pad.rightStick.x;
+        let hY = pad.rightStick.y;
+        let distAnalogoSq = hX*hX + hY*hY;
+        
         if (segurandoNaoManuseavelDir) {
-            s.matter.body.applyForce(p.body, p.body.position, { x: pad.rightStick.x * FORCA_ESCALADA_CENARIO, y: pad.rightStick.y * FORCA_ESCALADA_CENARIO });
+            s.matter.body.applyForce(p.body, p.body.position, { x: hX * FORCA_ESCALADA_CENARIO, y: hY * FORCA_ESCALADA_CENARIO });
         } 
         else if (segurandoManuseavelDir) {
-            s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: pad.rightStick.x * FORCA_MOVER_CAIXA, y: pad.rightStick.y * FORCA_MOVER_CAIXA });
+            s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: hX * FORCA_MOVER_CAIXA, y: hY * FORCA_MOVER_CAIXA });
         } 
         else {
-            let anguloAnalogo = Math.atan2(pad.rightStick.y, pad.rightStick.x);
-            let raioBraçoAlvo = 75;
-            let posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * raioBraçoAlvo;
-            let posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * raioBraçoAlvo;
+            if (distAnalogoSq > 0.15 * 0.15) {
+                p.anguloAlvoDir = Math.atan2(hY, hX);
+                p.forcaAtracaoDir = 0.25;
+            } else {
+                p.forcaAtracaoDir = 0.04;
+            }
             
-            s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x) * 0.25, y: (posYAlvo - p.rightHand.position.y) * 0.25 });
+            let posXAlvo = p.body.position.x + Math.cos(p.anguloAlvoDir) * RAIO_ORBITA_BRACO;
+            let posYAlvo = p.body.position.y + Math.sin(p.anguloAlvoDir) * RAIO_ORBITA_BRACO;
+            
+            s.matter.body.setVelocity(p.rightHand, { 
+                x: (posXAlvo - p.rightHand.position.x) * p.forcaAtracaoDir, 
+                y: (posYAlvo - p.rightHand.position.y) * p.forcaAtracaoDir 
+            });
         }
     }
     
@@ -538,7 +559,11 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     lH.corpoTocadoAgora = null; lH.pontoDeContatoGlobal = null; rH.corpoTocadoAgora = null; rH.pontoDeContatoGlobal = null;
     b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
-    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
+    
+    // Inicialização dos vetores estáveis de memória dos braços (Esquerdo aponta para a esquerda, Direito para a direita)
+    let charObj = { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
+    charObj.anguloAlvoEsq = Math.PI; charObj.anguloAlvoDir = 0; charObj.forcaAtracaoEsq = 0.04; charObj.forcaAtracaoDir = 0.04;
+    return charObj;
 }
 
 function executarRespawnIndividual(scene, pNum) {
@@ -608,6 +633,13 @@ function update() {
                 }
             }
         });
+        
+        if (p.leftJoint && p.rightJoint && p.leftJointTarget === p.rightJointTarget) {
+            let objB = p.leftJointTarget;
+            if (!objB.isStatic && !objB.label?.startsWith('p0_') && !objB.label?.startsWith('p1_')) {
+                // Amortecimento inercial padrão do motor Matter nativo
+            }
+        }
         
         let distEsqSq = (p.leftHand.position.x - p.body.position.x)**2 + (p.leftHand.position.y - p.body.position.y)**2;
         let distDirSq = (p.rightHand.position.x - p.body.position.x)**2 + (p.rightHand.position.y - p.body.position.y)**2;
