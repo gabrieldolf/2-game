@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Vetores de Braço Livres e Firmes</title>
+    <title>Heave Ho - Massa Base Pesada Estabilizada</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -449,7 +449,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// CORREÇÃO CIRÚRGICA: Força 100% ativa para mover, erguer e rotacionar as mãos no ar. O motor filtra apenas o empuxo contínuo contra o corpo.
+// SOLUÇÃO REALISTA DO VOO: O corpo nasce e permanece pesadíssimo (25.0 kg). Bater as mãos soltas no ar não gera empuxo suficiente para erguer o chumbo.
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -458,10 +458,13 @@ function handlePlayerInput(s, p) {
     
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     
-    if (p.body.mass !== 6.8) { s.matter.body.setMass(p.body, 6.8); }
+    // ANCORA DE PESO FIXED DESDE O INICIO: Corpo central rígido pesado em 25.0 kg impede flutuação de braço
+    if (p.body.mass !== 25.0) { s.matter.body.setMass(p.body, 25.0); }
+    
+    // Força nominal padrão e limpa mantida nas extremidades para controle 360 fluido
     const FORCA_NOMINAL_MAOS = 0.038; 
     
-    // CONTROLADOR CONTEXTUAL - MÃO ESQUERDA
+    // PROCESSAMENTO DA MÃO ESQUERDA
     if (pad.leftStick) {
         let fX = pad.leftStick.x * FORCA_NOMINAL_MAOS;
         let fY = pad.leftStick.y * FORCA_NOMINAL_MAOS;
@@ -470,30 +473,20 @@ function handlePlayerInput(s, p) {
         let segurandoManuseavel = p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel === true;
         
         if (segurandoNaoManuseavel) {
-            // Cenário Fixo: Aplica força diretamente no corpo central para escalada firme
-            s.matter.body.applyForce(p.body, p.body.position, { x: fX * 1.2, y: fY * 1.2 });
+            // Se grudado no cenário fixo, o analógico muda de foco e empurra o corpo (ganha força de alavanca 1.5x para içar os 25kg)
+            s.matter.body.applyForce(p.body, p.body.position, { x: fX * 1.5, y: fY * 1.5 });
         } 
         else if (segurandoManuseavel) {
-            // Bloco Manuseável móvel: Move a mão e arrasta o item dinamicamente
+            // Se segurando caixa móvel, move a mão e o objeto livremente no espaço
             s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fX, y: fY });
         } 
         else {
-            // FIX DEFINITIVO MÃO SOLTA: Calcula o vetor atual do braço (do corpo até a luva)
-            let bX = p.leftHand.position.x - p.body.position.x;
-            let bY = p.leftHand.position.y - p.body.position.y;
-            let distEsq = Math.sqrt(bX*bX + bY*bY);
-            
-            if (distEsq > 115) {
-                // Se o braço já estiver esticado e você continuar forçando na mesma direção externa, amortece apenas o empuxo residual do Ragdoll
-                let produtoEscalar = (bX * pad.leftStick.x + bY * pad.leftStick.y) / distEsq;
-                if (produtoEscalar > 0.3) { fX *= 0.1; fY *= 0.1; }
-            }
-            // Força 100% livre e forte mantida para levantar, girar e apontar a luva no espaço!
+            // Mão solta no ar: Força 100% pura para mover e rotacionar os braços livremente sem restrições ou molezas!
             s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fX, y: fY });
         }
     }
     
-    // CONTROLADOR CONTEXTUAL - MÃO DIREITA
+    // PROCESSAMENTO DA MÃO DIREITA
     if (pad.rightStick) {
         let fX = pad.rightStick.x * FORCA_NOMINAL_MAOS;
         let fY = pad.rightStick.y * FORCA_NOMINAL_MAOS;
@@ -502,20 +495,12 @@ function handlePlayerInput(s, p) {
         let segurandoManuseavel = p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel === true;
         
         if (segurandoNaoManuseavel) {
-            s.matter.body.applyForce(p.body, p.body.position, { x: fX * 1.2, y: fY * 1.2 });
+            s.matter.body.applyForce(p.body, p.body.position, { x: fX * 1.5, y: fY * 1.5 });
         } 
         else if (segurandoManuseavel) {
             s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fX, y: fY });
         } 
         else {
-            let bX = p.rightHand.position.x - p.body.position.x;
-            let bY = p.rightHand.position.y - p.body.position.y;
-            let distDir = Math.sqrt(bX*bX + bY*bY);
-            
-            if (distDir > 115) {
-                let produtoEscalar = (bX * pad.rightStick.x + bY * pad.rightStick.y) / distDir;
-                if (produtoEscalar > 0.3) { fX *= 0.1; fY *= 0.1; }
-            }
             s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fX, y: fY });
         }
     }
