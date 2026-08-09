@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Correção Definitiva de Voo</title>
+    <title>Heave Ho - Vetores de Braço Livres e Firmes</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -449,7 +449,7 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-// SOLUÇÃO ABSOLUTA: Mãos soltas no ar NÃO geram força inercial para arrastar o corpo. O peso do corpo está fixo e equilibrado.
+// CORREÇÃO CIRÚRGICA: Força 100% ativa para mover, erguer e rotacionar as mãos no ar. O motor filtra apenas o empuxo contínuo contra o corpo.
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
@@ -458,7 +458,6 @@ function handlePlayerInput(s, p) {
     
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     
-    // Peso normal fixo e equilibrado do Matter.js
     if (p.body.mass !== 6.8) { s.matter.body.setMass(p.body, 6.8); }
     const FORCA_NOMINAL_MAOS = 0.038; 
     
@@ -471,17 +470,26 @@ function handlePlayerInput(s, p) {
         let segurandoManuseavel = p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel === true;
         
         if (segurandoNaoManuseavel) {
-            // Se grudado na parede/cenário fixo, a força puxa o CORPO (escalada firme)
+            // Cenário Fixo: Aplica força diretamente no corpo central para escalada firme
             s.matter.body.applyForce(p.body, p.body.position, { x: fX * 1.2, y: fY * 1.2 });
         } 
         else if (segurandoManuseavel) {
-            // Se segurando uma caixa manuseável móvel, a força move a MÃO (e a caixa vai junto)
+            // Bloco Manuseável móvel: Move a mão e arrasta o item dinamicamente
             s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fX, y: fY });
         } 
         else {
-            // CORREÇÃO: Se a mão estiver SOLTA no ar, a força do analógico cai 98%. 
-            // Serve apenas para você girar e apontar a luva, sem puxar o Ragdoll ou fazê-lo voar!
-            s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fX * 0.02, y: fY * 0.02 });
+            // FIX DEFINITIVO MÃO SOLTA: Calcula o vetor atual do braço (do corpo até a luva)
+            let bX = p.leftHand.position.x - p.body.position.x;
+            let bY = p.leftHand.position.y - p.body.position.y;
+            let distEsq = Math.sqrt(bX*bX + bY*bY);
+            
+            if (distEsq > 115) {
+                // Se o braço já estiver esticado e você continuar forçando na mesma direção externa, amortece apenas o empuxo residual do Ragdoll
+                let produtoEscalar = (bX * pad.leftStick.x + bY * pad.leftStick.y) / distEsq;
+                if (produtoEscalar > 0.3) { fX *= 0.1; fY *= 0.1; }
+            }
+            // Força 100% livre e forte mantida para levantar, girar e apontar a luva no espaço!
+            s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fX, y: fY });
         }
     }
     
@@ -500,7 +508,15 @@ function handlePlayerInput(s, p) {
             s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fX, y: fY });
         } 
         else {
-            s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fX * 0.02, y: fY * 0.02 });
+            let bX = p.rightHand.position.x - p.body.position.x;
+            let bY = p.rightHand.position.y - p.body.position.y;
+            let distDir = Math.sqrt(bX*bX + bY*bY);
+            
+            if (distDir > 115) {
+                let produtoEscalar = (bX * pad.rightStick.x + bY * pad.rightStick.y) / distDir;
+                if (produtoEscalar > 0.3) { fX *= 0.1; fY *= 0.1; }
+            }
+            s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fX, y: fY });
         }
     }
     
