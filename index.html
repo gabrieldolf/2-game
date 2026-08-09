@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Código Blindado Sem Erros</title>
+    <title>Código Blindado Sem Erros</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -466,26 +466,26 @@ function processarGarra(s, p, h, jKey, grab) {
         let corpoTocado = h.corpoTocadoAgora;
         if (corpoTocado) {
             let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
+            
+            // Guarda as propriedades de colisão se for manuseável
             if (alvoValido.manuseavel === true) {
                 p[jKey + 'SalvaStatic'] = alvoValido.isStatic;
                 p[jKey + 'SalvaFilter'] = JSON.parse(JSON.stringify(alvoValido.collisionFilter));
                 s.matter.body.setStatic(alvoValido, false);
                 alvoValido.ignoreGravity = true;
                 alvoValido.collisionFilter.mask = 0; 
-                let pivotLeve = s.matter.add.circle(h.position.x, h.position.y, 4, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
-                p[jKey] = s.matter.add.constraint(h, pivotLeve, 1, 1.0);
-                p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = pivotLeve;
-                let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
-                let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
-                p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
-            } else {
-                let pivotLeve = s.matter.add.circle(h.position.x, h.position.y, 4, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
-                p[jKey] = s.matter.add.constraint(h, pivotLeve, 1, 0.85);
-                p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = pivotLeve;
-                let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
-                let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
-                p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
             }
+            
+            // Cria um sensor invisível no ponto exato do agarre
+            let pivotLeve = s.matter.add.circle(h.position.x, h.position.y, 4, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
+            p[jKey] = s.matter.add.constraint(h, pivotLeve, 1, 1.0); // Rigidez máxima (1.0) para não esticar
+            p[jKey + 'Target'] = alvoValido; 
+            p[jKey + 'PivotBody'] = pivotLeve;
+            
+            // TRAVA MILIMÉTRICA: Calcula e salva o vetor de distância local relativo à rotação do objeto
+            let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
+            let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
+            p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
         }
     } else if (!grab && p[jKey]) {
         let alvoValido = p[jKey + 'Target'];
@@ -494,10 +494,12 @@ function processarGarra(s, p, h, jKey, grab) {
             if (p[jKey + 'SalvaFilter']) alvoValido.collisionFilter = p[jKey + 'SalvaFilter'];
             s.matter.body.setStatic(alvoValido, p[jKey + 'SalvaStatic'] || false);
         }
-        if (p[jKey]) s.matter.world.remove(p[jKey]); if (p[jKey + 'PivotBody']) s.matter.world.remove(p[jKey + 'PivotBody']);
+        if (p[jKey]) s.matter.world.remove(p[jKey]); 
+        if (p[jKey + 'PivotBody']) s.matter.world.remove(p[jKey + 'PivotBody']);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
+
 function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
     if (!body || !body.position || body.isStatic) return;
     if (body.ultimaPos) {
@@ -668,12 +670,16 @@ function update() {
                 let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
                 
                 if (target.manuseavel === true) {
+                    // Itens manuseáveis são carregados acompanhando a mão
                     sAct.matter.body.setPosition(target, { x: mundoX, y: mundoY });
                     sAct.matter.body.setVelocity(target, { x: 0, y: 0 });
                     sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
                 } else {
+                    // OBJETOS NÃO MANUSEÁVEIS: A mão fica cravada e colada exatamente no ponto do agarre
+                    let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
+                    sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY });
+                    sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y });
                     sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
-                    sAct.matter.body.setVelocity(pivot, { x: target.velocity.x, y: target.velocity.y });
                 }
             }
         });
