@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Conexão Rígida e Massa Inercial</title>
+    <title>Heave Ho - Massa Extrema Contextual</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -317,7 +317,7 @@ function atualizarObjetoExistente() {
             if (corpoFatiaPuro) partesFisicasTriangulares.push(corpoFatiaPuro);
         }
         obj.body = scene.matter.body.create({ parts: partesFisicasTriangulares, isStatic: !c.manuseavel, label: 'ambiente', ignoreGravity: !obj.gravity });
-        scene.matter.world.add(obj.body); scene.matter.body.setPosition(obj.body, { x: px, y: py });
+        scene.matter.world.add(body); scene.matter.body.setPosition(obj.body, { x: px, y: py });
     }
     
     if (obj.body) {
@@ -425,7 +425,6 @@ function processarGarra(s, p, h, jKey, grab, enemy) {
         if (corpoTocado && pontoGlobal) {
             let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
             
-            // REQUISITO: Se for um objeto Manuseável, a mola vira uma conexão rígida indestrutível com rigidez máxima absoluta (1.0)
             let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.85;
             
             let pivotLeveCinematico = s.matter.add.circle(h.position.x, h.position.y, 6, { 
@@ -458,7 +457,7 @@ function handlePlayerInput(s, p) {
     
     if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
     
-    // REQUISITO: Varredura radial estável para verificar se o corpo está apoiado em cenário fixo (Não Manuseável)
+    // REQUISITO: Varredura radial nativa para verificar se o corpo está apoiado em cenário fixo (Não Manuseável)
     let todosCorposMundo = s.matter.world.localWorld.bodies;
     let apoiadoNoCenarioFixo = false;
     for (let i = 0; i < todosCorposMundo.length; i++) {
@@ -471,8 +470,8 @@ function handlePlayerInput(s, p) {
         }
     }
     
-    // REQUISITO: Aumenta em 30% a massa do corpo central (de 6.8 para 8.84) se ele estiver voando/pendurado fora do cenário fixo
-    let massaCalculadaCorpo = apoiadoNoCenarioFixo ? 6.8 : 8.84;
+    // MODIFICAÇÃO SOLICITADA: Contraste radical de peso. Escalada super leve (5.0), voo/pendurado vira chumbo de 25.0 (Aumento de 500%)
+    let massaCalculadaCorpo = apoiadoNoCenarioFixo ? 5.0 : 25.0;
     if (p.body.mass !== massaCalculadaCorpo) { s.matter.body.setMass(p.body, massaCalculadaCorpo); }
     
     const MULT_FORCA_JOGO = 0.038; 
