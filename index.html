@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Base</title>
+    <title>Heave Ho - Versão Limpa sem Partículas</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -82,6 +82,7 @@ let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
 
 function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; }
+// Corrigido para garantir que a atribuição de ferramentas funcione globalmente
 function setFerramenta(f) { ferramentaAtual = f; document.getElementById('btn-create').className = f==='create'?'active':''; document.getElementById('btn-select').className = f==='select'?'active':''; }
 function alternarModoEditor(scene) {
     modoEditorAtivo = !modoEditorAtivo;
@@ -107,13 +108,7 @@ function alternarVisibilidadeGrade() {
     for (let y = 0; y < WORLD_HEIGHT; y += gSize) gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
 }
 function preload() {
-    let canvas = document.createElement('canvas'); canvas.width = 16; canvas.height = 16;
-    let ctx = canvas.getContext('2d');
-    let grad = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
-    grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-    grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(8, 8, 8, 0, Math.PI * 2); ctx.fill();
-    this.textures.addCanvas('spark', canvas);
+    // Mantemos uma função de preload limpa para futuras texturas se necessário
 }
 
 function create() {
@@ -429,7 +424,6 @@ function processarGarra(s, p, h, jKey, grab) {
             let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
             let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.85;
             
-            // Configuração original da resposta: Sensor leve atrelado rigidamente com rigidez máxima
             let pivotLeveCinematico = s.matter.add.circle(h.position.x, h.position.y, 6, { 
                 isStatic: false, isSensor: true, ignoreGravity: true, mass: 0, visible: false
             });
@@ -438,7 +432,7 @@ function processarGarra(s, p, h, jKey, grab) {
             p[jKey + 'Target'] = alvoValido;
             p[jKey + 'PivotBody'] = pivotLeveCinematico;
             
-            // CÁLCULO REQUISITADO: Armazena o deslocamento local angular exato no momento em que tocou o bloco
+            // TRAVA MILIMÉTRICA CONSOLIDADA: Salva o vetor local exato relativo ao ângulo do bloco no clique
             let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
             let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
             p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
@@ -489,7 +483,9 @@ function handlePlayerInput(s, p) {
     let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.15*0.15);
     let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.15*0.15);
     
-    // CONTROLADOR DE VELOCIDADE ORBITAL: MÃO ESQUERDA (Com abertura anatômica automática se solto)
+    // REQUISITO EXIGIDO ANTERIORMENTE: Remoção total de fumaça, peidos ou injeções de partículas
+    
+    // MÃO ESQUERDA
     let segurandoNaoManuseavelEsq = p.leftJoint && p.leftJointTarget && (p.leftJointTarget.manuseavel === false || p.leftJointTarget.isStatic);
     let segurandoManuseavelEsq = p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel === true;
     
@@ -507,7 +503,7 @@ function handlePlayerInput(s, p) {
         s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x) * 0.22, y: (posYAlvo - p.leftHand.position.y) * 0.22 });
     }
     
-    // CONTROLADOR DE VELOCIDADE ORBITAL: MÃO DIREITA
+    // MÃO DIREITA
     let segurandoNaoManuseavelDir = p.rightJoint && p.rightJointTarget && (p.rightJointTarget.manuseavel === false || p.rightJointTarget.isStatic);
     let segurandoManuseavelDir = p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel === true;
     
@@ -549,7 +545,7 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
     
-    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null }; // Removido o particleEmitter do retorno
+    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
 }
 
 function executarRespawnIndividual(scene, pNum) {
@@ -558,7 +554,6 @@ function executarRespawnIndividual(scene, pNum) {
     if (p.leftJoint) { scene.matter.world.remove(p.leftJoint); if (p.leftJointPivotBody) scene.matter.world.remove(p.leftJointPivotBody); }
     if (p.rightJoint) { scene.matter.world.remove(p.rightJoint); if (p.rightJointPivotBody) scene.matter.world.remove(p.rightJointPivotBody); }
     p.leftJoint = null; p.rightJoint = null;
-    if (p.particleEmitter) { p.particleEmitter.destroy(); } 
     for (let i = cList.length - 1; i >= 0; i--) { 
         let c = cList[i]; 
         if (c && ((c.bodyA?.label?.includes(pref)) || (c.bodyB?.label?.includes(pref)))) scene.matter.world.remove(c); 
@@ -608,7 +603,7 @@ function update() {
                     sAct.matter.body.setVelocity(target, { x: 0, y: 0 });
                     sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
                 } else {
-                    // IMPLEMENTAÇÃO ORIGINAL: Força estritamente a luva na coordenada calculada pelo LocalOffset
+                    // TRAVA MILIMÉTRICA CONSOLIDADA: Força estritamente as luvas nas coordenadas calculadas pelo LocalOffset
                     let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
                     sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY });
                     sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y });
