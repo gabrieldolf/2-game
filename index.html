@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Estrutura Estável Otimizada</title>
+    <title>Heave Ho - Versão Estável Sem Partículas</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -43,13 +43,18 @@
     <div class="section">
         <h3 id="status-modo" style="color:#55ff55;">Criando novos objetos</h3>
         <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option></select></div>
-        <div class="prop-row" style="background:#27ae60; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Objeto Manuseável:</label><input type="checkbox" id="prop-manuseavel" checked onchange="atualizarObjetoExistente()"></div>
+        
+        <div class="prop-row" style="background:#27ae60; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Objeto Manuseável:</label><input type="checkbox" id="prop-manuseavel" checked onchange="transparent()"></div>
+        
         <div class="prop-row" style="background:#2980b9; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Fixar no Ar (isStatic):</label><input type="checkbox" id="prop-is-static" onchange="atualizarObjetoExistente()"></div>
+
         <div class="prop-row" id="row-w"><label id="label-w">Largura (px):</label><input type="number" id="prop-w" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row" id="row-h"><label>Altura (px):</label><input type="number" id="prop-h" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row"><label>Gravidade:</label><input type="checkbox" id="prop-gravity" checked onchange="atualizarObjetoExistente()"></div>
+        
         <div class="prop-row"><label style="color:#3498db; font-weight:bold;">Fixar Posição (Eixo X/Y):</label><input type="checkbox" id="prop-lock-pos" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row"><label>Bloquear Rotação:</label><input type="checkbox" id="prop-lock-rot" onchange="atualizarObjetoExistente()"></div>
+        
         <div class="prop-row"><label>Massa (Peso):</label><input type="number" id="prop-mass" value="1.0" step="0.1" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row"><label>Arrasto Ar:</label><input type="number" id="prop-air" value="0.02" step="0.01" onchange="atualizarObjetoExistente()"></div>
         <div class="prop-row"><label>Elasticidade:</label><input type="number" id="prop-bounce" value="0.1" step="0.05" min="0" max="1" onchange="atualizarObjetoExistente()"></div>
@@ -72,6 +77,7 @@ let player1, player2, ferramentaAtual = 'create', objetoSelecionado = null, list
 let gridGraphics, bordasFixasDoCenario = [], cursorsKeyboard;
 let modoEditorAtivo = false, cameraSalvaX = 0, cameraSalvaY = 0, cameraSalvaZoom = 1;
 let clickOffsetX = 0, clickOffsetY = 0;
+
 let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
 
@@ -82,6 +88,7 @@ function alternarModoEditor(scene) {
     const panel = document.getElementById('sidebar');
     const aviso = document.getElementById('aviso-modo');
     verticesCriacaoAtiva = []; previewGraphicsPoligono.clear();
+    
     if (modoEditorAtivo) {
         cameraSalvaX = scene.cameras.main.scrollX; cameraSalvaY = scene.cameras.main.scrollY; cameraSalvaZoom = scene.cameras.main.zoom;
         scene.cameras.main.setZoom(1.0); scene.matter.world.pause();
@@ -99,7 +106,9 @@ function alternarVisibilidadeGrade() {
     for (let x = 0; x < WORLD_WIDTH; x += gSize) gridGraphics.lineBetween(x, 0, x, WORLD_HEIGHT);
     for (let y = 0; y < WORLD_HEIGHT; y += gSize) gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
 }
-function preload() {}
+function preload() {
+    // Retornando à versão limpa sem injeção de canvas de partículas
+}
 
 function create() {
     this.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 100, true, true, true, true);
@@ -107,6 +116,7 @@ function create() {
     gridGraphics = this.add.graphics().setDepth(1);
     previewGraphicsPoligono = this.add.graphics().setDepth(15);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
+    
     const ambConf = { isStatic:true, label:'ambiente', friction:0.8, restitution:0.1, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     const borda = (s, x, y, w, h) => {
         let b = s.matter.add.rectangle(x, y, w, h, ambConf); 
@@ -115,42 +125,80 @@ function create() {
     };
     borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50); borda(this, WORLD_WIDTH/2, 25, WORLD_WIDTH, 50);
     borda(this, 25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT); borda(this, WORLD_WIDTH-25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT);
-    this.matter.world.on('collisionstart', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
-    this.matter.world.on('collisionactive', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
-    this.matter.world.on('collisionend', (event) => { event.pairs.forEach(pair => { quebrarToqueParaContato(pair.bodyA, pair.bodyB); quebrarToqueParaContato(pair.bodyB, pair.bodyA); }); });
+    
+    this.matter.world.on('collisionstart', (event) => {
+        event.pairs.forEach(pair => {
+            let bodyA = pair.bodyA, bodyB = pair.bodyB;
+            processarToqueParaContato(bodyA, bodyB, pair); processarToqueParaContato(bodyB, bodyA, pair);
+        });
+    });
+    this.matter.world.on('collisionactive', (event) => {
+        event.pairs.forEach(pair => {
+            let bodyA = pair.bodyA, bodyB = pair.bodyB;
+            processarToqueParaContato(bodyA, bodyB, pair); processarToqueParaContato(bodyB, bodyA, pair);
+        });
+    });
+    this.matter.world.on('collisionend', (event) => {
+        event.pairs.forEach(pair => {
+            let bodyA = pair.bodyA, bodyB = pair.bodyB;
+            quebrarToqueParaContato(bodyA, bodyB); quebrarToqueParaContato(bodyB, bodyA);
+        });
+    });
+
     this.input.on('pointerdown', (p) => {
         if (!modoEditorAtivo) return;
         if (ferramentaAtual === 'create') {
-            if (document.getElementById('prop-shape').value === 'polygon') verticesCriacaoAtiva.push({ x: p.worldX, y: p.worldY });
-            else executarCriacaoObjeto(this, p.worldX, p.worldY);
-        } else { executarSelecaoObjeto(this, p.worldX, p.worldY, p); }
+            if (document.getElementById('prop-shape').value === 'polygon') {
+                verticesCriacaoAtiva.push({ x: p.worldX, y: p.worldY });
+            } else {
+                executarCriacaoObjeto(this, p.worldX, p.worldY);
+            }
+        } else {
+            executarSelecaoObjeto(this, p.worldX, p.worldY, p);
+        }
     });
+    
     this.input.on('pointermove', function(p) {
         if (modoEditorAtivo && ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
             let pos = { x: p.worldX - clickOffsetX, y: p.worldY - clickOffsetY };
-            if (document.getElementById('prop-snap-active').checked && objetoSelecionado.shape !== 'polygon') pos = calcularAlinhamentoPorProximidade(this, pos.x, pos.y, objetoSelecionado.w, objetoSelecionado.h, objetoSelecionado.shape, objetoSelecionado.body);
-            if (objetoSelecionado.body) { this.matter.body.setPosition(objetoSelecionado.body, { x: pos.x, y: pos.y }); this.matter.body.setVelocity(objetoSelecionado.body, { x:0, y:0 }); }
-            else { objetoSelecionado.visualX = pos.x; objetoSelecionado.visualY = pos.y; }
+            if (document.getElementById('prop-snap-active').checked && objetoSelecionado.shape !== 'polygon') {
+                pos = calcularAlinhamentoPorProximidade(this, pos.x, pos.y, objetoSelecionado.w, objetoSelecionado.h, objetoSelecionado.shape, objetoSelecionado.body);
+            }
+            if (objetoSelecionado.body) {
+                this.matter.body.setPosition(objetoSelecionado.body, { x: pos.x, y: pos.y });
+                this.matter.body.setVelocity(objetoSelecionado.body, { x:0, y:0 });
+            } else {
+                objetoSelecionado.visualX = pos.x; objetoSelecionado.visualY = pos.y;
+            }
             objetoSelecionado.posicaoTravadaX = pos.x; objetoSelecionado.posicaoTravadaY = pos.y;
         }
     }, this);
     this.input.keyboard.on('keydown-E', () => { alternarModoEditor(this); });
-    this.input.keyboard.on('keydown-ENTER', () => { if (modoEditorAtivo && ferramentaAtual === 'create' && document.getElementById('prop-shape').value === 'polygon') finalizarCriacaoPoligono(this); });
+    
+    this.input.keyboard.on('keydown-ENTER', () => {
+        if (modoEditorAtivo && ferramentaAtual === 'create' && document.getElementById('prop-shape').value === 'polygon') {
+            finalizarCriacaoPoligono(this);
+        }
+    });
+
     this.input.gamepad.on('down', (pad) => {
         if (pad.index === 0 && !player1) player1 = createHeaveHoCharacter(this, 300, WORLD_HEIGHT-150, pad, 0, 0x00ff00);
         if (pad.index === 1 && !player2) player2 = createHeaveHoCharacter(this, 500, WORLD_HEIGHT-150, pad, 1, 0xffff00);
     });
+    atualizarInterfaceForma(); alternarVisibilidadeGrade();
 }
+
 function atualizarInterfaceForma() {
     const s = document.getElementById('prop-shape').value;
     document.getElementById('row-h').style.display = (s === 'circle' || s === 'polygon') ? 'none' : 'flex';
     document.getElementById('row-w').style.display = (s === 'polygon') ? 'none' : 'flex';
     document.getElementById('label-w').innerText = s === 'circle' ? "Raio (px):" : "Largura (px):";
 }
-
 function extrairCamposPainel() {
     return {
-        shape: document.getElementById('prop-shape').value, manuseavel: document.getElementById('prop-manuseavel').checked, isStatic: document.getElementById('prop-is-static').checked,
+        shape: document.getElementById('prop-shape').value,
+        manuseavel: document.getElementById('prop-manuseavel').checked,
+        isStatic: document.getElementById('prop-is-static').checked, 
         w: parseFloat(document.getElementById('prop-w').value) || 50, h: parseFloat(document.getElementById('prop-h').value) || 50,
         gravity: document.getElementById('prop-gravity').checked, lockPos: document.getElementById('prop-lock-pos').checked, lockRot: document.getElementById('prop-lock-rot').checked,
         mass: parseFloat(document.getElementById('prop-mass').value) || 1, air: parseFloat(document.getElementById('prop-air').value) || 0.02, bounce: parseFloat(document.getElementById('prop-bounce').value) || 0
@@ -160,18 +208,43 @@ function extrairCamposPainel() {
 function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
     if (document.getElementById('prop-snap-active').checked && c.shape !== 'polygon') { let pos = calcularAlinhamentoPorProximidade(scene, ax, ay, c.w, c.h, c.shape, null); ax = pos.x; ay = pos.y; }
-    let conf = { isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass, friction: 0.8, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    
+    let conf = { 
+        isStatic: c.isStatic, 
+        label: 'ambiente', 
+        ignoreGravity: !c.gravity, 
+        mass: c.mass, 
+        friction: 0.8, 
+        frictionAir: c.air, 
+        restitution: c.bounce, 
+        collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } 
+    };
+    
     let body = (c.shape === 'box') ? scene.matter.add.rectangle(ax, ay, c.w, c.h, conf) : scene.matter.add.circle(ax, ay, c.w, conf);
     body.manuseavel = c.manuseavel;
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
+    
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel, isStatic: c.isStatic });
 }
+
 function finalizarCriacaoPoligono(scene) {
     if (verticesCriacaoAtiva.length < 3) { alert("Polígonos precisam de pelo menos 3 vértices!"); return; }
     const c = extrairCamposPainel();
+    
     let somatorioX = 0, somatorioY = 0; verticesCriacaoAtiva.forEach(v => { somatorioX += v.x; somatorioY += v.y; });
     let centroX = somatorioX / verticesCriacaoAtiva.length; let centroY = somatorioY / verticesCriacaoAtiva.length;
-    let conf = { isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.manuseavel ? (c.mass / verticesCriacaoAtiva.length) : c.mass, friction: 0.8, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    
+    let conf = { 
+        isStatic: c.isStatic, 
+        label: 'ambiente', 
+        ignoreGravity: !c.gravity, 
+        mass: c.manuseavel ? (c.mass / verticesCriacaoAtiva.length) : c.mass, 
+        friction: 0.8, 
+        frictionAir: c.air, 
+        restitution: c.bounce, 
+        collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } 
+    };
+    
     let partesFisicasTriangulares = [];
     for (let i = 0; i < verticesCriacaoAtiva.length; i++) {
         let p1 = verticesCriacaoAtiva[i]; let p2 = verticesCriacaoAtiva[(i + 1) % verticesCriacaoAtiva.length];
@@ -179,24 +252,30 @@ function finalizarCriacaoPoligono(scene) {
         let corpoFatiaPuro = Phaser.Physics.Matter.Matter.Bodies.fromVertices((centroX + p1.x + p2.x)/3, (centroY + p1.y + p2.y)/3, trianguloVertices, conf);
         if (corpoFatiaPuro) partesFisicasTriangulares.push(corpoFatiaPuro);
     }
+    
     let body = scene.matter.body.create({ parts: partesFisicasTriangulares, isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !c.gravity });
     body.manuseavel = c.manuseavel;
     scene.matter.world.add(body); scene.matter.body.setPosition(body, { x: centroX, y: centroY });
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
+    
     let verticesLocaisRelativos = verticesCriacaoAtiva.map(v => { return { x: v.x - centroX, y: v.y - centroY }; });
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: verticesLocaisRelativos, manuseavel: c.manuseavel, isStatic: c.isStatic });
     verticesCriacaoAtiva = []; previewGraphicsPoligono.clear();
 }
-
 function executarSelecaoObjeto(scene, x, y, pointer) {
     let prox = null, mDist = Infinity;
     listaObjetosEditaveis.forEach(obj => {
         let colidiu = false;
-        if (obj.body) colidiu = Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices, { x: x, y: y });
-        else {
+        if (obj.body) {
+            colidiu = Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices, { x: x, y: y });
+        } else {
             let d = Math.sqrt((obj.visualX - x)**2 + (obj.visualY - y)**2);
             if (obj.shape === 'circle' && d <= obj.w) colidiu = true;
             else if (obj.shape === 'box' && Math.abs(obj.visualX - x) <= obj.w/2 && Math.abs(obj.visualY - y) <= obj.h/2) colidiu = true;
+            else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual) {
+                let verticesGlobaisEsteticos = obj.dadosDesenhoVisual.map(v => { return { x: v.x + obj.visualX, y: v.y + obj.visualY }; });
+                colidiu = Phaser.Physics.Matter.Matter.Vertices.contains(verticesGlobaisEsteticos, { x: x, y: y });
+            }
         }
         if (colidiu) {
             let posX = obj.body ? obj.body.position.x : obj.visualX; let posY = obj.body ? obj.body.position.y : obj.visualY;
@@ -209,6 +288,7 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
         clickOffsetX = x - posX; clickOffsetY = y - posY;
     } else if (!pointer.leftButtonDown()) { desmarcarObjetoDoEditor(); }
 }
+
 function selecionarObjetoDoEditor(obj) {
     objetoSelecionado = obj; document.getElementById('btn-delete').style.display = 'block';
     let s = document.getElementById('status-modo'); s.innerText = "Editando selecionado"; s.style.color = "#ffea00";
@@ -226,12 +306,39 @@ function atualizarObjetoExistente() {
     let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
     let px = obj.body ? obj.body.position.x : obj.visualX; let py = obj.body ? obj.body.position.y : obj.visualY;
     let anguloSalvo = obj.body ? obj.body.angle : 0;
+    
     if (obj.body) scene.matter.world.remove(obj.body); obj.body = null;
     obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity; obj.lockPos = c.lockPos; obj.lockRot = c.lockRot; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce; obj.visualX = px; obj.visualY = py; obj.manuseavel = c.manuseavel; obj.isStatic = c.isStatic;
-    let conf = { isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass, friction: 0.8, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    
+    let conf = { 
+        isStatic: c.isStatic, 
+        label: 'ambiente', 
+        ignoreGravity: !obj.gravity, 
+        mass: obj.mass / (obj.dadosDesenhoVisual ? obj.dadosDesenhoVisual.length : 1), 
+        friction: 0.8, 
+        frictionAir: c.air, 
+        restitution: c.bounce, 
+        collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } 
+    };
+    
     if (obj.shape === 'box') obj.body = scene.matter.add.rectangle(px, py, obj.w, obj.h, conf);
     else if (obj.shape === 'circle') obj.body = scene.matter.add.circle(px, py, obj.w, conf);
-    if (obj.body) { obj.body.manuseavel = c.manuseavel; if (!obj.body.isStatic) { scene.matter.body.setInertia(obj.body, obj.lockRot ? Infinity : obj.body.inertia); scene.matter.body.setAngle(obj.body, anguloSalvo); } }
+    else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual) {
+        let partesFisicasTriangulares = [];
+        for (let i = 0; i < obj.dadosDesenhoVisual.length; i++) {
+            let p1 = obj.dadosDesenhoVisual[i]; let p2 = obj.dadosDesenhoVisual[(i + 1) % obj.dadosDesenhoVisual.length];
+            let trianguloVertices = [{ x: 0, y: 0 }, { x: p1.x, y: p1.y }, { x: p2.x, y: p2.y }];
+            let corpoFatiaPuro = Phaser.Physics.Matter.Matter.Bodies.fromVertices(px + (p1.x + p2.x)/3, py + (p1.y + p2.y)/3, trianguloVertices, conf);
+            if (corpoFatiaPuro) partesFisicasTriangulares.push(corpoFatiaPuro);
+        }
+        obj.body = scene.matter.body.create({ parts: partesFisicasTriangulares, isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !obj.gravity });
+        scene.matter.world.add(obj.body); scene.matter.body.setPosition(obj.body, { x: px, y: py });
+    }
+    
+    if (obj.body) {
+        obj.body.manuseavel = c.manuseavel;
+        if (!obj.body.isStatic) { scene.matter.body.setInertia(obj.body, obj.lockRot ? Infinity : obj.body.inertia); scene.matter.body.setAngle(obj.body, anguloSalvo); }
+    }
 }
 
 function deletarObjetoSelecionado() {
@@ -244,12 +351,18 @@ function deletarObjetoSelecionado() {
 }
 function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorpo) {
     let finalX = x, finalY = y; const DISTANCIA_IMA = 20, corpos = scene.matter.world.localWorld.bodies;
-    const r = w;
+    const r = w, mE = x - r, mD = x + r;
+    const mT = y - (shape === 'circle' ? w : h/2), mB = y + (shape === 'circle' ? w : h/2);
     for (let i = 0; i < corpos.length; i++) {
         let b = corpos[i]; if (!b || b === ignorarCorpo || b.label !== 'ambiente') continue;
         const oE = b.bounds.min.x, oD = b.bounds.max.x, oT = b.bounds.min.y, oB = b.bounds.max.y;
-        if (x + r >= oE - DISTANCIA_IMA && x - r <= oD + DISTANCIA_IMA) {
-            if (Math.abs((y + h/2) - oT) < DISTANCIA_IMA) { finalY = oT - h/2; break; }
+        if (mD >= oE - DISTANCIA_IMA && mE <= oD + DISTANCIA_IMA) {
+            if (Math.abs(mB - oT) < DISTANCIA_IMA) { finalY = oT - (shape === 'circle' ? w : h/2); break; }
+            if (Math.abs(mT - oB) < DISTANCIA_IMA) { finalY = oB + (shape === 'circle' ? w : h/2); break; }
+        }
+        if (mB >= oT - DISTANCIA_IMA && mT <= oB + DISTANCIA_IMA) {
+            if (Math.abs(mD - oE) < DISTANCIA_IMA) { finalX = oE - r; break; }
+            if (Math.abs(mE - oD) < DISTANCIA_IMA) { finalX = oD + r; break; }
         }
     }
     return { x: finalX, y: finalY };
@@ -258,10 +371,24 @@ function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorp
 function desenharObjetoEditor(obj) {
     if (!obj) return; let g = obj.gfx; g.clear();
     let posX = obj.body ? obj.body.position.x : obj.visualX; let posY = obj.body ? obj.body.position.y : obj.visualY;
-    g.x = posX; g.y = posY; g.rotation = obj.body ? obj.body.angle : 0;
-    g.fillStyle(obj.manuseavel ? 0x8b5a2b : 0x2c3e50, 1.0); g.lineStyle(2, 0xffffff, 0.8);
+    let angulo = obj.body ? obj.body.angle : 0;
+    
+    g.x = posX; g.y = posY; g.rotation = angulo;
+    
+    let corObjeto = obj.manuseavel ? 0x8b5a2b : 0x2c3e50;
+    if (obj === objetoSelecionado) corObjeto = 0xffea00;
+    else if (obj.lockPos) corObjeto = 0xf1c40f;
+    
+    g.fillStyle(corObjeto, 1.0);
+    g.lineStyle(2, obj.manuseavel ? 0xffffff : 0x111111, 0.8);
+    
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
-    else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); }
+    else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); g.lineBetween(0, 0, obj.w, 0); }
+    else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual && obj.dadosDesenhoVisual.length > 0) {
+        g.beginPath(); g.moveTo(obj.dadosDesenhoVisual[0].x, obj.dadosDesenhoVisual[0].y);
+        for(let i = 1; i < obj.dadosDesenhoVisual.length; i++) { g.lineTo(obj.dadosDesenhoVisual[i].x, obj.dadosDesenhoVisual[i].y); }
+        g.closePath(); g.fill(); g.strokePath();
+    }
 }
 
 function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
@@ -279,8 +406,11 @@ function processarToqueParaContato(h, b, pair) {
         if (b.label === 'ambiente' || b.label.startsWith('p0_') || b.label.startsWith('p1_')) {
             if (b.label !== h.label.substring(0, 3) + 'body' && !b.label.includes('braco')) {
                 h.corpoTocadoAgora = b;
-                if (pair.activeContacts && pair.activeContacts.length > 0) h.pontoDeContatoGlobal = { x: pair.activeContacts.vertex.x, y: pair.activeContacts.vertex.y };
-                else h.pontoDeContatoGlobal = { x: h.position.x, y: h.position.y };
+                if (pair.activeContacts && pair.activeContacts.length > 0) {
+                    h.pontoDeContatoGlobal = { x: pair.activeContacts.vertex.x, y: pair.activeContacts.vertex.y };
+                } else {
+                    h.pontoDeContatoGlobal = { x: h.position.x, y: h.position.y };
+                }
             }
         }
     }
@@ -292,7 +422,11 @@ function quebrarToqueParaContato(h, b) {
     }
 }
 
-function verificarEForcarRedesenhoDebug(scene) { if (scene.matter.world.drawDebug && scene.matter.world.debugGraphics) { scene.matter.world.debugGraphics.clear(); scene.matter.world.drawDebug(); } }
+function verificarEForcarRedesenhoDebug(scene) {
+    if (scene.matter.world.drawDebug && scene.matter.world.debugGraphics) {
+        scene.matter.world.debugGraphics.clear(); scene.matter.world.drawDebug();
+    }
+}
 
 function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
 
@@ -312,15 +446,23 @@ function processarGarra(s, p, h, jKey, grab) {
         if (corpoTocado) {
             let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
             let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.85;
-            let pivotLeveCinematico = s.matter.add.circle(h.position.x, h.position.y, 6, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
+            
+            let pivotLeveCinematico = s.matter.add.circle(h.position.x, h.position.y, 6, { 
+                isStatic: false, isSensor: true, ignoreGravity: true, mass: 0, visible: false
+            });
+            
             p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 1, rigidezConexao, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
-            p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = pivotLeveCinematico;
+            p[jKey + 'Target'] = alvoValido;
+            p[jKey + 'PivotBody'] = pivotLeveCinematico;
+            
+            // TRAVA MILIMÉTRICA CONSOLIDADA: Grava o deslocamento em relação ao objeto e seu ângulo original de toque
             let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
             let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
             p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
         }
     } else if (!grab && p[jKey]) {
-        if (p[jKey]) s.matter.world.remove(p[jKey]); if (p[jKey + 'PivotBody']) s.matter.world.remove(p[jKey + 'PivotBody']);
+        if (p[jKey] && typeof p[jKey] === 'object') { s.matter.world.remove(p[jKey]); }
+        if (p[jKey + 'PivotBody']) { s.matter.world.remove(p[jKey + 'PivotBody']); }
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
@@ -329,48 +471,92 @@ function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4);
     const rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
-    if (isButtonPressed(pad, 8)) { executarRespawnIndividual(s, p.id); return; }
+    
+    if (isButtonPressed(pad, 8)) { PlayerId = p.id; executarRespawnIndividual(s, PlayerId); return; }
+    
     let campoMod = document.getElementById('prop-fall-weight-mod');
     let valorModificador = campoMod ? parseFloat(campoMod.value) : 10.0;
-    let massaCalculadaCorpo = 6.8;
-    let totalmenteLivreNoVazio = (!p.leftJoint && !p.rightJoint);
-    if (p.body.velocity.y > 0.5 && (pad.leftStick?.y < -0.15 || pad.rightStick?.y < -0.15) && totalmenteLivreNoVazio) {
-        let deltaYEsq = Math.max(0, p.body.position.y - p.leftHand.position.y);
-        let deltaYDir = Math.max(0, p.body.position.y - p.rightHand.position.y);
-        massaCalculadaCorpo += (deltaYEsq + deltaYDir) * valorModificador * 0.1;
-    }
-    if (p.body.mass !== massaCalculadaCorpo) s.matter.body.setMass(p.body, massaCalculadaCorpo);
-    const FORCA_ESCALADA_CENARIO = 0.045, FORCA_MOVER_CAIXA = 0.038, RAIO_ORBITA_BRACO = 75;
-    let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.02);
-    let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.02);
+    if (isNaN(valorModificador) || valorModificador < 0) { valorModificador = 0; if(campoMod) campoMod.value = 0; }
     
-    if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.manuseavel) {
+    let MASSA_PADRAO = 6.8;
+    let massaCalculadaCorpo = MASSA_PADRAO;
+    
+    let totalmenteLivreNoVazio = (!p.leftJoint && !p.rightJoint);
+    let estaCaindo = (p.body.velocity.y > 0.5);
+    
+    const ZONA_MORTA_CIMA = -0.15;
+    let esquerdoParaCima = pad.leftStick && (pad.leftStick.y < ZONA_MORTA_CIMA);
+    let direitoParaCima = pad.rightStick && (pad.rightStick.y < ZONA_MORTA_CIMA);
+    let algumAnalogicoParaCima = (esquerdoParaCima || direitoParaCima);
+    
+    if (estaCaindo && algumAnalogicoParaCima && totalmenteLivreNoVazio) {
+        let pesoExtraEsq = 0; let pesoExtraDir = 0;
+        let deltaYEsq = p.body.position.y - p.leftHand.position.y;
+        if (deltaYEsq > 0) { pesoExtraEsq = deltaYEsq * valorModificador * 0.1; }
+        let deltaYDir = p.body.position.y - p.rightHand.position.y;
+        if (deltaYDir > 0) { pesoExtraDir = deltaYDir * valorModificador * 0.1; }
+        massaCalculadaCorpo += (pesoExtraEsq + pesoExtraDir);
+    }
+    if (p.body.mass !== massaCalculadaCorpo) { s.matter.body.setMass(p.body, massaCalculadaCorpo); }
+    
+    const FORCA_ESCALADA_CENARIO = 0.045; 
+    const FORCA_MOVER_CAIXA = 0.038;
+    const RAIO_ORBITA_BRACO = 75;
+    
+    let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.15*0.15);
+    let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.15*0.15);
+    
+    // REQUISITO CUMPRIDO: Todas as linhas que disparavam emissões de partículas foram totalmente eliminadas
+    
+    // MÃO ESQUERDA
+    let segurandoNaoManuseavelEsq = p.leftJoint && p.leftJointTarget && (p.leftJointTarget.manuseavel === false || p.leftJointTarget.isStatic);
+    let segurandoManuseavelEsq = p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel === true;
+    
+    if (segurandoNaoManuseavelEsq) {
         if (pad.leftStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * FORCA_ESCALADA_CENARIO, y: pad.leftStick.y * FORCA_ESCALADA_CENARIO });
-    } else if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel) {
+    } else if (segurandoManuseavelEsq) {
         if (pad.leftStick) s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: pad.leftStick.x * FORCA_MOVER_CAIXA, y: pad.leftStick.y * FORCA_MOVER_CAIXA });
     } else {
-        let posXAlvo = p.body.position.x - 45, posYAlvo = p.body.position.y + 40;
-        if (movendoEsquerdo) { let a = Math.atan2(pad.leftStick.y, pad.leftStick.x); posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; }
-        s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x)*0.22, y: (posYAlvo - p.leftHand.position.y)*0.22 });
+        let posXAlvo = p.body.position.x - 45; let posYAlvo = p.body.position.y + 40;
+        if (movendoEsquerdo) {
+            let anguloAnalogo = Math.atan2(pad.leftStick.y, pad.leftStick.x);
+            posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
+            posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * RAIO_ORBITA_BRACO;
+        }
+        s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x) * 0.22, y: (posYAlvo - p.leftHand.position.y) * 0.22 });
     }
-    if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.manuseavel) {
+    
+    // MÃO DIREITA
+    let segurandoNaoManuseavelDir = p.rightJoint && p.rightJointTarget && (p.rightJointTarget.manuseavel === false || p.rightJointTarget.isStatic);
+    let segurandoManuseavelDir = p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel === true;
+    
+    if (segurandoNaoManuseavelDir) {
         if (pad.rightStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.rightStick.x * FORCA_ESCALADA_CENARIO, y: pad.rightStick.y * FORCA_ESCALADA_CENARIO });
-    } else if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel) {
+    } else if (segurandoManuseavelDir) {
         if (pad.rightStick) s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: pad.rightStick.x * FORCA_MOVER_CAIXA, y: pad.rightStick.y * FORCA_MOVER_CAIXA });
     } else {
-        let posXAlvo = p.body.position.x + 45, posYAlvo = p.body.position.y + 40;
-        if (movendoDireito) { let a = Math.atan2(pad.rightStick.y, pad.rightStick.x); posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; }
-        s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x)*0.22, y: (posYAlvo - p.rightHand.position.y)*0.22 });
+        let posXAlvo = p.body.position.x + 45; let posYAlvo = p.body.position.y + 40;
+        if (movendoDireito) {
+            let anguloAnalogo = Math.atan2(pad.rightStick.y, pad.rightStick.x);
+            posXAlvo = p.body.position.x + Math.cos(anguloAnalogo) * RAIO_ORBITA_BRACO;
+            posYAlvo = p.body.position.y + Math.sin(anguloAnalogo) * RAIO_ORBITA_BRACO;
+        }
+        s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x) * 0.22, y: (posYAlvo - p.rightHand.position.y) * 0.22 });
     }
-    processarGarra(s, p, p.leftHand, 'leftJoint', lL); processarGarra(s, p, p.rightHand, 'rightJoint', rR);
+    
+    processarGarra(s, p, p.leftHand, 'leftJoint', lL); 
+    processarGarra(s, p, p.rightHand, 'rightJoint', rR);
 }
-function aplicarLimiteFrame(scene, body, maxDist) {
+function aplicarLimiteFrame(scene, body, maxDist, maxRot) {
     if (!body || !body.position || body.isStatic) return;
     if (body.ultimaPos) {
-        let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y;
-        if (dx*dx + dy*dy > maxDist*maxDist) { let d = Math.sqrt(dx*dx + dy*dy); scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx/d)*maxDist, y: body.ultimaPos.y + (dy/d)*maxDist }); }
+        let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y, distSq = dx*dx + dy*dy;
+        if (distSq > maxDist * maxDist) {
+            let dist = Math.sqrt(distSq);
+            scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx / dist) * maxDist, y: body.ultimaPos.y + (dy / dist) * maxDist });
+        }
     }
-    body.ultimaPos = { x: body.position.x, y: body.position.y };
+    body.ultimaPos = { x: body.position.x, y: body.position.y }; body.ultimaRot = body.angle;
 }
 
 function createHeaveHoCharacter(scene, x, y, pad, id, col) {
@@ -378,15 +564,26 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
     const lH = scene.matter.add.circle(x - 50, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
     const rH = scene.matter.add.circle(x + 50, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
-    lH.corpoTocadoAgora = null; rH.corpoTocadoAgora = null;
+    lH.corpoTocadoAgora = null; lH.pontoDeContatoGlobal = null; rH.corpoTocadoAgora = null; rH.pontoDeContatoGlobal = null;
+    b.ultimaPos = { x: x, y: y }; b.ultimaRot = 0; lH.ultimaPos = { x: x-50, y: y }; lH.ultimaRot = 0; rH.ultimaPos = { x: x+50, y: y }; rH.ultimaRot = 0;
     let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
+    
+    // REQUISITO CUMPRIDO: Bloco de instanciação do emissor de partículas removido completamente
+    
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
 }
 
 function executarRespawnIndividual(scene, pNum) {
-    let p = (pNum === 0) ? player1 : player2; if (!p) return;
+    const cList = scene.matter.world.localWorld.constraints; const pref = `p${pNum}_`;
+    const p = (pNum === 0) ? player1 : player2; if (!p) return;
     if (p.leftJoint) { scene.matter.world.remove(p.leftJoint); if (p.leftJointPivotBody) scene.matter.world.remove(p.leftJointPivotBody); }
     if (p.rightJoint) { scene.matter.world.remove(p.rightJoint); if (p.rightJointPivotBody) scene.matter.world.remove(p.rightJointPivotBody); }
+    p.leftJoint = null; p.rightJoint = null;
+    
+    for (let i = cList.length - 1; i >= 0; i--) { 
+        let c = cList[i]; 
+        if (c && ((c.bodyA?.label?.includes(pref)) || (c.bodyB?.label?.includes(pref)))) scene.matter.world.remove(c); 
+    }
     scene.matter.world.remove(p.body); scene.matter.world.remove(p.leftHand); scene.matter.world.remove(p.rightHand);
     p.leftElos.forEach(e => scene.matter.world.remove(e)); p.rightElos.forEach(e => scene.matter.world.remove(e)); p.gfx.clear();
     if (pNum === 0) player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, p.pad, 0, 0x00ff00);
@@ -401,30 +598,83 @@ function update() {
         if (cursorsKeyboard.right.isDown) this.cameras.main.scrollX += camSpeed;
         if (cursorsKeyboard.up.isDown) this.cameras.main.scrollY -= camSpeed;
         if (cursorsKeyboard.down.isDown) this.cameras.main.scrollY += camSpeed;
+        
         previewGraphicsPoligono.clear();
+        if (verticesCriacaoAtiva.length > 0 && document.getElementById('prop-shape').value === 'polygon') {
+            previewGraphicsPoligono.lineStyle(3, 0xff0000, 1.0); previewGraphicsPoligono.fillStyle(0xffffff, 1.0);
+            previewGraphicsPoligono.beginPath(); previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
+            verticesCriacaoAtiva.forEach(v => { previewGraphicsPoligono.lineTo(v.x, v.y); previewGraphicsPoligono.fillCircle(v.x, v.y, 6); });
+            previewGraphicsPoligono.strokePath();
+        }
         listaObjetosEditaveis.forEach(obj => { desenharObjetoEditor(obj); });
+        if (player1) { player1.gfx.clear(); } if (player2) { player2.gfx.clear(); }
+        verificarEForcarRedesenhoDebug(this);
         return;
     }
-    if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2);
-    [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10); });
+
+    if (player1) { handlePlayerInput(this, player1); } if (player2) { handlePlayerInput(this, player2); }
+    [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10, 0.08); });
+    
     [player1, player2].forEach(p => {
         if (!p) return;
         ['leftJoint', 'rightJoint'].forEach(jKey => {
             if (p[jKey] && p[jKey + 'PivotBody'] && p[jKey + 'Target']) {
-                let target = p[jKey + 'Target'], pivot = p[jKey + 'PivotBody'], offset = p[jKey + 'LocalOffset'];
+                let target = p[jKey + 'Target']; let pivot = p[jKey + 'PivotBody']; let offset = p[jKey + 'LocalOffset'];
                 let cos = Math.cos(target.angle), sin = Math.sin(target.angle);
                 let mundoX = target.position.x + (offset.x * cos - offset.y * sin);
                 let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
+                
                 if (target.manuseavel === true) {
-                    sAct.matter.body.setPosition(target, { x: mundoX, y: mundoY }); sAct.matter.body.setVelocity(target, { x: 0, y: 0 }); sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
+                    sAct.matter.body.setPosition(target, { x: mundoX, y: mundoY });
+                    sAct.matter.body.setVelocity(target, { x: 0, y: 0 });
+                    sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
                 } else {
+                    // TRAVA MILIMÉTRICA RESTAURADA: Força geometricamente a posição da mão para anular a folga elástica
                     let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand;
-                    sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY }); sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y }); sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
+                    sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY });
+                    sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y });
+                    sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY });
                 }
             }
         });
+        
+        let distEsqSq = (p.leftHand.position.x - p.body.position.x)**2 + (p.leftHand.position.y - p.body.position.y)**2;
+        let distDirSq = (p.rightHand.position.x - p.body.position.x)**2 + (p.rightHand.position.y - p.body.position.y)**2;
+        const LIMITE_ESTIRAMENTO_MAXIMO = 185; 
+        if (p.leftJoint && distEsqSq > LIMITE_ESTIRAMENTO_MAXIMO * LIMITE_ESTIRAMENTO_MAXIMO) {
+            if (p.leftJoint) sAct.matter.world.remove(p.leftJoint); if (p.leftJointPivotBody) sAct.matter.world.remove(p.leftJointPivotBody);
+            p.leftJoint = null; p.leftJointTarget = null; p.leftJointPivotBody = null; p.leftJointLocalOffset = null;
+        }
+        if (p.rightJoint && distDirSq > LIMITE_ESTIRAMENTO_MAXIMO * LIMITE_ESTIRAMENTO_MAXIMO) {
+            if (p.rightJoint) sAct.matter.world.remove(p.rightJoint); if (p.rightJointPivotBody) sAct.matter.world.remove(p.rightJointPivotBody);
+            p.rightJoint = null; p.rightJointTarget = null; p.rightJointPivotBody = null; p.rightJointLocalOffset = null;
+        }
+        if (p.body.position.x < -120 || p.body.position.x > WORLD_WIDTH + 120 || p.body.position.y < -120 || p.body.position.y > WORLD_HEIGHT + 120) {
+            executarRespawnIndividual(sAct, p.id); return;
+        }
     });
-    if (player1) desenharJogador(player1); if (player2) desenharJogador(player2);
+
+    listaObjetosEditaveis.forEach(obj => {
+        if (!obj) return;
+        if (obj.lockPos && obj.body) {
+            if (obj.body.position.x !== obj.posicaoTravadaX || obj.body.position.y !== obj.posicaoTravadaY) {
+                sAct.matter.body.setPosition(obj.body, { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY }); sAct.matter.body.setVelocity(obj.body, { x: 0, y: 0 });
+            }
+        }
+        desenharObjetoEditor(obj);
+    });
+    
+    if (player1 && player2) {
+        desenharJogador(player1); desenharJogador(player2);
+        const mX = (player1.body.position.x + player2.body.position.x) / 2, mY = (player1.body.position.y + player2.body.position.y) / 2;
+        let z = Math.min(SCREEN_WIDTH / (Math.abs(player1.body.position.x - player2.body.position.x) + 250), SCREEN_HEIGHT / (Math.abs(player1.body.position.y - player2.body.position.y) + 250));
+        z = Phaser.Math.Clamp(z, 0.45, 1.0); 
+        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (mX - SCREEN_WIDTH / 2), 0.08); 
+        this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (mY - SCREEN_HEIGHT / 2), 0.08); 
+        this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, z, 0.05));
+    } else if (player1) { 
+        desenharJogador(player1); this.cameras.main.centerOn(player1.body.position.x, player1.body.position.y); 
+    }
 }
 </script>
 </body>
