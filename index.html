@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>qwqwqwqwqw</title>
+    <title>asasasasassa</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -127,58 +127,86 @@ function create() {
     previewGraphicsPoligono = this.add.graphics().setDepth(15);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
     
-    // ANCHOR PRE-PHYSICS BLINDADO: Garante rigidez geométrica absoluta em todas as juntas antes do cálculo de forças
+    // ANCHOR PRE-PHYSICS ABSOLUTO: Inverte o sentido da cascata geométrica quando o jogador está ancorado
     this.matter.world.on('beforeupdate', () => {
         if (modoEditorAtivo) return;
         [player1, player2].forEach(p => {
             if (!p || !p.body) return;
             const RAIO_CORPO = 22;
-            const DIST_ELOS = 32; // Comprimento inestirável configurado por elo longo
+            const DIST_ELOS = 32;
             
-            // ------------- CASCATA BRAÇO ESQUERDO -------------
+            // ---------------- COMPORTAMENTO BRAÇO ESQUERDO ----------------
             if (p.leftElos && p.leftElos.length > 0) {
-                // 1. Cola o ombro na quina exata do corpo verde
-                let elo0 = p.leftElos[0];
-                let dX = elo0.position.x - p.body.position.x, dY = elo0.position.y - p.body.position.y, d = Math.sqrt(dX*dX + dY*dY);
-                if (d > RAIO_CORPO) this.matter.body.setPosition(elo0, { x: p.body.position.x + (dX/d)*RAIO_CORPO, y: p.body.position.y + (dY/d)*RAIO_CORPO });
-                
-                // 2. Encadeia e trava os elos intermediários seguintes de forma rígida
-                let paiX = elo0.position.x;
-                let paiY = elo0.position.y;
-                for (let i = 1; i < p.leftElos.length; i++) {
-                    let elo = p.leftElos[i];
-                    let dx = elo.position.x - paiX, dy = elo.position.y - paiY, dist = Math.sqrt(dx*dx + dy*dy);
-                    if (dist > DIST_ELOS) this.matter.body.setPosition(elo, { x: paiX + (dx/dist)*DIST_ELOS, y: paiY + (dy/dist)*DIST_ELOS });
-                    paiX = elo.position.x;
-                    paiY = elo.position.y;
+                if (p.leftJoint) {
+                    // SE ESTIVER AGARRADO: A mão é o ponto fixo. Puxa os elos e o corpo em direção à mão
+                    let filhoX = p.leftHand.position.x;
+                    let filhoY = p.leftHand.position.y;
+                    
+                    // Ajusta do último elo até o ombro
+                    for (let i = p.leftElos.length - 1; i >= 0; i--) {
+                        let elo = p.leftElos[i];
+                        let dx = elo.position.x - filhoX, dy = elo.position.y - filhoY, dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist > DIST_ELOS) this.matter.body.setPosition(elo, { x: filhoX + (dx/dist)*DIST_ELOS, y: filhoY + (dy/dist)*DIST_ELOS });
+                        filhoX = elo.position.x;
+                        filhoY = elo.position.y;
+                    }
+                    // Puxa o corpo verde em direção ao ombro esquerdo ajustado
+                    let dxC = p.body.position.x - filhoX, dyC = p.body.position.y - filhoY, distC = Math.sqrt(dxC*dxC + dyC*dyC);
+                    if (distC > RAIO_CORPO) this.matter.body.setPosition(p.body, { x: filhoX + (dxC/distC)*RAIO_CORPO, y: filhoY + (dyC/distC)*RAIO_CORPO });
+                } else {
+                    // SE ESTIVER LIVRE: O corpo é o ponto fixo. Empurra os elos e a mão para perto do corpo
+                    let paiX = p.body.position.x;
+                    let paiY = p.body.position.y;
+                    let elo0 = p.leftElos[0];
+                    let dX0 = elo0.position.x - paiX, dY0 = elo0.position.y - paiY, d0 = Math.sqrt(dX0*dX0 + dY0*dY0);
+                    if (d0 > RAIO_CORPO) this.matter.body.setPosition(elo0, { x: paiX + (dX0/d0)*RAIO_CORPO, y: paiY + (dY0/d0)*RAIO_CORPO });
+                    
+                    paiX = elo0.position.x; paiY = elo0.position.y;
+                    for (let i = 1; i < p.leftElos.length; i++) {
+                        let elo = p.leftElos[i];
+                        let dx = elo.position.x - paiX, dy = elo.position.y - paiY, dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist > DIST_ELOS) this.matter.body.setPosition(elo, { x: paiX + (dx/dist)*DIST_ELOS, y: paiY + (dy/dist)*DIST_ELOS });
+                        paiX = elo.position.x; paiY = elo.position.y;
+                    }
+                    let dXHand = p.leftHand.position.x - paiX, dYHand = p.leftHand.position.y - paiY, distHand = Math.sqrt(dXHand*dXHand + dYHand*dYHand);
+                    if (distHand > DIST_ELOS) this.matter.body.setPosition(p.leftHand, { x: paiX + (dXHand/distHand)*DIST_ELOS, y: paiY + (dYHand/distHand)*DIST_ELOS });
                 }
-                
-                // 3. TRAVA INCONDICIONAL: Força a luva esquerda a ficar colada na ponta do último elo em qualquer situação
-                let dXHand = p.leftHand.position.x - paiX, dYHand = p.leftHand.position.y - paiY, distHand = Math.sqrt(dXHand*dXHand + dYHand*dYHand);
-                if (distHand > DIST_ELOS) this.matter.body.setPosition(p.leftHand, { x: paiX + (dXHand/distHand)*DIST_ELOS, y: paiY + (dYHand/distHand)*DIST_ELOS });
             }
             
-            // ------------- CASCATA BRAÇO DIREITO -------------
+            // ---------------- COMPORTAMENTO BRAÇO DIREITO ----------------
             if (p.rightElos && p.rightElos.length > 0) {
-                // 1. Cola o ombro direito na quina do corpo verde
-                let elo0 = p.rightElos[0];
-                let dX = elo0.position.x - p.body.position.x, dY = elo0.position.y - p.body.position.y, d = Math.sqrt(dX*dX + dY*dY);
-                if (d > RAIO_CORPO) this.matter.body.setPosition(elo0, { x: p.body.position.x + (dX/d)*RAIO_CORPO, y: p.body.position.y + (dY/d)*RAIO_CORPO });
-                
-                // 2. Encadeia e trava os elos intermediários seguintes de forma simétrica
-                let paiX = elo0.position.x;
-                let paiY = elo0.position.y;
-                for (let i = 1; i < p.rightElos.length; i++) {
-                    let elo = p.rightElos[i];
-                    let dx = elo.position.x - paiX, dy = elo.position.y - paiY, dist = Math.sqrt(dx*dx + dy*dy);
-                    if (dist > DIST_ELOS) this.matter.body.setPosition(elo, { x: paiX + (dx/dist)*DIST_ELOS, y: paiY + (dy/dist)*DIST_ELOS });
-                    paiX = elo.position.x;
-                    paiY = elo.position.y;
+                if (p.rightJoint) {
+                    // SE ESTIVER AGARRADO: A mão é o ponto fixo. Puxa os elos e o corpo em direção à mão
+                    let filhoX = p.rightHand.position.x;
+                    let filhoY = p.rightHand.position.y;
+                    
+                    for (let i = p.rightElos.length - 1; i >= 0; i--) {
+                        let elo = p.rightElos[i];
+                        let dx = elo.position.x - filhoX, dy = elo.position.y - filhoY, dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist > DIST_ELOS) this.matter.body.setPosition(elo, { x: filhoX + (dx/dist)*DIST_ELOS, y: filhoY + (dy/dist)*DIST_ELOS });
+                        filhoX = elo.position.x;
+                        filhoY = elo.position.y;
+                    }
+                    let dxC = p.body.position.x - filhoX, dyC = p.body.position.y - filhoY, distC = Math.sqrt(dxC*dxC + dyC*dyC);
+                    if (distC > RAIO_CORPO) this.matter.body.setPosition(p.body, { x: filhoX + (dxC/distC)*RAIO_CORPO, y: filhoY + (dyC/distC)*RAIO_CORPO });
+                } else {
+                    // SE ESTIVER LIVRE: O corpo é o ponto fixo. Empurra os elos e a mão para perto do corpo
+                    let paiX = p.body.position.x;
+                    let paiY = p.body.position.y;
+                    let elo0 = p.rightElos[0];
+                    let dX0 = elo0.position.x - paiX, dY0 = elo0.position.y - paiY, d0 = Math.sqrt(dX0*dX0 + dY0*dY0);
+                    if (d0 > RAIO_CORPO) this.matter.body.setPosition(elo0, { x: paiX + (dX0/d0)*RAIO_CORPO, y: paiY + (dY0/d0)*RAIO_CORPO });
+                    
+                    paiX = elo0.position.x; paiY = elo0.position.y;
+                    for (let i = 1; i < p.rightElos.length; i++) {
+                        let elo = p.rightElos[i];
+                        let dx = elo.position.x - paiX, dy = elo.position.y - paiY, dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist > DIST_ELOS) this.matter.body.setPosition(elo, { x: paiX + (dx/dist)*DIST_ELOS, y: paiY + (dy/dist)*DIST_ELOS });
+                        paiX = elo.position.x; paiY = elo.position.y;
+                    }
+                    let dXHand = p.rightHand.position.x - paiX, dYHand = p.rightHand.position.y - paiY, distHand = Math.sqrt(dXHand*dXHand + dYHand*dYHand);
+                    if (distHand > DIST_ELOS) this.matter.body.setPosition(p.rightHand, { x: paiX + (dXHand/distHand)*DIST_ELOS, y: paiY + (dYHand/distHand)*DIST_ELOS });
                 }
-                
-                // 3. TRAVA INCONDICIONAL: Força a luva direita a ficar colada na ponta do último elo
-                let dXHand = p.rightHand.position.x - paiX, dYHand = p.rightHand.position.y - paiY, distHand = Math.sqrt(dXHand*dXHand + dYHand*dYHand);
-                if (distHand > DIST_ELOS) this.matter.body.setPosition(p.rightHand, { x: paiX + (dXHand/distHand)*DIST_ELOS, y: paiY + (dYHand/distHand)*DIST_ELOS });
             }
         });
     });
