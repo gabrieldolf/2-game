@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>OKOKOKOKOK</title>
+    <title>123</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -456,8 +456,14 @@ function handlePlayerInput(s, p) {
     } else if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel) {
         if (pad.leftStick) s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: pad.leftStick.x * FORCA_MOVER_CAIXA, y: pad.leftStick.y * FORCA_MOVER_CAIXA });
     } else {
-        let posXAlvo = p.body.position.x - 45, posYAlvo = p.body.position.y + 40;
-        if (movendoEsquerdo) { let a = Math.atan2(pad.leftStick.y, pad.leftStick.x); posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; }
+        // CORREÇÃO DE POSTURA: Mudamos o alvo padrão Y de repouso para o centro do corpo (y) em vez de caído (+40)
+        let posXAlvo = p.body.position.x - 90; 
+        let posYAlvo = p.body.position.y;
+        if (movendoEsquerdo) { 
+            let a = Math.atan2(pad.leftStick.y, pad.leftStick.x); 
+            posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; 
+            posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; 
+        }
         s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x)*0.22, y: (posYAlvo - p.leftHand.position.y)*0.22 });
     }
     
@@ -479,8 +485,14 @@ function handlePlayerInput(s, p) {
     } else if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel) {
         if (pad.rightStick) s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: pad.rightStick.x * FORCA_MOVER_CAIXA, y: pad.rightStick.y * FORCA_MOVER_CAIXA });
     } else {
-        let posXAlvo = p.body.position.x + 45, posYAlvo = p.body.position.y + 40;
-        if (movendoDireito) { let a = Math.atan2(pad.rightStick.y, pad.rightStick.x); posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; }
+        // CORREÇÃO DE POSTURA: Alvo padrão Y de repouso centralizado para a mão direita
+        let posXAlvo = p.body.position.x + 90; 
+        let posYAlvo = p.body.position.y;
+        if (movendoDireito) { 
+            let a = Math.atan2(pad.rightStick.y, pad.rightStick.x); 
+            posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; 
+            posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; 
+        }
         s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x)*0.22, y: (posYAlvo - p.rightHand.position.y)*0.22 });
     }
     processarGarra(s, p, p.leftHand, 'leftJoint', lL); processarGarra(s, p, p.rightHand, 'rightJoint', rR);
@@ -490,14 +502,14 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const grp = scene.matter.world.nextGroup(true), flt = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp };
     const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
     
-    // AJUSTADO: Afastamos o spawn inicial das luvas para acomodar a nova extensão dos braços longos
+    // CORREÇÃO DE POSTURA: Mudamos o Y das duas mãos para nascerem no mesmo alinhamento horizontal do corpo (y)
     const lH = scene.matter.add.circle(x - 100, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
     const rH = scene.matter.add.circle(x + 100, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
     
     lH.corpoTocadoAgora = null; rH.corpoTocadoAgora = null;
     let lL = [], rL = []; 
     
-    // AJUSTADO: Mudamos o parâmetro de tamanho de 16 para 32 pixels por elo intermediário
+    // Instancia os elos intermediários perfeitamente alinhados na horizontal
     createArmSegment(scene, b, lH, 3, 32, id, grp, lL); 
     createArmSegment(scene, b, rH, 3, 32, id, grp, rL);
     
