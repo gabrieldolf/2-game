@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Sistema de Cordas Dinâmicas</title>
+    <title>Heave Ho - Correção de Escopo e Cordas</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -346,6 +346,20 @@ function quebrarToqueParaContato(h, b) {
 }
 
 function verificarEForcarRedesenhoDebug(scene) { if (scene.matter.world.drawDebug && scene.matter.world.debugGraphics) { scene.matter.world.debugGraphics.clear(); scene.matter.world.drawDebug(); } }
+
+// CORREÇÃO EXIGIDA: Reinserção da função utilitária global para leitura estável de botões
+function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
+
+function desenharJogador(p) {
+    const g = p.gfx; g.clear(); g.lineStyle(12, 0x000000, 1);
+    g.beginPath(); g.moveTo(p.body.position.x, p.body.position.y); p.leftElos.forEach(e => g.lineTo(e.position.x, e.position.y)); g.lineTo(p.leftHand.position.x, p.leftHand.position.y);
+    g.lineStyle(12, 0xff0000, 1); g.strokePath();
+    g.beginPath(); g.moveTo(p.body.position.x, p.body.position.y); p.rightElos.forEach(e => g.lineTo(e.position.x, e.position.y)); g.lineTo(p.rightHand.position.x, p.rightHand.position.y);
+    g.lineStyle(12, 0x0000ff, 1); g.strokePath();
+    g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22);
+    const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
+    g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
+}
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let corpoTocado = h.corpoTocadoAgora;
