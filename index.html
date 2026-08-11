@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>123</title>
+    <title>333333333333333333333</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -445,8 +445,6 @@ function handlePlayerInput(s, p) {
             let dX = p.body.position.x - elo.position.x, dY = p.body.position.y - elo.position.y, dist = Math.sqrt(dX*dX + dY*dY);
             if (dist > 20) { 
                 let intensity = Math.sqrt(pad.leftStick.x**2 + pad.leftStick.y**2);
-                // SISTEMA DE EMBALO ACUMULATIVO: Soma a velocidade atual do elo multiplicada pelo vetor do analógico
-                // Isso faz com que cada puxada no tempo correto acumule energia cinética, abrindo mais o ângulo do pêndulo
                 let fatorEmbaloX = elo.velocity.x * 0.0015;
                 let forcaX = (dX / dist) * 0.0048 * intensity + fatorEmbaloX;
                 let forcaY = (dY / dist) * 0.0035 * intensity;
@@ -456,15 +454,14 @@ function handlePlayerInput(s, p) {
     } else if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel) {
         if (pad.leftStick) s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: pad.leftStick.x * FORCA_MOVER_CAIXA, y: pad.leftStick.y * FORCA_MOVER_CAIXA });
     } else {
-        // CORREÇÃO DE POSTURA: Mudamos o alvo padrão Y de repouso para o centro do corpo (y) em vez de caído (+40)
-        let posXAlvo = p.body.position.x - 90; 
-        let posYAlvo = p.body.position.y;
+        // CORREÇÃO: Se não estiver movendo o analógico e a mão estiver solta, não força nenhuma posição. 
+        // O braço vira um "peso morto" e cai balançando puramente pela gravidade do cenário.
         if (movendoEsquerdo) { 
             let a = Math.atan2(pad.leftStick.y, pad.leftStick.x); 
-            posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; 
-            posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; 
+            let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; 
+            let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; 
+            s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x)*0.22, y: (posYAlvo - p.leftHand.position.y)*0.22 });
         }
-        s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x)*0.22, y: (posYAlvo - p.leftHand.position.y)*0.22 });
     }
     
     // Mão Direita
@@ -475,7 +472,6 @@ function handlePlayerInput(s, p) {
             let dX = p.body.position.x - elo.position.x, dY = p.body.position.y - elo.position.y, dist = Math.sqrt(dX*dX + dY*dY);
             if (dist > 20) { 
                 let intensity = Math.sqrt(pad.rightStick.x**2 + pad.rightStick.y**2);
-                // SISTEMA DE EMBALO ACUMULATIVO SIMÉTRICO: Mão direita
                 let fatorEmbaloX = elo.velocity.x * 0.0015;
                 let forcaX = (dX / dist) * 0.0048 * intensity + fatorEmbaloX;
                 let forcaY = (dY / dist) * 0.0035 * intensity;
@@ -485,15 +481,13 @@ function handlePlayerInput(s, p) {
     } else if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel) {
         if (pad.rightStick) s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: pad.rightStick.x * FORCA_MOVER_CAIXA, y: pad.rightStick.y * FORCA_MOVER_CAIXA });
     } else {
-        // CORREÇÃO DE POSTURA: Alvo padrão Y de repouso centralizado para a mão direita
-        let posXAlvo = p.body.position.x + 90; 
-        let posYAlvo = p.body.position.y;
+        // CORREÇÃO: Braço direito vira peso morto ao soltar o analógico direito
         if (movendoDireito) { 
             let a = Math.atan2(pad.rightStick.y, pad.rightStick.x); 
-            posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; 
-            posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; 
+            let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; 
+            let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; 
+            s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x)*0.22, y: (posYAlvo - p.rightHand.position.y)*0.22 });
         }
-        s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x)*0.22, y: (posYAlvo - p.rightHand.position.y)*0.22 });
     }
     processarGarra(s, p, p.leftHand, 'leftJoint', lL); processarGarra(s, p, p.rightHand, 'rightJoint', rR);
 }
