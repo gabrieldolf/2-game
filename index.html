@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>asasasasassa</title>
+    <title>wwwwwwwwwwwwwwwwww</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -462,86 +462,38 @@ function verificarEForcarRedesenhoDebug(scene) { if (scene.matter.world.drawDebu
 function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
 function aplicarLimiteFrame(scene, body, maxDist) {
     if (!body || !body.position || body.isStatic) return;
-    
-    // Limita o deslocamento padrão do corpo principal (quadril)
-    if (body.ultimaPos) {
-        let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y;
-        if (dx*dx + dy*dy > maxDist*maxDist) { 
-            let d = Math.sqrt(dx*dx + dy*dy); 
-            scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx/d)*maxDist, y: body.ultimaPos.y + (dy/d)*maxDist }); 
-        }
-    }
+    if (body.ultimaPos) { let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y; if (dx*dx + dy*dy > maxDist*maxDist) { let d = Math.sqrt(dx*dx + dy*dy); scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx/d)*maxDist, y: body.ultimaPos.y + (dy/d)*maxDist }); } }
     body.ultimaPos = { x: body.position.x, y: body.position.y };
-    
-    // RECOMPOSIÇÃO ULTRA-RÍGIDA EM CASCATA: Força cada junta a manter o comprimento exato, eliminando o esticamento
+
+    // CORREÇÃO PÓS-FRAME: Reduz o desprendimento a zero absoluto, colando os elos intermediários na luva fixa
     [player1, player2].forEach(p => {
         if (!p || p.body !== body) return;
-        const LIMITE_RAIO_CORPO = 22; // Distância do corpo até o primeiro elo
-        const DIST_ELOS = 32;         // Comprimento exato de cada elo longo configurado
+        const RAIO_CORPO = 22; const DIST_ELOS = 32;
         
-        // ------------- BRAÇO ESQUERDO -------------
+        // Braço Esquerdo
         if (p.leftElos && p.leftElos.length > 0) {
-            // 1. Gruda o primeiro elo (ombro) na borda exata do corpo verde
-            let elo0 = p.leftElos[0];
-            let dX = elo0.position.x - body.position.x, dY = elo0.position.y - body.position.y;
-            let dist = Math.sqrt(dX*dX + dY*dY);
-            if (dist > LIMITE_RAIO_CORPO) {
-                scene.matter.body.setPosition(elo0, { x: body.position.x + (dX / dist) * LIMITE_RAIO_CORPO, y: body.position.y + (dY / dist) * LIMITE_RAIO_CORPO });
-            }
-            
-            // 2. Encadeia e trava os elos intermediários seguintes (Elo 2 e Elo 3)
-            let paiX = elo0.position.x;
-            let paiY = elo0.position.y;
-            for (let i = 1; i < p.leftElos.length; i++) {
-                let elo = p.leftElos[i];
-                let dx = elo.position.x - paiX, dy = elo.position.y - paiY;
-                let d = Math.sqrt(dx*dx + dy*dy);
-                if (d > DIST_ELOS) {
-                    scene.matter.body.setPosition(elo, { x: paiX + (dx / d) * DIST_ELOS, y: paiY + (dy / d) * DIST_ELOS });
+            if (p.leftJoint) {
+                let filhoX = p.leftHand.position.x; let filhoY = p.leftHand.position.y;
+                for (let i = p.leftElos.length - 1; i >= 0; i--) {
+                    let elo = p.leftElos[i]; let dx = elo.position.x - filhoX, dy = elo.position.y - filhoY, dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist > DIST_ELOS) scene.matter.body.setPosition(elo, { x: filhoX + (dx/dist)*DIST_ELOS, y: filhoY + (dy/dist)*DIST_ELOS });
+                    filhoX = elo.position.x; filhoY = elo.position.y;
                 }
-                paiX = elo.position.x;
-                paiY = elo.position.y;
-            }
-            
-            // 3. Gruda a mão esquerda na ponta do último elo, fechando o braço
-            let hand = p.leftHand;
-            let dxH = hand.position.x - paiX, dyH = hand.position.y - paiY;
-            let dH = Math.sqrt(dxH*dxH + dyH*dyH);
-            if (dH > DIST_ELOS) {
-                scene.matter.body.setPosition(hand, { x: paiX + (dxH / dH) * DIST_ELOS, y: paiY + (dyH / dH) * DIST_ELOS });
+                let dxC = p.body.position.x - filhoX, dyC = p.body.position.y - filhoY, distC = Math.sqrt(dxC*dxC + dyC*dyC);
+                if (distC > RAIO_CORPO) scene.matter.body.setPosition(p.body, { x: filhoX + (dxC/distC)*RAIO_CORPO, y: filhoY + (dyC/distC)*RAIO_CORPO });
             }
         }
-        
-        // ------------- BRAÇO DIREITO -------------
+        // Braço Direito
         if (p.rightElos && p.rightElos.length > 0) {
-            // 1. Gruda o ombro direito na borda exata do corpo
-            let elo0 = p.rightElos[0];
-            let dX = elo0.position.x - body.position.x, dY = elo0.position.y - body.position.y;
-            let dist = Math.sqrt(dX*dX + dY*dY);
-            if (dist > LIMITE_RAIO_CORPO) {
-                scene.matter.body.setPosition(elo0, { x: body.position.x + (dX / dist) * LIMITE_RAIO_CORPO, y: body.position.y + (dY / dist) * LIMITE_RAIO_CORPO });
-            }
-            
-            // 2. Encadeia e trava os elos intermediários seguintes de forma simétrica
-            let paiX = elo0.position.x;
-            let paiY = elo0.position.y;
-            for (let i = 1; i < p.rightElos.length; i++) {
-                let elo = p.rightElos[i];
-                let dx = elo.position.x - paiX, dy = elo.position.y - paiY;
-                let d = Math.sqrt(dx*dx + dy*dy);
-                if (d > DIST_ELOS) {
-                    scene.matter.body.setPosition(elo, { x: paiX + (dx / d) * DIST_ELOS, y: paiY + (dy / d) * DIST_ELOS });
+            if (p.rightJoint) {
+                let filhoX = p.rightHand.position.x; let filhoY = p.rightHand.position.y;
+                for (let i = p.rightElos.length - 1; i >= 0; i--) {
+                    let elo = p.rightElos[i]; let dx = elo.position.x - filhoX, dy = elo.position.y - filhoY, dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist > DIST_ELOS) scene.matter.body.setPosition(elo, { x: filhoX + (dx/dist)*DIST_ELOS, y: filhoY + (dy/dist)*DIST_ELOS });
+                    filhoX = elo.position.x; filhoY = elo.position.y;
                 }
-                paiX = elo.position.x;
-                paiY = elo.position.y;
-            }
-            
-            // 3. Gruda a mão direita na ponta do último elo intermediário
-            let hand = p.rightHand;
-            let dxH = hand.position.x - paiX, dyH = hand.position.y - paiY;
-            let dH = Math.sqrt(dxH*dxH + dyH*dyH);
-            if (dH > DIST_ELOS) {
-                scene.matter.body.setPosition(hand, { x: paiX + (dxH / dH) * DIST_ELOS, y: paiY + (dyH / dH) * DIST_ELOS });
+                let dxC = p.body.position.x - filhoX, dyC = p.body.position.y - filhoY, distC = Math.sqrt(dxC*dxC + dyC*dyC);
+                if (distC > RAIO_CORPO) scene.matter.body.setPosition(p.body, { x: filhoX + (dxC/distC)*RAIO_CORPO, y: filhoY + (dyC/distC)*RAIO_CORPO });
             }
         }
     });
@@ -580,6 +532,7 @@ function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4); const rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     if (isButtonPressed(pad, 8)) { executarRespawnIndividual(s, p.id); return; }
+    
     let campoMod = document.getElementById('prop-fall-weight-mod'); let valorModificador = campoMod ? parseFloat(campoMod.value) : 10.0;
     let massaCalculadaCorpo = 6.8; let totalmenteLivreNoVazio = (!p.leftJoint && !p.rightJoint);
     if (p.body.velocity.y > 0.5 && (pad.leftStick?.y < -0.15 || pad.rightStick?.y < -0.15) && totalmenteLivreNoVazio) {
@@ -587,7 +540,8 @@ function handlePlayerInput(s, p) {
         massaCalculadaCorpo += (deltaYEsq + deltaYDir) * valorModificador * 0.05;
     }
     if (p.body.mass !== massaCalculadaCorpo) s.matter.body.setMass(p.body, massaCalculadaCorpo);
-        const FORCA_ESCALADA_CENARIO = 0.045, FORCA_MOVER_CAIXA = 0.038, RAIO_ORBITA_BRACO = 96;
+    
+    const FORCA_ESCALADA_CENARIO = 0.045, FORCA_MOVER_CAIXA = 0.038, RAIO_ORBITA_BRACO = 96;
     let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.02);
     let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.02);
     
@@ -602,15 +556,12 @@ function handlePlayerInput(s, p) {
     } else if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel) {
         if (pad.leftStick) s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: pad.leftStick.x * FORCA_MOVER_CAIXA, y: pad.leftStick.y * FORCA_MOVER_CAIXA });
     } else {
+        // CORREÇÃO: O motor orbital só atua se a mão NÃO estiver travada por uma junta de garra
         if (movendoEsquerdo) { 
             let a = Math.atan2(pad.leftStick.y, pad.leftStick.x); 
             let posXAlvo = p.body.position.x + Math.cos(a) * RAIO_ORBITA_BRACO; 
             let posYAlvo = p.body.position.y + Math.sin(a) * RAIO_ORBITA_BRACO; 
-            // CORREÇÃO ZERO EMPUXO: Move a mão aplicando velocidade orbital suave relativa à velocidade do próprio corpo, eliminando puxões artificiais
-            s.matter.body.setVelocity(p.leftHand, { 
-                x: p.body.velocity.x + (posXAlvo - p.leftHand.position.x) * 0.22, 
-                y: p.body.velocity.y + (posYAlvo - p.leftHand.position.y) * 0.22 
-            });
+            s.matter.body.setVelocity(p.leftHand, { x: p.body.velocity.x + (posXAlvo - p.leftHand.position.x) * 0.22, y: p.body.velocity.y + (posYAlvo - p.leftHand.position.y) * 0.22 });
         }
     }
     
@@ -629,11 +580,7 @@ function handlePlayerInput(s, p) {
             let a = Math.atan2(pad.rightStick.y, pad.rightStick.x); 
             let posXAlvo = p.body.position.x + Math.cos(a) * RAIO_ORBITA_BRACO; 
             let posYAlvo = p.body.position.y + Math.sin(a) * RAIO_ORBITA_BRACO; 
-            // CORREÇÃO ZERO EMPUXO DIREITA
-            s.matter.body.setVelocity(p.rightHand, { 
-                x: p.body.velocity.x + (posXAlvo - p.rightHand.position.x) * 0.22, 
-                y: p.body.velocity.y + (posYAlvo - p.rightHand.position.y) * 0.22 
-            });
+            s.matter.body.setVelocity(p.rightHand, { x: p.body.velocity.x + (posXAlvo - p.rightHand.position.x) * 0.22, y: p.body.velocity.y + (posYAlvo - p.rightHand.position.y) * 0.22 });
         }
     }
     processarGarra(s, p, p.leftHand, 'leftJoint', lL); processarGarra(s, p, p.rightHand, 'rightJoint', rR);
