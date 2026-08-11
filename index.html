@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Escopo e Cordas</title>
+    <title>ABC Cordas</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -482,14 +482,32 @@ function update() {
                 let target = p[jKey + 'Target'], pivot = p[jKey + 'PivotBody'], offset = p[jKey + 'LocalOffset'];
                 let cos = Math.cos(target.angle), sin = Math.sin(target.angle);
                 let mundoX = target.position.x + (offset.x * cos - offset.y * sin); let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
-                if (target.manuseavel === true) { sAct.matter.body.setPosition(target, { x: mundoX, y: mundoY }); sAct.matter.body.setVelocity(target, { x: 0, y: 0 }); sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY }); }
+                if (target.manuseavel === true) { sAct.matter.body.setPosition(target, { x: mundoX, y: municipalityY }); sAct.matter.body.setVelocity(target, { x: 0, y: 0 }); sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY }); }
                 else { let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand; sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY }); sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y }); sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY }); }
             }
         });
     });
     if (player1) { player1.gfx.clear(); desenharJogador(player1); } if (player2) { player2.gfx.clear(); desenharJogador(player2); }
     listaObjetosEditaveis.forEach(obj => { if (obj) desenharObjetoEditor(obj); });
+
+    // CORREÇÃO DA CÂMERA: Segue dinamicamente os jogadores ativos no cenário de jogo
+    if (player1 && player2) {
+        const mX = (player1.body.position.x + player2.body.position.x) / 2;
+        const mY = (player1.body.position.y + player2.body.position.y) / 2;
+        let z = Math.min(SCREEN_WIDTH / (Math.abs(player1.body.position.x - player2.body.position.x) + 250), SCREEN_HEIGHT / (Math.abs(player1.body.position.y - player2.body.position.y) + 250));
+        z = Phaser.Math.Clamp(z, 0.45, 1.0);
+        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (mX - SCREEN_WIDTH / 2), 0.08);
+        this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (mY - SCREEN_HEIGHT / 2), 0.08);
+        this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, z, 0.05));
+    } else if (player1) {
+        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (player1.body.position.x - SCREEN_WIDTH / 2), 0.08);
+        this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (player1.body.position.y - SCREEN_HEIGHT / 2), 0.08);
+    } else if (player2) {
+        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (player2.body.position.x - SCREEN_WIDTH / 2), 0.08);
+        this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (player2.body.position.y - SCREEN_HEIGHT / 2), 0.08);
+    }
 }
 </script>
 </body>
 </html>
+
