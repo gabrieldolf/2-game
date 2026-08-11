@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>121212121212</title>
+    <title>aaaaaaaaa</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -390,28 +390,75 @@ function aplicarLimiteFrame(scene, body, maxDist) {
     }
     body.ultimaPos = { x: body.position.x, y: body.position.y };
     
-    // TRAVA ANTI-DESCOLAMENTO DO OMBRO: Prende o primeiro elo do braço colado no corpo verde
+    // RECOMPOSIÇÃO ULTRA-RÍGIDA EM CASCATA: Força cada junta a manter o comprimento exato, eliminando o esticamento
     [player1, player2].forEach(p => {
         if (!p || p.body !== body) return;
-        const LIMITE_RAIO_CORPO = 22; // Raio físico exato do corpo do jogador
+        const LIMITE_RAIO_CORPO = 22; // Distância do corpo até o primeiro elo
+        const DIST_ELOS = 32;         // Comprimento exato de cada elo longo configurado
         
-        // Fixa a raiz do braço esquerdo
+        // ------------- BRAÇO ESQUERDO -------------
         if (p.leftElos && p.leftElos.length > 0) {
-            let eloEsq = p.leftElos[0];
-            let dX = eloEsq.position.x - body.position.x, dY = eloEsq.position.y - body.position.y;
+            // 1. Gruda o primeiro elo (ombro) na borda exata do corpo verde
+            let elo0 = p.leftElos[0];
+            let dX = elo0.position.x - body.position.x, dY = elo0.position.y - body.position.y;
             let dist = Math.sqrt(dX*dX + dY*dY);
             if (dist > LIMITE_RAIO_CORPO) {
-                scene.matter.body.setPosition(eloEsq, { x: body.position.x + (dX / dist) * LIMITE_RAIO_CORPO, y: body.position.y + (dY / dist) * LIMITE_RAIO_CORPO });
+                scene.matter.body.setPosition(elo0, { x: body.position.x + (dX / dist) * LIMITE_RAIO_CORPO, y: body.position.y + (dY / dist) * LIMITE_RAIO_CORPO });
+            }
+            
+            // 2. Encadeia e trava os elos intermediários seguintes (Elo 2 e Elo 3)
+            let paiX = elo0.position.x;
+            let paiY = elo0.position.y;
+            for (let i = 1; i < p.leftElos.length; i++) {
+                let elo = p.leftElos[i];
+                let dx = elo.position.x - paiX, dy = elo.position.y - paiY;
+                let d = Math.sqrt(dx*dx + dy*dy);
+                if (d > DIST_ELOS) {
+                    scene.matter.body.setPosition(elo, { x: paiX + (dx / d) * DIST_ELOS, y: paiY + (dy / d) * DIST_ELOS });
+                }
+                paiX = elo.position.x;
+                paiY = elo.position.y;
+            }
+            
+            // 3. Gruda a mão esquerda na ponta do último elo, fechando o braço
+            let hand = p.leftHand;
+            let dxH = hand.position.x - paiX, dyH = hand.position.y - paiY;
+            let dH = Math.sqrt(dxH*dxH + dyH*dyH);
+            if (dH > DIST_ELOS) {
+                scene.matter.body.setPosition(hand, { x: paiX + (dxH / dH) * DIST_ELOS, y: paiY + (dyH / dH) * DIST_ELOS });
             }
         }
         
-        // Fixa a raiz do braço direito de forma simétrica
+        // ------------- BRAÇO DIREITO -------------
         if (p.rightElos && p.rightElos.length > 0) {
-            let eloDir = p.rightElos[0];
-            let dX = eloDir.position.x - body.position.x, dY = eloDir.position.y - body.position.y;
+            // 1. Gruda o ombro direito na borda exata do corpo
+            let elo0 = p.rightElos[0];
+            let dX = elo0.position.x - body.position.x, dY = elo0.position.y - body.position.y;
             let dist = Math.sqrt(dX*dX + dY*dY);
             if (dist > LIMITE_RAIO_CORPO) {
-                scene.matter.body.setPosition(eloDir, { x: body.position.x + (dX / dist) * LIMITE_RAIO_CORPO, y: body.position.y + (dY / dist) * LIMITE_RAIO_CORPO });
+                scene.matter.body.setPosition(elo0, { x: body.position.x + (dX / dist) * LIMITE_RAIO_CORPO, y: body.position.y + (dY / dist) * LIMITE_RAIO_CORPO });
+            }
+            
+            // 2. Encadeia e trava os elos intermediários seguintes de forma simétrica
+            let paiX = elo0.position.x;
+            let paiY = elo0.position.y;
+            for (let i = 1; i < p.rightElos.length; i++) {
+                let elo = p.rightElos[i];
+                let dx = elo.position.x - paiX, dy = elo.position.y - paiY;
+                let d = Math.sqrt(dx*dx + dy*dy);
+                if (d > DIST_ELOS) {
+                    scene.matter.body.setPosition(elo, { x: paiX + (dx / d) * DIST_ELOS, y: paiY + (dy / d) * DIST_ELOS });
+                }
+                paiX = elo.position.x;
+                paiY = elo.position.y;
+            }
+            
+            // 3. Gruda a mão direita na ponta do último elo intermediário
+            let hand = p.rightHand;
+            let dxH = hand.position.x - paiX, dyH = hand.position.y - paiY;
+            let dH = Math.sqrt(dxH*dxH + dyH*dyH);
+            if (dH > DIST_ELOS) {
+                scene.matter.body.setPosition(hand, { x: paiX + (dxH / dH) * DIST_ELOS, y: paiY + (dyH / dH) * DIST_ELOS });
             }
         }
     });
