@@ -420,7 +420,7 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
 }
 
-function执行RespawnIndividual(scene, pNum) { // Traduzido o cabeçalho interno mantendo estabilidade
+function executarRespawnIndividual(scene, pNum) {
     let p = (pNum === 0) ? player1 : player2; if (!p) return;
     if (p.leftJoint) { scene.matter.world.remove(p.leftJoint); if (p.leftJointPivotBody) scene.matter.world.remove(p.leftJointPivotBody); }
     if (p.rightJoint) { scene.matter.world.remove(p.rightJoint); if (p.rightJointPivotBody) scene.matter.world.remove(p.rightJointPivotBody); }
