@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>111111111111</title>
+    <title>333333333333</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -347,8 +347,8 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
         let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 10, len, { density: 0.005, frictionAir: 0.01, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
         if (!lastLink) list.push(link);
         
-        // CORREÇÃO BRAÇO: stiffness: 1.0 garante rigidez absoluta em cada junta do braço, eliminando o efeito elástico
-        scene.matter.add.constraint(last, link, len, 1.0, { 
+        // PADRÃO DA CORDA: Configurar o comprimento (length) como 0 remove completamente a elasticidade nativa do Matter.js
+        scene.matter.add.constraint(last, link, 0, 1.0, { 
             pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, 
             pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 },
             stiffness: 1.0 
@@ -379,7 +379,7 @@ function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || 
 function aplicarLimiteFrame(scene, body, maxDist) {
     if (!body || !body.position || body.isStatic) return;
     
-    // Limita o deslocamento padrão do corpo principal (quadril)
+    // Limita o deslocamento e velocidade máxima do quadril/corpo principal do jogador
     if (body.ultimaPos) {
         let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y;
         if (dx*dx + dy*dy > maxDist*maxDist) { 
@@ -389,55 +389,7 @@ function aplicarLimiteFrame(scene, body, maxDist) {
     }
     body.ultimaPos = { x: body.position.x, y: body.position.y };
     
-    // TRAVA DE CASCATA ANATÔMICA: Corrige as juntas encadeando elo por elo até a luva
-    [player1, player2].forEach(p => {
-        if (!p || p.body !== body) return;
-        const DIST_ELOS = 16; // Comprimento exato de descanso de cada segmento
-        
-        // ---------------- BRAÇO ESQUERDO ----------------
-        let paiEsqX = p.body.position.x;
-        let paiEsqY = p.body.position.y;
-        
-        // Encadeia os elos intermediários
-        p.leftElos.forEach(elo => {
-            let dX = elo.position.x - paiEsqX, dY = elo.position.y - paiEsqY;
-            let dist = Math.sqrt(dX*dX + dY*dY);
-            if (dist > DIST_ELOS) {
-                scene.matter.body.setPosition(elo, { x: paiEsqX + (dX / dist) * DIST_ELOS, y: paiEsqY + (dY / dist) * DIST_ELOS });
-            }
-            paiEsqX = elo.position.x;
-            paiEsqY = elo.position.y;
-        });
-        
-        // CORREÇÃO CRÍTICA: Amarra a MÃO ESQUERDA na ponta do último elo intermediário, fechando o buraco
-        let dHandEsqX = p.leftHand.position.x - paiEsqX, dHandEsqY = p.leftHand.position.y - paiEsqY;
-        let distHandEsq = Math.sqrt(dHandEsqX*dHandEsqX + dHandEsqY*dHandEsqY);
-        if (distHandEsq > DIST_ELOS) {
-            scene.matter.body.setPosition(p.leftHand, { x: paiEsqX + (dHandEsqX / distHandEsq) * DIST_ELOS, y: paiEsqY + (dHandEsqY / distHandEsq) * DIST_ELOS });
-        }
-        
-        // ---------------- BRAÇO DIREITO ----------------
-        let paiDirX = p.body.position.x;
-        let paiDirY = p.body.position.y;
-        
-        // Encadeia os elos intermediários de forma simétrica
-        p.rightElos.forEach(elo => {
-            let dX = elo.position.x - paiDirX, dY = elo.position.y - paiDirY;
-            let dist = Math.sqrt(dX*dX + dY*dY);
-            if (dist > DIST_ELOS) {
-                scene.matter.body.setPosition(elo, { x: paiDirX + (dX / dist) * DIST_ELOS, y: paiDirY + (dY / dist) * DIST_ELOS });
-            }
-            paiDirX = elo.position.x;
-            paiDirY = elo.position.y;
-        });
-        
-        // CORREÇÃO CRÍTICA: Amarra a MÃO DIREITA na ponta do último elo intermediário
-        let dHandDirX = p.rightHand.position.x - paiDirX, dHandDirY = p.rightHand.position.y - paiDirY;
-        let distHandDir = Math.sqrt(dHandDirX*dHandDirX + dHandDirY*dHandDirY);
-        if (distHandDir > DIST_ELOS) {
-            scene.matter.body.setPosition(p.rightHand, { x: paiDirX + (dHandDirX / distHandDir) * DIST_ELOS, y: paiDirY + (dHandDirY / distHandDir) * DIST_ELOS });
-        }
-    });
+    // As correções geométricas manuais dos elos dos braços foram removidas para dar lugar à resolução nativa ultra-rígida do Matter.js
 }
 
 function desenharJogador(p) {
