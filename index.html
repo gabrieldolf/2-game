@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>000000000</title>
+    <title>111111111111</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -379,7 +379,7 @@ function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || 
 function aplicarLimiteFrame(scene, body, maxDist) {
     if (!body || !body.position || body.isStatic) return;
     
-    // Limita o deslocamento padrão do corpo principal (quandriles)
+    // Limita o deslocamento padrão do corpo principal (quadril)
     if (body.ultimaPos) {
         let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y;
         if (dx*dx + dy*dy > maxDist*maxDist) { 
@@ -389,45 +389,54 @@ function aplicarLimiteFrame(scene, body, maxDist) {
     }
     body.ultimaPos = { x: body.position.x, y: body.position.y };
     
-    // TRAVA DE ARTICULAÇÃO ABSOLUTA: Força todas as juntas intermediárias dos braços a acompanharem o corpo
+    // TRAVA DE CASCATA ANATÔMICA: Corrige as juntas encadeando elo por elo até a luva
     [player1, player2].forEach(p => {
         if (!p || p.body !== body) return;
+        const DIST_ELOS = 16; // Comprimento exato de descanso de cada segmento
         
-        // Corrige o braço esquerdo elo por elo para impedir que se descolem do ombro
-        let origemEsqX = p.body.position.x;
-        let origemEsqY = p.body.position.y;
-        p.leftElos.forEach((elo, index) => {
-            let dX = elo.position.x - origemEsqX, dY = elo.position.y - origemEsqY;
+        // ---------------- BRAÇO ESQUERDO ----------------
+        let paiEsqX = p.body.position.x;
+        let paiEsqY = p.body.position.y;
+        
+        // Encadeia os elos intermediários
+        p.leftElos.forEach(elo => {
+            let dX = elo.position.x - paiEsqX, dY = elo.position.y - paiEsqY;
             let dist = Math.sqrt(dX*dX + dY*dY);
-            let distIdeal = (index + 1) * 16; // Comprimento exato acumulado do elo
-            if (dist > distIdeal) {
-                scene.matter.body.setPosition(elo, { x: origemEsqX + (dX / dist) * distIdeal, y: origemEsqY + (dY / dist) * distIdeal });
+            if (dist > DIST_ELOS) {
+                scene.matter.body.setPosition(elo, { x: paiEsqX + (dX / dist) * DIST_ELOS, y: paiEsqY + (dY / dist) * DIST_ELOS });
             }
+            paiEsqX = elo.position.x;
+            paiEsqY = elo.position.y;
         });
         
-        // Corrige o braço direito elo por elo de forma simétrica
-        let origemDirX = p.body.position.x;
-        let origemDirY = p.body.position.y;
-        p.rightElos.forEach((elo, index) => {
-            let dX = elo.position.x - origemDirX, dY = elo.position.y - origemDirY;
+        // CORREÇÃO CRÍTICA: Amarra a MÃO ESQUERDA na ponta do último elo intermediário, fechando o buraco
+        let dHandEsqX = p.leftHand.position.x - paiEsqX, dHandEsqY = p.leftHand.position.y - paiEsqY;
+        let distHandEsq = Math.sqrt(dHandEsqX*dHandEsqX + dHandEsqY*dHandEsqY);
+        if (distHandEsq > DIST_ELOS) {
+            scene.matter.body.setPosition(p.leftHand, { x: paiEsqX + (dHandEsqX / distHandEsq) * DIST_ELOS, y: paiEsqY + (dHandEsqY / distHandEsq) * DIST_ELOS });
+        }
+        
+        // ---------------- BRAÇO DIREITO ----------------
+        let paiDirX = p.body.position.x;
+        let paiDirY = p.body.position.y;
+        
+        // Encadeia os elos intermediários de forma simétrica
+        p.rightElos.forEach(elo => {
+            let dX = elo.position.x - paiDirX, dY = elo.position.y - paiDirY;
             let dist = Math.sqrt(dX*dX + dY*dY);
-            let distIdeal = (index + 1) * 16;
-            if (dist > distIdeal) {
-                scene.matter.body.setPosition(elo, { x: origemDirX + (dX / dist) * distIdeal, y: origemDirY + (dY / dist) * distIdeal });
+            if (dist > DIST_ELOS) {
+                scene.matter.body.setPosition(elo, { x: paiDirX + (dX / dist) * DIST_ELOS, y: paiDirY + (dY / dist) * DIST_ELOS });
             }
+            paiDirX = elo.position.x;
+            paiDirY = elo.position.y;
         });
         
-        // Amarra geométrica final nas luvas para fechar a contenção anatômica
-        const COMPRIMENTO_MAX_BRACO = 68;
-        ['leftHand', 'rightHand'].forEach(handKey => {
-            let hand = p[handKey];
-            let dX = hand.position.x - body.position.x, dY = hand.position.y - body.position.y;
-            let distSq = dX*dX + dY*dY;
-            if (distSq > COMPRIMENTO_MAX_BRACO * COMPRIMENTO_MAX_BRACO) {
-                let dist = Math.sqrt(distSq);
-                scene.matter.body.setPosition(hand, { x: body.position.x + (dX / dist) * COMPRIMENTO_MAX_BRACO, y: body.position.y + (dY / dist) * COMPRIMENTO_MAX_BRACO });
-            }
-        });
+        // CORREÇÃO CRÍTICA: Amarra a MÃO DIREITA na ponta do último elo intermediário
+        let dHandDirX = p.rightHand.position.x - paiDirX, dHandDirY = p.rightHand.position.y - paiDirY;
+        let distHandDir = Math.sqrt(dHandDirX*dHandDirX + dHandDirY*dHandDirY);
+        if (distHandDir > DIST_ELOS) {
+            scene.matter.body.setPosition(p.rightHand, { x: paiDirX + (dHandDirX / distHandDir) * DIST_ELOS, y: paiDirY + (dHandDirY / distHandDir) * DIST_ELOS });
+        }
     });
 }
 
