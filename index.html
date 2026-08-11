@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho - Código Blindado Otimizado</title>
+    <title>Blindado Otimizado</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -476,7 +476,8 @@ function update() {
                 let cos = Math.cos(target.angle), sin = Math.sin(target.angle);
                 let mundoX = target.position.x + (offset.x * cos - offset.y * sin); let mundoY = target.position.y + (offset.x * sin + offset.y * cos);
                 if (target.manuseavel === true) { sAct.matter.body.setPosition(target, { x: mundoX, y: mundoY }); sAct.matter.body.setVelocity(target, { x: 0, y: 0 }); sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY }); }
-                else { let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand; sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY }); sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y }); sAct.matter.body.setPosition(pivot, { x: municipalX || mundoX, y: mundoY }); }
+                // CORRIGIDO: Removido o termo incorreto municipalX que quebrava o script
+                else { let hand = (jKey === 'leftJoint') ? p.leftHand : p.rightHand; sAct.matter.body.setPosition(hand, { x: mundoX, y: mundoY }); sAct.matter.body.setVelocity(hand, { x: target.velocity.x, y: target.velocity.y }); sAct.matter.body.setPosition(pivot, { x: mundoX, y: mundoY }); }
             }
         });
     });
@@ -495,3 +496,4 @@ function update() {
 </script>
 </body>
 </html>
+
