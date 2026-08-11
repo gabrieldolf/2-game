@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>ABC Cordas</title>
+    <title>123</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -189,7 +189,7 @@ function executarCriacaoObjeto(scene, x, y) {
         for (let i = 0; i < c.ropeSegments; i++) {
             // SENSOR ATIVO: isSensor impede colisões físicas com o jogador ou cenário, mas mantém detecção de toque
             let elo = scene.matter.add.rectangle(ax, ay + (i * segmentLen) + segmentLen/2, 14, segmentLen + 6, { 
-                isStatic: false, isSensor: true, density: 0.01, frictionAir: 0.015, label: 'ambiente',
+                isStatic: false, isSensor: true, density: 0.008, frictionAir: 0.012, label: 'ambiente',
                 collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } 
             });
             elo.manuseavel = false; elos.push(elo);
@@ -410,13 +410,21 @@ function handlePlayerInput(s, p) {
     // Mão Esquerda
     if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.manuseavel) {
         if (pad.leftStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * FORCA_ESCALADA_CENARIO, y: pad.leftStick.y * FORCA_ESCALADA_CENARIO });
-        // DINÂMICA DE PÊNDULO: Aplica impulso na corda se o jogador estiver se afastando dela
+        
+        // MECÂNICA DE PUXADA: Amplifica a força aplicada no elo da corda baseado na inclinação do analógico
         let elo = p.leftJointTarget;
-        let dX = p.body.position.x - elo.position.x;
-        let dY = p.body.position.y - elo.position.y;
-        let dist = Math.sqrt(dX*dX + dY*dY);
-        if (dist > 30) {
-            s.matter.body.applyForce(elo, elo.position, { x: (dX / dist) * 0.0018, y: (dY / dist) * 0.0012 });
+        if (pad.leftStick) {
+            let dX = p.body.position.x - elo.position.x;
+            let dY = p.body.position.y - elo.position.y;
+            let dist = Math.sqrt(dX*dX + dY*dY);
+            if (dist > 20) {
+                // Aplica uma força na direção do corpo do jogador multiplicada pela intensidade do stick
+                let intensidadePuxada = Math.sqrt(pad.leftStick.x * pad.leftStick.x + pad.leftStick.y * pad.leftStick.y);
+                s.matter.body.applyForce(elo, elo.position, { 
+                    x: (dX / dist) * 0.0045 * intensidadePuxada, 
+                    y: (dY / dist) * 0.0035 * intensidadePuxada 
+                });
+            }
         }
     } else if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel) {
         if (pad.leftStick) s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: pad.leftStick.x * FORCA_MOVER_CAIXA, y: pad.leftStick.y * FORCA_MOVER_CAIXA });
@@ -429,13 +437,20 @@ function handlePlayerInput(s, p) {
     // Mão Direita
     if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.manuseavel) {
         if (pad.rightStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.rightStick.x * FORCA_ESCALADA_CENARIO, y: pad.rightStick.y * FORCA_ESCALADA_CENARIO });
-        // DINÂMICA DE PÊNDULO: Aplica impulso vetorial simétrico na seção agarrada da corda
+        
+        // MECÂNICA DE PUXADA: Simétrica para a luva direita
         let elo = p.rightJointTarget;
-        let dX = p.body.position.x - elo.position.x;
-        let dY = p.body.position.y - elo.position.y;
-        let dist = Math.sqrt(dX*dX + dY*dY);
-        if (dist > 30) {
-            s.matter.body.applyForce(elo, elo.position, { x: (dX / dist) * 0.0018, y: (dY / dist) * 0.0012 });
+        if (pad.rightStick) {
+            let dX = p.body.position.x - elo.position.x;
+            let dY = p.body.position.y - elo.position.y;
+            let dist = Math.sqrt(dX*dX + dY*dY);
+            if (dist > 20) {
+                let intensidadePuxada = Math.sqrt(pad.rightStick.x * pad.rightStick.x + pad.rightStick.y * pad.rightStick.y);
+                s.matter.body.applyForce(elo, elo.position, { 
+                    x: (dX / dist) * 0.0045 * intensidadePuxada, 
+                    y: (dY / dist) * 0.0035 * intensidadePuxada 
+                });
+            }
         }
     } else if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel) {
         if (pad.rightStick) s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: pad.rightStick.x * FORCA_MOVER_CAIXA, y: pad.rightStick.y * FORCA_MOVER_CAIXA });
@@ -445,15 +460,6 @@ function handlePlayerInput(s, p) {
         s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x)*0.22, y: (posYAlvo - p.rightHand.position.y)*0.22 });
     }
     processarGarra(s, p, p.leftHand, 'leftJoint', lL); processarGarra(s, p, p.rightHand, 'rightJoint', rR);
-}
-
-function aplicarLimiteFrame(scene, body, maxDist) {
-    if (!body || !body.position || body.isStatic) return;
-    if (body.ultimaPos) {
-        let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y;
-        if (dx*dx + dy*dy > maxDist*maxDist) { let d = Math.sqrt(dx*dx + dy*dy); scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx/d)*maxDist, y: body.ultimaPos.y + (dy/d)*maxDist }); }
-    }
-    body.ultimaPos = { x: body.position.x, y: body.position.y };
 }
 
 function createHeaveHoCharacter(scene, x, y, pad, id, col) {
