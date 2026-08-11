@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Blindado Otimizado</title>
+    <title>Otimizado</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -74,7 +74,15 @@
 const SCREEN_WIDTH = 1024, SCREEN_HEIGHT = 768, WORLD_WIDTH = 3000, WORLD_HEIGHT = 2000;
 const config = {
     type: Phaser.AUTO, width: SCREEN_WIDTH, height: SCREEN_HEIGHT, parent: 'canvas-container', backgroundColor: '#4488aa',
-    physics: { default: 'matter', matter: { gravity: { y:1.5 }, debug: true } },
+    physics: { 
+        default: 'matter', 
+        matter: { 
+            gravity: { y:1.5 }, 
+            debug: true,
+            // RÍGIDO: Força o motor a processar as correntes e cordas mais vezes por frame para anular o esticamento
+            runner: { constraintIterations: 6, positionIterations: 6, velocityIterations: 4 }
+        } 
+    },
     input: { gamepad: true }, scene: { preload: preload, create: create, update: update }
 };
 const game = new Phaser.Game(config);
@@ -189,8 +197,14 @@ function executarCriacaoObjeto(scene, x, y) {
                 collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } 
             });
             elo.manuseavel = false; elos.push(elo);
-            if (i === 0) constraints.push(scene.matter.add.worldConstraint(elo, 0, 1.0, { pointA: { x: ax, y: ay }, pointB: { x: 0, y: -segmentLen/2 } }));
-            else constraints.push(scene.matter.add.constraint(lastBody, elo, segmentLen, 1.0, { pointA: { x: 0, y: segmentLen/2 }, pointB: { x: 0, y: -segmentLen/2 } }));
+            
+            if (i === 0) {
+                // ANCORAGEM RIGIDA: Comprimento 0 impede folgas mecânicas na junta fixa superior
+                constraints.push(scene.matter.add.worldConstraint(elo, 0, 1.0, { pointA: { x: ax, y: ay }, pointB: { x: 0, y: -segmentLen/2 } }));
+            } else {
+                // CORRENTE INESTIRÁVEL: Trava os elos adjacentes exatamente no ponto de articulação geometry
+                constraints.push(scene.matter.add.constraint(lastBody, elo, 0, 1.0, { pointA: { x: 0, y: segmentLen/2 }, pointB: { x: 0, y: -segmentLen/2 } }));
+            }
             lastBody = elo;
         }
         listaObjetosEditaveis.push({ body: null, gfx: scene.add.graphics().setDepth(3), shape: 'rope', w: 14, h: c.ropeLen, ropeElos: elos, ropeConstraints: constraints, ropeColor: c.ropeColor, ropeSegments: c.ropeSegments, ropeLen: c.ropeLen, posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: false });
@@ -202,6 +216,7 @@ function executarCriacaoObjeto(scene, x, y) {
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel, isStatic: c.isStatic });
 }
+
 function finalizarCriacaoPoligono(scene) {
     if (verticesCriacaoAtiva.length < 3) { alert("Polígonos precisam de pelo menos 3 vértices!"); return; }
     const c = extrairCamposPainel();
