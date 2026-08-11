@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>121212121212</title>
+    <title>qwqwqwqwqw</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -127,50 +127,58 @@ function create() {
     previewGraphicsPoligono = this.add.graphics().setDepth(15);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
     
-    // ANCHOR PRE-PHYSICS ATUALIZADO: Amarra as duas extremidades dos braços (Ombros e Mãos) ANTES do cálculo de forças
+    // ANCHOR PRE-PHYSICS BLINDADO: Garante rigidez geométrica absoluta em todas as juntas antes do cálculo de forças
     this.matter.world.on('beforeupdate', () => {
         if (modoEditorAtivo) return;
         [player1, player2].forEach(p => {
             if (!p || !p.body) return;
             const RAIO_CORPO = 22;
-            const COMPRIMENTO_ELO = 32;
+            const DIST_ELOS = 32; // Comprimento inestirável configurado por elo longo
             
-            // ------------- CONTENÇÃO BRAÇO ESQUERDO -------------
+            // ------------- CASCATA BRAÇO ESQUERDO -------------
             if (p.leftElos && p.leftElos.length > 0) {
-                // 1. Cola o ombro esquerdo na quina do corpo verde
-                let elo0 = p.leftElos[0]; 
-                let dX0 = elo0.position.x - p.body.position.x, dY0 = elo0.position.y - p.body.position.y, d0 = Math.sqrt(dX0*dX0 + dY0*dY0);
-                if (d0 > RAIO_CORPO) this.matter.body.setPosition(elo0, { x: p.body.position.x + (dX0/d0)*RAIO_CORPO, y: p.body.position.y + (dY0/d0)*RAIO_CORPO });
+                // 1. Cola o ombro na quina exata do corpo verde
+                let elo0 = p.leftElos[0];
+                let dX = elo0.position.x - p.body.position.x, dY = elo0.position.y - p.body.position.y, d = Math.sqrt(dX*dX + dY*dY);
+                if (d > RAIO_CORPO) this.matter.body.setPosition(elo0, { x: p.body.position.x + (dX/d)*RAIO_CORPO, y: p.body.position.y + (dY/d)*RAIO_CORPO });
                 
-                // 2. Se a mão esquerda estiver agarrada, força a luva a ficar colada no último elo do braço
-                if (p.leftJoint) {
-                    let ultimoElo = p.leftElos[p.leftElos.length - 1];
-                    let dXHand = p.leftHand.position.x - ultimoElo.position.x;
-                    let dYHand = p.leftHand.position.y - ultimoElo.position.y;
-                    let distHand = Math.sqrt(dXHand*dXHand + dYHand*dYHand);
-                    if (distHand > COMPRIMENTO_ELO) {
-                        this.matter.body.setPosition(p.leftHand, { x: ultimoElo.position.x + (dXHand/distHand)*COMPRIMENTO_ELO, y: ultimoElo.position.y + (dYHand/distHand)*COMPRIMENTO_ELO });
-                    }
+                // 2. Encadeia e trava os elos intermediários seguintes de forma rígida
+                let paiX = elo0.position.x;
+                let paiY = elo0.position.y;
+                for (let i = 1; i < p.leftElos.length; i++) {
+                    let elo = p.leftElos[i];
+                    let dx = elo.position.x - paiX, dy = elo.position.y - paiY, dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist > DIST_ELOS) this.matter.body.setPosition(elo, { x: paiX + (dx/dist)*DIST_ELOS, y: paiY + (dy/dist)*DIST_ELOS });
+                    paiX = elo.position.x;
+                    paiY = elo.position.y;
                 }
+                
+                // 3. TRAVA INCONDICIONAL: Força a luva esquerda a ficar colada na ponta do último elo em qualquer situação
+                let dXHand = p.leftHand.position.x - paiX, dYHand = p.leftHand.position.y - paiY, distHand = Math.sqrt(dXHand*dXHand + dYHand*dYHand);
+                if (distHand > DIST_ELOS) this.matter.body.setPosition(p.leftHand, { x: paiX + (dXHand/distHand)*DIST_ELOS, y: paiY + (dYHand/distHand)*DIST_ELOS });
             }
             
-            // ------------- CONTENÇÃO BRAÇO DIREITO -------------
+            // ------------- CASCATA BRAÇO DIREITO -------------
             if (p.rightElos && p.rightElos.length > 0) {
                 // 1. Cola o ombro direito na quina do corpo verde
-                let elo0 = p.rightElos[0]; 
-                let dX0 = elo0.position.x - p.body.position.x, dY0 = elo0.position.y - p.body.position.y, d0 = Math.sqrt(dX0*dX0 + dY0*dY0);
-                if (d0 > RAIO_CORPO) this.matter.body.setPosition(elo0, { x: p.body.position.x + (dX0/d0)*RAIO_CORPO, y: p.body.position.y + (dY0/d0)*RAIO_CORPO });
+                let elo0 = p.rightElos[0];
+                let dX = elo0.position.x - p.body.position.x, dY = elo0.position.y - p.body.position.y, d = Math.sqrt(dX*dX + dY*dY);
+                if (d > RAIO_CORPO) this.matter.body.setPosition(elo0, { x: p.body.position.x + (dX/d)*RAIO_CORPO, y: p.body.position.y + (dY/d)*RAIO_CORPO });
                 
-                // 2. Se a mão direita estiver agarrada, força a luva a ficar colada no último elo do braço de forma simétrica
-                if (p.rightJoint) {
-                    let ultimoElo = p.rightElos[p.rightElos.length - 1];
-                    let dXHand = p.rightHand.position.x - ultimoElo.position.x;
-                    let dYHand = p.rightHand.position.y - ultimoElo.position.y;
-                    let distHand = Math.sqrt(dXHand*dXHand + dYHand*dYHand);
-                    if (distHand > COMPRIMENTO_ELO) {
-                        this.matter.body.setPosition(p.rightHand, { x: ultimoElo.position.x + (dXHand/distHand)*COMPRIMENTO_ELO, y: ultimoElo.position.y + (dYHand/distHand)*COMPRIMENTO_ELO });
-                    }
+                // 2. Encadeia e trava os elos intermediários seguintes de forma simétrica
+                let paiX = elo0.position.x;
+                let paiY = elo0.position.y;
+                for (let i = 1; i < p.rightElos.length; i++) {
+                    let elo = p.rightElos[i];
+                    let dx = elo.position.x - paiX, dy = elo.position.y - paiY, dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist > DIST_ELOS) this.matter.body.setPosition(elo, { x: paiX + (dx/dist)*DIST_ELOS, y: paiY + (dy/dist)*DIST_ELOS });
+                    paiX = elo.position.x;
+                    paiY = elo.position.y;
                 }
+                
+                // 3. TRAVA INCONDICIONAL: Força a luva direita a ficar colada na ponta do último elo
+                let dXHand = p.rightHand.position.x - paiX, dYHand = p.rightHand.position.y - paiY, distHand = Math.sqrt(dXHand*dXHand + dYHand*dYHand);
+                if (distHand > DIST_ELOS) this.matter.body.setPosition(p.rightHand, { x: paiX + (dXHand/distHand)*DIST_ELOS, y: paiY + (dYHand/distHand)*DIST_ELOS });
             }
         });
     });
