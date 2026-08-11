@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>333333333333333333333</title>
+    <title>11111111</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -344,15 +344,15 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
     let last = bA;
     for (let i = 0; i < num; i++) {
         const lastLink = (i === num - 1);
-        // AJUSTADO: O retângulo físico agora usa a nova largura/comprimento ampliado para o braço longo
         let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 12, len, { density: 0.005, frictionAir: 0.01, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
         if (!lastLink) list.push(link);
         
-        // PADRÃO DA CORDA: Mantemos o comprimento (length) em 0 para garantir que o braço longo continue inestirável
+        // CORREÇÃO DE RIGIDEZ: stiffness: 1.0 e length: 0 forçam o Matter.js a grudar as juntas sem elasticidade
         scene.matter.add.constraint(last, link, 0, 1.0, { 
             pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, 
             pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 },
-            stiffness: 1.0 
+            stiffness: 1.0,
+            damping: 0.01
         });
         last = link;
     }
@@ -380,7 +380,7 @@ function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || 
 function aplicarLimiteFrame(scene, body, maxDist) {
     if (!body || !body.position || body.isStatic) return;
     
-    // Limita o deslocamento e velocidade máxima do quadril/corpo principal do jogador
+    // Limita o deslocamento padrão do corpo principal (quadril)
     if (body.ultimaPos) {
         let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y;
         if (dx*dx + dy*dy > maxDist*maxDist) { 
@@ -390,7 +390,31 @@ function aplicarLimiteFrame(scene, body, maxDist) {
     }
     body.ultimaPos = { x: body.position.x, y: body.position.y };
     
-    // As correções geométricas manuais dos elos dos braços foram removidas para dar lugar à resolução nativa ultra-rígida do Matter.js
+    // TRAVA ANTI-DESCOLAMENTO DO OMBRO: Prende o primeiro elo do braço colado no corpo verde
+    [player1, player2].forEach(p => {
+        if (!p || p.body !== body) return;
+        const LIMITE_RAIO_CORPO = 22; // Raio físico exato do corpo do jogador
+        
+        // Fixa a raiz do braço esquerdo
+        if (p.leftElos && p.leftElos.length > 0) {
+            let eloEsq = p.leftElos[0];
+            let dX = eloEsq.position.x - body.position.x, dY = eloEsq.position.y - body.position.y;
+            let dist = Math.sqrt(dX*dX + dY*dY);
+            if (dist > LIMITE_RAIO_CORPO) {
+                scene.matter.body.setPosition(eloEsq, { x: body.position.x + (dX / dist) * LIMITE_RAIO_CORPO, y: body.position.y + (dY / dist) * LIMITE_RAIO_CORPO });
+            }
+        }
+        
+        // Fixa a raiz do braço direito de forma simétrica
+        if (p.rightElos && p.rightElos.length > 0) {
+            let eloDir = p.rightElos[0];
+            let dX = eloDir.position.x - body.position.x, dY = eloDir.position.y - body.position.y;
+            let dist = Math.sqrt(dX*dX + dY*dY);
+            if (dist > LIMITE_RAIO_CORPO) {
+                scene.matter.body.setPosition(eloDir, { x: body.position.x + (dX / dist) * LIMITE_RAIO_CORPO, y: body.position.y + (dY / dist) * LIMITE_RAIO_CORPO });
+            }
+        }
+    });
 }
 
 function desenharJogador(p) {
