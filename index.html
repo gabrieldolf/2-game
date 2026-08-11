@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>000000000000000</title>
+    <title>OKOKOKOKOK</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -344,10 +344,11 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
     let last = bA;
     for (let i = 0; i < num; i++) {
         const lastLink = (i === num - 1);
-        let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 10, len, { density: 0.005, frictionAir: 0.01, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
+        // AJUSTADO: O retângulo físico agora usa a nova largura/comprimento ampliado para o braço longo
+        let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 12, len, { density: 0.005, frictionAir: 0.01, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
         if (!lastLink) list.push(link);
         
-        // PADRÃO DA CORDA: Configurar o comprimento (length) como 0 remove completamente a elasticidade nativa do Matter.js
+        // PADRÃO DA CORDA: Mantemos o comprimento (length) em 0 para garantir que o braço longo continue inestirável
         scene.matter.add.constraint(last, link, 0, 1.0, { 
             pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, 
             pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 },
@@ -488,10 +489,18 @@ function handlePlayerInput(s, p) {
 function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const grp = scene.matter.world.nextGroup(true), flt = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp };
     const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
-    const lH = scene.matter.add.circle(x - 50, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
-    const rH = scene.matter.add.circle(x + 50, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
+    
+    // AJUSTADO: Afastamos o spawn inicial das luvas para acomodar a nova extensão dos braços longos
+    const lH = scene.matter.add.circle(x - 100, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
+    const rH = scene.matter.add.circle(x + 100, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
+    
     lH.corpoTocadoAgora = null; rH.corpoTocadoAgora = null;
-    let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 16, id, grp, lL); createArmSegment(scene, b, rH, 3, 16, id, grp, rL);
+    let lL = [], rL = []; 
+    
+    // AJUSTADO: Mudamos o parâmetro de tamanho de 16 para 32 pixels por elo intermediário
+    createArmSegment(scene, b, lH, 3, 32, id, grp, lL); 
+    createArmSegment(scene, b, rH, 3, 32, id, grp, rL);
+    
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
 }
 
