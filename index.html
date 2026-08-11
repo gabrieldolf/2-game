@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>00000000</title>
+    <title>111111111</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -346,7 +346,13 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
         const lastLink = (i === num - 1);
         let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 10, len, { density: 0.005, frictionAir: 0.01, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
         if (!lastLink) list.push(link);
-        scene.matter.add.constraint(last, link, len, 1.0, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 } });
+        
+        // CORREÇÃO BRAÇO: stiffness: 1.0 garante rigidez absoluta em cada junta do braço, eliminando o efeito elástico
+        scene.matter.add.constraint(last, link, len, 1.0, { 
+            pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, 
+            pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 },
+            stiffness: 1.0 
+        });
         last = link;
     }
 }
@@ -372,11 +378,37 @@ function verificarEForcarRedesenhoDebug(scene) { if (scene.matter.world.drawDebu
 function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
 function aplicarLimiteFrame(scene, body, maxDist) {
     if (!body || !body.position || body.isStatic) return;
+    
+    // Limita o deslocamento do corpo principal
     if (body.ultimaPos) {
         let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y;
-        if (dx*dx + dy*dy > maxDist*maxDist) { let d = Math.sqrt(dx*dx + dy*dy); scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx/d)*maxDist, y: body.ultimaPos.y + (dy/d)*maxDist }); }
+        if (dx*dx + dy*dy > maxDist*maxDist) { 
+            let d = Math.sqrt(dx*dx + dy*dy); 
+            scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx/d)*maxDist, y: body.ultimaPos.y + (dy/d)*maxDist }); 
+        }
     }
     body.ultimaPos = { x: body.position.x, y: body.position.y };
+    
+    // TRAVA GEOMÉTRICA CONTRA ESTICAMENTO: Impede que as luvas se afastem do corpo principal além do limite dos braços
+    [player1, player2].forEach(p => {
+        if (!p || p.body !== body) return;
+        const COMPRIMENTO_MAX_BRACO = 68; // Tamanho máximo físico dos 3 elos somados
+        
+        ['leftHand', 'rightHand'].forEach(handKey => {
+            let hand = p[handKey];
+            let dX = hand.position.x - body.position.x;
+            let dY = hand.position.y - body.position.y;
+            let distSq = dX*dX + dY*dY;
+            
+            if (distSq > COMPRIMENTO_MAX_BRACO * COMPRIMENTO_MAX_BRACO) {
+                let dist = Math.sqrt(distSq);
+                scene.matter.body.setPosition(hand, {
+                    x: body.position.x + (dX / dist) * COMPRIMENTO_MAX_BRACO,
+                    y: body.position.y + (dY / dist) * COMPRIMENTO_MAX_BRACO
+                });
+            }
+        });
+    });
 }
 
 function desenharJogador(p) {
