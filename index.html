@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>ssssssssssssssssssssss</title>
+    <title>123123123</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -404,6 +404,7 @@ function desenharJogador(p) {
 // CORREÇÃO CIRÚRGICA: Usa a rotação reversa de vetor do Matter para fixar a mão exatamente no pixel do cubo já rodado
 // CORREÇÃO CIRÚRGICA: Usa a quina real do colisor (vertices) para fixar a mão exatamente no pixel do toque visual
 // CORREÇÃO GEOMÉTRICA ABSOLUTA: Usa toLocal nativo para traduzir o pixel da tela para dentro do plano do cubo rotacionado
+// CORREÇÃO DEFINITIVA: Usa a rotação em radianos (rotation) na matriz inversa para colar a mão no pixel exato do cubo virado
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
@@ -440,16 +441,21 @@ function processarGarra(s, p, h, jKey, grab) {
 
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
-            // TRADUÇÃO CIRÚRGICA: Transforma a posição global da mão para a coordenada local intrínseca do cubo
-            // toLocal é a função nativa do Matter que resolve distorções de centro de massa e rotações prévias
-            let localOffset = Phaser.Physics.Matter.Matter.Body.toLocal(alvoValido, { x: h.position.x, y: h.position.y });
+            // Mede o vetor global absoluto na tela entre o centro do cubo e a luva
+            let dx = h.position.x - alvoValido.position.x;
+            let dy = h.position.y - alvoValido.position.y;
+            
+            // MATRIZ INVERSA EM RADIANOS: Usa -alvoValido.rotation para mapear perfeitamente o pixel dentro de cubos já virados
+            let localOffset = {
+                x: dx * Math.cos(-alvoValido.rotation) - dy * Math.sin(-alvoValido.rotation),
+                y: dx * Math.sin(-alvoValido.rotation) + dy * Math.cos(-alvoValido.rotation)
+            };
 
             if (alvoValido.isStatic) {
                 p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
                 p[jKey] = s.matter.add.worldConstraint(h, 0, 1.0, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 } });
             } else {
                 p[jKey + 'PontoPivorMundo'] = null; 
-                // Cria a amarra usando a coordenada local traduzida perfeitamente pela matriz do motor
                 p[jKey] = s.matter.add.constraint(h, alvoValido, 0, rigidezConexao, { pointA: { x: 0, y: 0 }, pointB: localOffset });
             }
             
