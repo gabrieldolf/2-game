@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>123123123123123</title>
+    <title>5555555555555</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -385,20 +385,25 @@ function desenharJogador(p) {
     g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22); const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
-// CORREÇÃO CRÍTICA: Substitui a distância do centro por testes de ponto em vértices para prender no ponto exato do toque
+// CORRIGIDO: Substitui query.point por query.region com folga de segurança de 8px para validar o contato externo
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
-        console.log(`[GARRAS] Botão pressionado para a Mão ${lado}. Analisando superfícies de toque...`);
+        console.log(`[GARRAS] Botão pressionado para a Mão ${lado}. Analisando região de toque...`);
         
         let alvoCorpo = null;
         
-        // 1. Testa primeiro a intersecção de ponto real contra as 4 bordas pretas fixas do cenário
+        // Cria uma pequena caixa matemática de varredura ao redor da luva para detectar o contato externo real
+        let caixaDeteccao = {
+            min: { x: h.position.x - 14 - 8, y: h.position.y - 14 - 8 },
+            max: { x: h.position.x + 14 + 8, y: h.position.y + 14 + 8 }
+        };
+        
+        // 1. Testa a intersecção de área contra as 4 bordas pretas fixas do cenário
         for (let i = 0; i < bordasFixasDoCenario.length; i++) {
             let b = bordasFixasDoCenario[i];
             if (!b) continue;
-            // query.point checa se a coordenada da luva intercepta qualquer parte do retângulo do chão/parede
-            let encostou = s.matter.query.point([b], { x: h.position.x, y: h.position.y }).length > 0;
+            let encostou = s.matter.query.region([b], caixaDeteccao).length > 0;
             if (encostou) { alvoCorpo = b; break; }
         }
         
@@ -409,14 +414,14 @@ function processarGarra(s, p, h, jKey, grab) {
                 if (!obj) continue;
                 
                 if (obj.body) {
-                    let encostou = s.matter.query.point([obj.body], { x: h.position.x, y: h.position.y }).length > 0;
+                    let encostou = s.matter.query.region([obj.body], caixaDeteccao).length > 0;
                     if (encostou) { alvoCorpo = obj.body; break; }
                 } else if (obj.shape === 'rope' && obj.ropeElos) {
-                    // Para cordas, testa elo por elo de forma individual
-                    for (let j = 0; i < obj.ropeElos.length; j++) {
+                    // CORRIGIDO: Laço interno do J limpo e livre de loops infinitos
+                    for (let j = 0; j < obj.ropeElos.length; j++) {
                         let elo = obj.ropeElos[j];
                         if (!elo) continue;
-                        let encostou = s.matter.query.point([elo], { x: h.position.x, y: h.position.y }).length > 0;
+                        let encostou = s.matter.query.region([elo], caixaDeteccao).length > 0;
                         if (encostou) { alvoCorpo = elo; break; }
                     }
                     if (alvoCorpo) break;
@@ -425,16 +430,15 @@ function processarGarra(s, p, h, jKey, grab) {
         }
 
         if (alvoCorpo) {
-            console.log(`[GARRAS] Sucesso! Mão ${lado} detectou contato real com "${alvoCorpo.label}". Travando pino invisível.`);
+            console.log(`[GARRAS] Sucesso! Mão ${lado} detectou contato na região de "${alvoCorpo.label}". Travando pino.`);
             let alvoValido = alvoCorpo.parent ? alvoCorpo.parent : alvoCorpo;
             let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.85;
             
-            // Desenha o flash indicador piscante no local exato do travamento
             let flashGfx = s.add.graphics().setDepth(20);
             flashGfx.lineStyle(4, 0xffea00, 1); flashGfx.lineBetween(h.position.x, h.position.y, h.position.x, h.position.y + 4);
             s.time.delayedCall(150, () => { flashGfx.clear(); flashGfx.destroy(); });
 
-            s.matter.body.setDensity(h, 0.02); // Devolve o peso nativo no frame do agarre para servir de fulcro estável
+            s.matter.body.setDensity(h, 0.02); // Restaura peso nativo de apoio no frame do agarre
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
             let pivotLeveCinematico = s.matter.add.circle(h.position.x, h.position.y, 6, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
@@ -445,10 +449,10 @@ function processarGarra(s, p, h, jKey, grab) {
             let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle); 
             p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
         } else {
-            console.log(`[GARRAS] Ignorado. Mão ${lado} livre no ar (não há nenhuma quina ou colisor sob a coordenada da luva).`);
+            console.log(`[GARRAS] Ignorado. Região ao redor da Mão ${lado} está vazia no ar.`);
         }
     } else if (!grab && p[jKey]) {
-        s.matter.body.setDensity(h, 0.0005); // Devolve a massa pena da Ideia 2 ao soltar para desativar o empuxo do analógico
+        s.matter.body.setDensity(h, 0.0005); // Retorna ao peso pena da Ideia 2 para anular o puxão solto
         if (p[jKey]) s.matter.world.remove(p[jKey]); if (p[jKey + 'PivotBody']) s.matter.world.remove(p[jKey + 'PivotBody']);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
