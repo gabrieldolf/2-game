@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>33131313313313</title>
+    <title>111115555555555</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -394,6 +394,7 @@ function desenharJogador(p) {
     g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22); const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
+// CORREÇÃO ABSOLUTA: Desativa a auto-limpeza por distorção elástica para manter o pino fixo por tempo indefinido
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
@@ -423,7 +424,7 @@ function processarGarra(s, p, h, jKey, grab) {
         }
 
         if (alvoCorpo) {
-            console.log(`[GARRAS] Sucesso! Mão ${lado} conectada à superfície. Travando pino.`);
+            console.log(`[GARRAS] Sucesso! Mão ${lado} conectada à superfície. Criando restrição persistente.`);
             let alvoValido = alvoCorpo.parent ? alvoCorpo.parent : alvoCorpo;
             let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.95;
             
@@ -433,8 +434,13 @@ function processarGarra(s, p, h, jKey, grab) {
 
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
+            // TRAVA DE PERSISTÊNCIA: Criamos o constraint com tolerância a distorções elásticas do Matter.js
             let pivotLeveCinematico = s.matter.add.circle(h.position.x, h.position.y, 6, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
-            p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 1, rigidezConexao, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
+            p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 0, rigidezConexao, { 
+                pointA: { x: 0, y: 0 }, 
+                pointB: { x: 0, y: 0 },
+                length: 0 // Força o comprimento a zero absoluto para impedir o desprendimento por frame
+            });
             p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = pivotLeveCinematico;
             
             let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
@@ -450,6 +456,7 @@ function processarGarra(s, p, h, jKey, grab) {
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
+
 
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
