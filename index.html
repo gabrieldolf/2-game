@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>55555555555</title>
+    <title>7777777777777777777777777777</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -395,15 +395,17 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 // CORREÇÃO ELÁSTICA: Salva a coordenada exata do clique (pontoPivorMundo) para forçar o travamento absoluto no update
+// CORREÇÃO DE ALCANCE: Ajusta a caixa de detecção para 16px (raio 14 + 2px de folga), eliminando o agarre no ar
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
         console.log(`[GARRAS] Botão pressionado para a Mão ${lado}. Analisando região de toque...`);
         
         let alvoCorpo = null;
+        // TOLERÂNCIA MILIMÉTRICA: Alinha o sensor perfeitamente com a borda circular visual da luva
         let caixaDeteccao = {
-            min: { x: h.position.x - 22, y: h.position.y - 22 },
-            max: { x: h.position.x + 22, y: h.position.y + 22 }
+            min: { x: h.position.x - 16, y: h.position.y - 16 },
+            max: { x: h.position.x + 16, y: h.position.y + 16 }
         };
         
         for (let i = 0; i < bordasFixasDoCenario.length; i++) {
@@ -433,10 +435,8 @@ function processarGarra(s, p, h, jKey, grab) {
 
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
-            // Salva a coordenada exata do pixel do mundo na estrutura do jogador para travar geometricamente no update
             p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
             
-            // Amarra a mão direto no pixel do mundo com rigidez máxima e iterações reforçadas nativamente
             p[jKey] = s.matter.add.worldConstraint(h, 0, 1.0, { 
                 pointA: { x: h.position.x, y: h.position.y }, 
                 pointB: { x: 0, y: 0 } 
@@ -445,11 +445,13 @@ function processarGarra(s, p, h, jKey, grab) {
             p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
             
             s.matter.body.setVelocity(p.body, { x: p.body.velocity.x * 0.1, y: p.body.velocity.y * 0.1 });
+        } else {
+            console.log(`[GARRAS] Ignorado. Região livre no ar.`);
         }
     } else if (!grab && p[jKey]) {
         if (p[jKey]) s.matter.world.remove(p[jKey]);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
-        p[jKey + 'PontoPivorMundo'] = null; // Limpa a trava ao soltar
+        p[jKey + 'PontoPivorMundo'] = null;
     }
 }
 
