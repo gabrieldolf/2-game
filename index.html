@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>rrrrrrrrrrrr</title>
+    <title>sssssssss</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -390,6 +390,7 @@ function desenharJogador(p) {
 }
 // CORREÇÃO CIRÚRGICA DE ENCAIXE: Laço ajustado para 'j < obj.ropeElos.length' eliminando o travamento infinito
 // BLINDADO: Varredura refeita do zero, livre de qualquer laço infinito. Acaba com o problema da tela azul de vez
+// BLINDADO CONTRA TELA AZUL: Adiciona travas contra rotações indefinidas para impedir que coordenadas NaN quebrem a física
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
@@ -398,13 +399,11 @@ function processarGarra(s, p, h, jKey, grab) {
         let alvoCorpo = null;
         let caixaDeteccao = { min: { x: h.position.x - 16, y: h.position.y - 16 }, max: { x: h.position.x + 16, y: h.position.y + 16 } };
         
-        // 1. Verifica toque nas 4 bordas pretas do cenário fixo
         for (let i = 0; i < bordasFixasDoCenario.length; i++) {
             let b = bordasFixasDoCenario[i]; if (!b) continue;
             if (s.matter.query.region([b], caixaDeteccao).length > 0) { alvoCorpo = b; break; }
         }
         
-        // 2. Se não estiver no chão fixo, busca na lista de blocos do Editor de forma linear e segura
         if (!alvoCorpo) {
             for (let i = 0; i < listaObjetosEditaveis.length; i++) {
                 let obj = listaObjetosEditaveis[i];
@@ -428,10 +427,14 @@ function processarGarra(s, p, h, jKey, grab) {
             let dx = h.position.x - alvoValido.position.x;
             let dy = h.position.y - alvoValido.position.y;
             
-            // Matriz em radianos preservada exatamente para a rotação original do cubo
+            // TRAVA ANTICRASH: Garante que a rotação seja um número válido em radianos, eliminando o undefined/NaN de vez
+            let anguloRadianosEstavel = alvoValido.rotation ? alvoValido.rotation : 0;
+            if (isNaN(anguloRadianosEstavel)) anguloRadianosEstavel = 0;
+            
+            // Matriz inversa protegida de erros matemáticos catastróficos
             let localOffset = {
-                x: dx * Math.cos(-alvoValido.rotation) - dy * Math.sin(-alvoValido.rotation),
-                y: dx * Math.sin(-alvoValido.rotation) + dy * Math.cos(-alvoValido.rotation)
+                x: dx * Math.cos(-anguloRadianosEstavel) - dy * Math.sin(-anguloRadianosEstavel),
+                y: dx * Math.sin(-anguloRadianosEstavel) + dy * Math.cos(-anguloRadianosEstavel)
             };
 
             if (alvoValido.isStatic) {
