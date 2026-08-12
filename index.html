@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>QQQQQQQQQQQQQ</title>
+    <title>ssssssssssssssssssssss</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -403,6 +403,7 @@ function desenharJogador(p) {
 // CORREÇÃO DEFINITIVA: Usa o getLocalPoint nativo do Matter para achar o pixel exato do toque no cubo já rotacionado
 // CORREÇÃO CIRÚRGICA: Usa a rotação reversa de vetor do Matter para fixar a mão exatamente no pixel do cubo já rodado
 // CORREÇÃO CIRÚRGICA: Usa a quina real do colisor (vertices) para fixar a mão exatamente no pixel do toque visual
+// CORREÇÃO GEOMÉTRICA ABSOLUTA: Usa toLocal nativo para traduzir o pixel da tela para dentro do plano do cubo rotacionado
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
@@ -439,31 +440,16 @@ function processarGarra(s, p, h, jKey, grab) {
 
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
-            // IMPLEMENTAÇÃO DA SUA IDEIA: Varre os cantos físicos reais do objeto para achar a quina exata do toque
-            let pontoToqueLocal = { x: h.position.x, y: h.position.y };
-            if (alvoValido.vertices && alvoValido.vertices.length > 0) {
-                let menorD = Infinity; let quinaMaisProxima = alvoValido.vertices[0];
-                alvoValido.vertices.forEach(v => {
-                    let d = Math.sqrt((h.position.x - v.x)**2 + (h.position.y - v.y)**2);
-                    if (d < menorD) { menorD = d; quinaMaisProxima = v; }
-                });
-                // Se estiver muito perto de uma quina, solda a mão exatamente nela para alinhar o visual
-                if (menorD < 28) pontoToqueLocal = quinaMaisProxima;
-            }
-            
-            // Converte o ponto do toque baseado na orientação estrutural interna estável do Matter
-            let dx = pontoToqueLocal.x - alvoValido.position.x;
-            let dy = pontoToqueLocal.y - alvoValido.position.y;
-            let localOffset = {
-                x: dx * Math.cos(-alvoValido.angle) - dy * Math.sin(-alvoValido.angle),
-                y: dx * Math.sin(-alvoValido.angle) + dy * Math.cos(-alvoValido.angle)
-            };
+            // TRADUÇÃO CIRÚRGICA: Transforma a posição global da mão para a coordenada local intrínseca do cubo
+            // toLocal é a função nativa do Matter que resolve distorções de centro de massa e rotações prévias
+            let localOffset = Phaser.Physics.Matter.Matter.Body.toLocal(alvoValido, { x: h.position.x, y: h.position.y });
 
             if (alvoValido.isStatic) {
                 p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
                 p[jKey] = s.matter.add.worldConstraint(h, 0, 1.0, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 } });
             } else {
                 p[jKey + 'PontoPivorMundo'] = null; 
+                // Cria a amarra usando a coordenada local traduzida perfeitamente pela matriz do motor
                 p[jKey] = s.matter.add.constraint(h, alvoValido, 0, rigidezConexao, { pointA: { x: 0, y: 0 }, pointB: localOffset });
             }
             
