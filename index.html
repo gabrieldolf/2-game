@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>333333333333</title>
+    <title>Heave Ho - Massa Assimétrica Dinâmica</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -19,6 +19,7 @@
     <script src="phaser.min.js"></script>
 </head>
 <body>
+
 <div id="sidebar">
     <h2>EDITOR</h2>
     <div class="section" style="background:#2c3e50; padding:8px; border-radius:4px; margin-bottom:5px;">
@@ -44,7 +45,7 @@
         <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option><option value="rope">Corda / Corrente</option></select></div>
         <div id="painel-propriedades-comuns">
             <div class="prop-row" style="background:#27ae60; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Objeto Manuseável:</label><input type="checkbox" id="prop-manuseavel" checked onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row" style="background:#2980b9; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Fixar no Ar (isStatic):</label><input type="checkbox" id="prop-is-static" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row" style="background:#2980b9; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Fixar no Ar (isStatic):</label><input type="checkbox" id="prop-is-static" onchange="adjustableExistente()"></div>
             <div class="prop-row" id="row-w"><label id="label-w">Largura (px):</label><input type="number" id="prop-w" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" id="row-h"><label>Altura (px):</label><input type="number" id="prop-h" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" id="row-gravity"><label>Gravidade:</label><input type="checkbox" id="prop-gravity" checked onchange="atualizarObjetoExistente()"></div>
@@ -86,7 +87,6 @@ let modoEditorAtivo = false, cameraSalvaX = 0, cameraSalvaY = 0, cameraSalvaZoom
 let clickOffsetX = 0, clickOffsetY = 0;
 let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
-
 function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; }
 function setFerramenta(f) { ferramentaAtual = f; document.getElementById('btn-create').className = f==='create'?'active':''; document.getElementById('btn-select').className = f==='select'?'active':''; }
 function alternarModoEditor(scene) {
@@ -104,14 +104,12 @@ function alternarModoEditor(scene) {
     }
     alternarVisibilidadeGrade();
 }
-
 function alternarVisibilidadeGrade() {
     gridGraphics.clear(); if (!modoEditorAtivo || !document.getElementById('prop-grid-active').checked) return;
     const gSize = parseInt(document.getElementById('prop-grid-size').value) || 64; gridGraphics.lineStyle(1, 0xffffff, 0.15);
     for (let x = 0; x < WORLD_WIDTH; x += gSize) gridGraphics.lineBetween(x, 0, x, WORLD_HEIGHT);
     for (let y = 0; y < WORLD_HEIGHT; y += gSize) gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
 }
-
 function preload() {}
 function create() {
     if (this.input.gamepad) { this.input.gamepad.start(); }
@@ -121,6 +119,21 @@ function create() {
     previewGraphicsPoligono = this.add.graphics().setDepth(15);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
     
+    this.matter.world.on('beforeupdate', () => {
+        if (modoEditorAtivo) return;
+        [player1, player2].forEach(p => {
+            if (!p || !p.body) return;
+            const RAIO = 22;
+            if (p.leftElos && p.leftElos.length > 0) {
+                let e = p.leftElos[0]; let dX = e.position.x - p.body.position.x, dY = e.position.y - p.body.position.y, d = Math.sqrt(dX*dX + dY*dY);
+                if (d > RAIO) this.matter.body.setPosition(e, { x: p.body.position.x + (dX/d)*RAIO, y: p.body.position.y + (dY/d)*RAIO });
+            }
+            if (p.rightElos && p.rightElos.length > 0) {
+                let e = p.rightElos[0]; let dX = e.position.x - p.body.position.x, dY = e.position.y - p.body.position.y, d = Math.sqrt(dX*dX + dY*dY);
+                if (d > RAIO) this.matter.body.setPosition(e, { x: p.body.position.x + (dX/d)*RAIO, y: p.body.position.y + (dY/d)*RAIO });
+            }
+        });
+    });
     const ambConf = { isStatic:true, label:'ambiente', friction:0.8, restitution:0.1, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     const borda = (s, x, y, w, h) => {
         let b = s.matter.add.rectangle(x, y, w, h, ambConf); 
@@ -132,7 +145,6 @@ function create() {
     this.matter.world.on('collisionstart', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
     this.matter.world.on('collisionactive', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
     this.matter.world.on('collisionend', (event) => { event.pairs.forEach(pair => { quebrarToqueParaContato(pair.bodyA, pair.bodyB); quebrarToqueParaContato(pair.bodyB, pair.bodyA); }); });
-    
     this.input.on('pointerdown', (p) => {
         if (!modoEditorAtivo) return;
         if (ferramentaAtual === 'create') {
@@ -140,7 +152,6 @@ function create() {
             else executarCriacaoObjeto(this, p.worldX, p.worldY);
         } else { executarSelecaoObjeto(this, p.worldX, p.worldY, p); }
     });
-    
     this.input.on('pointermove', function(p) {
         if (modoEditorAtivo && ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
             let pos = { x: p.worldX - clickOffsetX, y: p.worldY - clickOffsetY };
@@ -156,7 +167,6 @@ function create() {
             objetoSelecionado.posicaoTravadaX = pos.x; objetoSelecionado.posicaoTravadaY = pos.y;
         }
     }, this);
-    
     this.input.keyboard.on('keydown-E', () => { alternarModoEditor(this); });
     this.input.keyboard.on('keydown-ENTER', () => { if (modoEditorAtivo && ferramentaAtual === 'create' && document.getElementById('prop-shape').value === 'polygon') finalizarCriacaoPoligono(this); });
     this.input.gamepad.on('down', (pad) => {
@@ -173,7 +183,6 @@ function atualizarInterfaceForma() {
     document.getElementById('row-w').style.display = (s === 'polygon' || s === 'rope') ? 'none' : 'flex';
     document.getElementById('label-w').innerText = s === 'circle' ? "Raio (px):" : "Largura (px):";
 }
-
 function extrairCamposPainel() {
     return {
         shape: document.getElementById('prop-shape').value, manuseavel: document.getElementById('prop-manuseavel').checked, isStatic: document.getElementById('prop-is-static').checked,
@@ -228,7 +237,6 @@ function finalizarCriacaoPoligono(scene) {
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: verticesLocaisRelativos, manuseavel: c.manuseavel, isStatic: c.isStatic });
     verticesCriacaoAtiva = []; previewGraphicsPoligono.clear();
 }
-
 function executarSelecaoObjeto(scene, x, y, pointer) {
     let prox = null, mDist = Infinity;
     listaObjetosEditaveis.forEach(obj => {
@@ -257,7 +265,6 @@ function selecionarObjetoDoEditor(obj) {
         document.getElementById('prop-air').value = obj.air; document.getElementById('prop-bounce').value = obj.bounce;
     }
 }
-
 function atualizarObjetoExistente() {
     if (ferramentaAtual !== 'select' || !objetoSelecionado) return;
     let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
@@ -291,7 +298,6 @@ function deletarObjetoSelecionado() {
     } else if (objetoSelecionado.body) { scene.matter.world.remove(objetoSelecionado.body); }
     objetoSelecionado.gfx.clear(); objetoSelecionado.gfx.destroy(); listaObjetosEditaveis = listaObjetosEditaveis.filter(o => o !== objetoSelecionado); desmarcarObjetoDoEditor();
 }
-
 function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorpo) {
     let finalX = x, finalY = y; const DISTANCIA_IMA = 20, corpos = scene.matter.world.localWorld.bodies;
     for (let i = 0; i < corpos.length; i++) {
@@ -301,7 +307,6 @@ function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorp
     }
     return { x: finalX, y: finalY };
 }
-
 function desenharObjetoEditor(obj) {
     if (!obj) return; let g = obj.gfx; g.clear();
     if (obj.shape === 'rope' && obj.ropeElos) {
@@ -325,7 +330,6 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
         last = link;
     }
 }
-
 function processarToqueParaContato(h, b, pair) {
     if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
         if (b.label === 'ambiente' || b.label.startsWith('p0_') || b.label.startsWith('p1_')) {
@@ -337,11 +341,10 @@ function processarToqueParaContato(h, b, pair) {
         }
     }
 }
-
 function quebrarToqueParaContato(h, b) { if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) { if (h.corpoTocadoAgora === b) { h.corpoTocadoAgora = null; h.pontoDeContatoGlobal = null; } } }
 function verificarEForcarRedesenhoDebug(scene) { if (scene.matter.world.drawDebug && scene.matter.world.debugGraphics) { scene.matter.world.debugGraphics.clear(); scene.matter.world.drawDebug(); } }
 function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
-// CORRIGIDO: Agora acessa p.leftElos[0] para evitar leituras de propriedades indefinidas no loop do motor
+
 function aplicarLimiteFrame(scene, body, maxDist) {
     if (!body || !body.position || body.isStatic) return;
     if (body.ultimaPos) { let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y; if (dx*dx + dy*dy > maxDist*maxDist) { let d = Math.sqrt(dx*dx + dy*dy); scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx/d)*maxDist, y: body.ultimaPos.y + (dy/d)*maxDist }); } }
@@ -382,13 +385,17 @@ function desenharJogador(p) {
     g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22); const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
-
+// IDEIA 2 IMPLEMENTADA: Quando a garra ativa, reajusta a densidade instantaneamente para servir de alavanca real
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let corpoTocado = h.corpoTocadoAgora;
         if (corpoTocado) {
             let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
             let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.85;
+            
+            // Retorna ao peso padrão (density normal) para travar o fulcro e subir
+            s.matter.body.setDensity(h, 0.02);
+            
             let pivotLeveCinematico = s.matter.add.circle(h.position.x, h.position.y, 6, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
             p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 1, rigidezConexao, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
             p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = pivotLeveCinematico;
@@ -396,6 +403,9 @@ function processarGarra(s, p, h, jKey, grab) {
             let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle); p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
         }
     } else if (!grab && p[jKey]) {
+        // Soltou: Mão volta a ter massa quase nula (density 0.0005) para não puxar o quadril
+        s.matter.body.setDensity(h, 0.0005);
+        
         if (p[jKey]) s.matter.world.remove(p[jKey]); if (p[jKey + 'PivotBody']) s.matter.world.remove(p[jKey + 'PivotBody']);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
@@ -411,9 +421,11 @@ function handlePlayerInput(s, p) {
         massaCalculadaCorpo += (deltaYEsq + deltaYDir) * valorModificador * 0.1;
     }
     if (p.body.mass !== massaCalculadaCorpo) s.matter.body.setMass(p.body, massaCalculadaCorpo);
-    const FORCA_ESCALADA_CENARIO = 0.045, FORCA_MOVER_CAIXA = 0.038;
+    const FORCA_ESCALADA_CENARIO = 0.045, FORCA_MOVER_CAIXA = 0.038, RAIO_ORBITA_BRACO = 96;
+    let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.02);
+    let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.02);
     
-    // Mão Esquerda
+    // REVERTIDO: Retorna ao controle original de setVelocity orbital (mais fluido)
     if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.manuseavel) {
         if (pad.leftStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * FORCA_ESCALADA_CENARIO, y: pad.leftStick.y * FORCA_ESCALADA_CENARIO });
         let elo = p.leftJointTarget;
@@ -424,17 +436,8 @@ function handlePlayerInput(s, p) {
     } else if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel) {
         if (pad.leftStick) s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: pad.leftStick.x * FORCA_MOVER_CAIXA, y: pad.leftStick.y * FORCA_MOVER_CAIXA });
     } else {
-        if (pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.02)) {
-            let dX = p.leftHand.position.x - p.body.position.x, dY = p.leftHand.position.y - p.body.position.y, dist = Math.sqrt(dX*dX + dY*dY);
-            if (dist > 5) {
-                let tangentX = -dY / dist, tangentY = dX / dist;
-                let dot = pad.leftStick.x * tangentX + pad.leftStick.y * tangentY;
-                s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: tangentX * dot * 0.0015, y: tangentY * dot * 0.0015 });
-            }
-        }
+        if (movendoEsquerdo) { let a = Math.atan2(pad.leftStick.y, pad.leftStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x)*0.22, y: (posYAlvo - p.leftHand.position.y)*0.22 }); }
     }
-    
-    // Mão Direita
     if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.manuseavel) {
         if (pad.rightStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.rightStick.x * FORCA_ESCALADA_CENARIO, y: pad.rightStick.y * FORCA_ESCALADA_CENARIO });
         let elo = p.rightJointTarget;
@@ -445,26 +448,20 @@ function handlePlayerInput(s, p) {
     } else if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel) {
         if (pad.rightStick) s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: pad.rightStick.x * FORCA_MOVER_CAIXA, y: pad.rightStick.y * FORCA_MOVER_CAIXA });
     } else {
-        if (pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.02)) {
-            let dX = p.rightHand.position.x - p.body.position.x, dY = p.rightHand.position.y - p.body.position.y, dist = Math.sqrt(dX*dX + dY*dY);
-            if (dist > 5) {
-                let tangentX = -dY / dist, tangentY = dX / dist;
-                let dot = pad.rightStick.x * tangentX + pad.rightStick.y * tangentY;
-                s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: tangentX * dot * 0.0015, y: tangentY * dot * 0.0015 });
-            }
-        }
+        if (movendoDireito) { let a = Math.atan2(pad.rightStick.y, pad.rightStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x)*0.22, y: (posYAlvo - p.rightHand.position.y)*0.22 }); }
     }
     processarGarra(s, p, p.leftHand, 'leftJoint', lL); processarGarra(s, p, p.rightHand, 'rightJoint', rR);
 }
 function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const grp = scene.matter.world.nextGroup(true), flt = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp };
     const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
-    const lH = scene.matter.add.circle(x - 100, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
-    const rH = scene.matter.add.circle(x + 100, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
+    
+    // IDEIA 2: Mão já nasce flutuando com densidade quase nula (0.0005) para remover energia cinética no ar e no chão
+    const lH = scene.matter.add.circle(x - 100, y, 14, { density: 0.0005, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
+    const rH = scene.matter.add.circle(x + 100, y, 14, { density: 0.0005, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
     lH.corpoTocadoAgora = null; rH.corpoTocadoAgora = null; let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 32, id, grp, lL); createArmSegment(scene, b, rH, 3, 32, id, grp, rL);
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
 }
-
 function executarRespawnIndividual(scene, pNum) {
     let p = (pNum === 0) ? player1 : player2; if (!p) return;
     if (p.leftJoint) { scene.matter.world.remove(p.leftJoint); if (p.leftJointPivotBody) scene.matter.world.remove(p.leftJointPivotBody); }
@@ -473,7 +470,6 @@ function executarRespawnIndividual(scene, pNum) {
     if (pNum === 0) player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, p.pad, 0, 0x00ff00);
     else player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, p.pad, 1, 0xffff00);
 }
-
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
     if (modoEditorAtivo) {
@@ -496,4 +492,3 @@ function update() {
 </script>
 </body>
 </html>
-
