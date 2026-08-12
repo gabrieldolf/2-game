@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>7777777777777777777777777777</title>
+    <title>3535353535353535</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -396,17 +396,14 @@ function desenharJogador(p) {
 }
 // CORREÇÃO ELÁSTICA: Salva a coordenada exata do clique (pontoPivorMundo) para forçar o travamento absoluto no update
 // CORREÇÃO DE ALCANCE: Ajusta a caixa de detecção para 16px (raio 14 + 2px de folga), eliminando o agarre no ar
+// CORREÇÃO DE ACESSÓRIO: Acopla restrição relativa local se o objeto for dinâmico, fazendo a mão girar e andar com ele
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
         console.log(`[GARRAS] Botão pressionado para a Mão ${lado}. Analisando região de toque...`);
         
         let alvoCorpo = null;
-        // TOLERÂNCIA MILIMÉTRICA: Alinha o sensor perfeitamente com a borda circular visual da luva
-        let caixaDeteccao = {
-            min: { x: h.position.x - 16, y: h.position.y - 16 },
-            max: { x: h.position.x + 16, y: h.position.y + 16 }
-        };
+        let caixaDeteccao = { min: { x: h.position.x - 16, y: h.position.y - 16 }, max: { x: h.position.x + 16, y: h.position.y + 16 } };
         
         for (let i = 0; i < bordasFixasDoCenario.length; i++) {
             let b = bordasFixasDoCenario[i]; if (!b) continue;
@@ -428,6 +425,7 @@ function processarGarra(s, p, h, jKey, grab) {
         if (alvoCorpo) {
             console.log(`[GARRAS] Sucesso! Mão ${lado} conectada à superfície.`);
             let alvoValido = alvoCorpo.parent ? alvoCorpo.parent : alvoCorpo;
+            let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.95;
             
             let flashGfx = s.add.graphics().setDepth(20);
             flashGfx.lineStyle(4, 0xffea00, 1); flashGfx.lineBetween(h.position.x, h.position.y, h.position.x, h.position.y + 4);
@@ -435,18 +433,23 @@ function processarGarra(s, p, h, jKey, grab) {
 
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
-            p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
+            // Calcula o ponto local relativo de contato dentro do corpo atingido para objetos em movimento/rotação
+            let dx = h.position.x - alvoValido.position.x;
+            let dy = h.position.y - alvoValido.position.y;
+            let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
+            let localOffset = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
+
+            // CONDICIONAL INTELIGENTE: Se o objeto for imóvel, mantém o worldConstraint estável. Se mover/rodar, amarra no corpo
+            if (alvoValido.isStatic) {
+                p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
+                p[jKey] = s.matter.add.worldConstraint(h, 0, 1.0, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 } });
+            } else {
+                p[jKey + 'PontoPivorMundo'] = null; // Objetos móveis usam atualização física nativa do Matter
+                p[jKey] = s.matter.add.constraint(h, alvoValido, 0, rigidezConexao, { pointA: { x: 0, y: 0 }, pointB: localOffset });
+            }
             
-            p[jKey] = s.matter.add.worldConstraint(h, 0, 1.0, { 
-                pointA: { x: h.position.x, y: h.position.y }, 
-                pointB: { x: 0, y: 0 } 
-            });
-            p[jKey + 'Target'] = alvoValido;
-            p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
-            
+            p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = localOffset;
             s.matter.body.setVelocity(p.body, { x: p.body.velocity.x * 0.1, y: p.body.velocity.y * 0.1 });
-        } else {
-            console.log(`[GARRAS] Ignorado. Região livre no ar.`);
         }
     } else if (!grab && p[jKey]) {
         if (p[jKey]) s.matter.world.remove(p[jKey]);
