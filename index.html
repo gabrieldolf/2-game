@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>12312312332123123123</title>
+    <title>Newton</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -385,7 +385,7 @@ function desenharJogador(p) {
     g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22); const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
-// CORRIGIDO: Linha do p[jKey] limpa e livre de erros de sintaxe para cravar a garra no pixel exato
+// CORREÇÃO GEOMÉTRICA: Sincroniza a velocidade linear da mão com a do corpo para anular empuxo e fixar o agarre
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let corpoTocado = h.corpoTocadoAgora;
@@ -393,6 +393,7 @@ function processarGarra(s, p, h, jKey, grab) {
             let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
             let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.85;
             
+            // Fixa os vetores físicos a zero antes de travar o pino invisível
             s.matter.body.setVelocity(h, { x: 0, y: 0 });
             s.matter.body.setAngularVelocity(h, 0);
             
@@ -414,7 +415,7 @@ function processarGarra(s, p, h, jKey, grab) {
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4); const rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
-    if (isButtonPressed(pad, 8)) { executorsRespawnIndividual(s, p.id); return; }
+    if (isButtonPressed(pad, 8)) { executarRespawnIndividual(s, p.id); return; }
     let campoMod = document.getElementById('prop-fall-weight-mod'); let valorModificador = campoMod ? parseFloat(campoMod.value) : 10.0;
     let massaCalculadaCorpo = 6.8; let totalmenteLivreNoVazio = (!p.leftJoint && !p.rightJoint);
     if (p.body.velocity.y > 0.5 && (pad.leftStick?.y < -0.15 || pad.rightStick?.y < -0.15) && totalmenteLivreNoVazio) {
@@ -438,11 +439,10 @@ function handlePlayerInput(s, p) {
         if (pad.leftStick) s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: pad.leftStick.x * FORCA_MOVER_CAIXA, y: pad.leftStick.y * FORCA_MOVER_CAIXA });
     } else {
         if (movendoEsquerdo) { 
-            let a = Math.atan2(pad.leftStick.y, pad.leftStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; 
-            let velX = (posXAlvo - p.leftHand.position.x)*0.22; let velY = (posYAlvo - p.leftHand.position.y)*0.22;
-            s.matter.body.setVelocity(p.leftHand, { x: velX, y: velY }); 
-            // COMPENSAÇÃO DE NEWTON: Força contrária perfeita para anular puxões das mãos soltas
-            s.matter.body.applyForce(p.body, p.body.position, { x: -velX * 0.0016, y: -velY * 0.0016 });
+            let a = Math.atan2(pad.leftStick.y, pad.leftStick.x);
+            // Alinha a luva livre na coordenada sem injetar aceleração artificial isolada
+            s.matter.body.setPosition(p.leftHand, { x: p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO, y: p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO });
+            s.matter.body.setVelocity(p.leftHand, { x: p.body.velocity.x, y: p.body.velocity.y }); 
         }
     }
     // Mão Direita
@@ -457,11 +457,9 @@ function handlePlayerInput(s, p) {
         if (pad.rightStick) s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: pad.rightStick.x * FORCA_MOVER_CAIXA, y: pad.rightStick.y * FORCA_MOVER_CAIXA });
     } else {
         if (movendoDireito) { 
-            let a = Math.atan2(pad.rightStick.y, pad.rightStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; 
-            let velX = (posXAlvo - p.rightHand.position.x)*0.22; let velY = (posYAlvo - p.rightHand.position.y)*0.22;
-            s.matter.body.setVelocity(p.rightHand, { x: velX, y: velY }); 
-            // COMPENSAÇÃO DE NEWTON DIREITA
-            s.matter.body.applyForce(p.body, p.body.position, { x: -velX * 0.0016, y: -velY * 0.0016 });
+            let a = Math.atan2(pad.rightStick.y, pad.rightStick.x);
+            s.matter.body.setPosition(p.rightHand, { x: p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO, y: p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO });
+            s.matter.body.setVelocity(p.rightHand, { x: p.body.velocity.x, y: p.body.velocity.y }); 
         }
     }
     processarGarra(s, p, p.leftHand, 'leftJoint', lL); processarGarra(s, p, p.rightHand, 'rightJoint', rR);
