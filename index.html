@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>1010101010101010</title>
+    <title>33131313313313</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -345,14 +345,19 @@ function quebrarToqueParaContato(h, b) { if (h.label && (h.label.includes('_left
 function verificarEForcarRedesenhoDebug(scene) { if (scene.matter.world.drawDebug && scene.matter.world.debugGraphics) { scene.matter.world.debugGraphics.clear(); scene.matter.world.drawDebug(); } }
 function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
 
+// CORREÇÃO DEFINITIVA: Desativa a cascata manual no braço agarrado para impedir que o setPosition quebre o pino
 function aplicarLimiteFrame(scene, body, maxDist) {
     if (!body || !body.position || body.isStatic) return;
     if (body.ultimaPos) { let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y; if (dx*dx + dy*dy > maxDist*maxDist) { let d = Math.sqrt(dx*dx + dy*dy); scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx/d)*maxDist, y: body.ultimaPos.y + (dy/d)*maxDist }); } }
     body.ultimaPos = { x: body.position.x, y: body.position.y };
+    
     [player1, player2].forEach(p => {
         if (!p || p.body !== body) return;
         const RAIO_CORPO = 22; const DIST_ELOS = 32;
-        if (p.leftElos && p.leftElos.length > 0) {
+        
+        // ------------- BRAÇO ESQUERDO -------------
+        // Só aplica o reajuste geométrico manual se a mão esquerda NÃO estiver ancorada em nada
+        if (p.leftElos && p.leftElos.length > 0 && !p.leftJoint) {
             let elo0 = p.leftElos[0]; let dX = elo0.position.x - body.position.x, dY = elo0.position.y - body.position.y, dist = Math.sqrt(dX*dX + dY*dY);
             if (dist > RAIO_CORPO) scene.matter.body.setPosition(elo0, { x: body.position.x + (dX/dist)*RAIO_CORPO, y: body.position.y + (dY/dist)*RAIO_CORPO });
             let paiX = elo0.position.x, paiY = elo0.position.y;
@@ -364,7 +369,10 @@ function aplicarLimiteFrame(scene, body, maxDist) {
             let hand = p.leftHand; let dxH = hand.position.x - paiX, dyH = hand.position.y - paiY, dH = Math.sqrt(dxH*dxH + dyH*dyH);
             if (dH > DIST_ELOS) scene.matter.body.setPosition(hand, { x: paiX + (dxH/dH)*DIST_ELOS, y: paiY + (dyH/dH)*DIST_ELOS });
         }
-        if (p.rightElos && p.rightElos.length > 0) {
+        
+        // ------------- BRAÇO DIREITO -------------
+        // Só aplica o reajuste geométrico manual se a mão direita NÃO estiver ancorada em nada
+        if (p.rightElos && p.rightElos.length > 0 && !p.rightJoint) {
             let elo0 = p.rightElos[0]; let dX = elo0.position.x - body.position.x, dY = elo0.position.y - body.position.y, dist = Math.sqrt(dX*dX + dY*dY);
             if (dist > RAIO_CORPO) scene.matter.body.setPosition(elo0, { x: body.position.x + (dX/dist)*RAIO_CORPO, y: body.position.y + (dY/dist)*RAIO_CORPO });
             let paiX = elo0.position.x, paiY = elo0.position.y;
@@ -378,6 +386,7 @@ function aplicarLimiteFrame(scene, body, maxDist) {
         }
     });
 }
+
 function desenharJogador(p) {
     const g = p.gfx; g.clear(); g.lineStyle(12, 0x000000, 1);
     g.beginPath(); g.moveTo(p.body.position.x, p.body.position.y); p.leftElos.forEach(e => g.lineTo(e.position.x, e.position.y)); g.lineTo(p.leftHand.position.x, p.leftHand.position.y); g.lineStyle(12, 0xff0000, 1); g.strokePath();
