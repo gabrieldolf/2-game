@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Invert</title>
+    <title>102</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -385,7 +385,7 @@ function desenharJogador(p) {
     g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22); const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
-// CORREÇÃO DEFINITIVA: Restaura garras nativas e remove setVelocity/setPosition forçados das mãos soltas
+// IDEIA 2 RESTAURADA: Zera e acalma as forças físicas por alguns frames para dar tempo ao Matter de grudar a junta
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let corpoTocado = h.corpoTocadoAgora;
@@ -393,9 +393,15 @@ function processarGarra(s, p, h, jKey, grab) {
             let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
             let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.85;
             
-            // Zera as velocidades residuais no frame exato para cravar a garra sem ricochete
+            // 1. Ativa a massa padrão estável para servir de fulcro real de alavanca
+            s.matter.body.setMass(h, 1.5);
+            
+            // 2. SISTEMA ACALMAR: Ativa o congelamento de inércia por 3 frames para prender sem escorregar
+            p.framesAcalmar = 3;
             s.matter.body.setVelocity(h, { x: 0, y: 0 });
             s.matter.body.setAngularVelocity(h, 0);
+            s.matter.body.setVelocity(p.body, { x: 0, y: 0 });
+            s.matter.body.setAngularVelocity(p.body, 0);
             
             let pivotLeveCinematico = s.matter.add.circle(h.position.x, h.position.y, 6, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
             p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 1, rigidezConexao, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
@@ -406,6 +412,9 @@ function processarGarra(s, p, h, jKey, grab) {
             p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
         }
     } else if (!grab && p[jKey]) {
+        // Soltou: Mão volta a ter massa quase nula instantaneamente (0.0001) para não puxar o quadril
+        s.matter.body.setMass(h, 0.0001);
+        
         if (p[jKey]) s.matter.world.remove(p[jKey]); 
         if (p[jKey + 'PivotBody']) s.matter.world.remove(p[jKey + 'PivotBody']);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
@@ -416,6 +425,19 @@ function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4); const rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     if (isButtonPressed(pad, 8)) { executarRespawnIndividual(s, p.id); return; }
+    
+    // Atualiza o contador de amortecimento do frame
+    if (p.framesAcalmar === undefined) p.framesAcalmar = 0;
+    if (p.framesAcalmar > 0) {
+        p.framesAcalmar--;
+        // Mantém a velocidade anulada para estabilizar a junta elástica
+        s.matter.body.setVelocity(p.leftHand, { x: 0, y: 0 });
+        s.matter.body.setVelocity(p.rightHand, { x: 0, y: 0 });
+        s.matter.body.setVelocity(p.body, { x: 0, y: 0 });
+        processarGarra(s, p, p.leftHand, 'leftJoint', lL); processarGarra(s, p, p.rightHand, 'rightJoint', rR);
+        return; // Ignora a leitura do analógico durante o congelamento de segurança
+    }
+    
     let campoMod = document.getElementById('prop-fall-weight-mod'); let valorModificador = campoMod ? parseFloat(campoMod.value) : 10.0;
     let massaCalculadaCorpo = 6.8; let totalmenteLivreNoVazio = (!p.leftJoint && !p.rightJoint);
     if (p.body.velocity.y > 0.5 && (pad.leftStick?.y < -0.15 || pad.rightStick?.y < -0.15) && totalmenteLivreNoVazio) {
@@ -423,7 +445,7 @@ function handlePlayerInput(s, p) {
         massaCalculadaCorpo += (deltaYEsq + deltaYDir) * valorModificador * 0.1;
     }
     if (p.body.mass !== massaCalculadaCorpo) s.matter.body.setMass(p.body, massaCalculadaCorpo);
-    const FORCA_ESCALADA_CENARIO = 0.045, FORCA_MOVER_CAIXA = 0.038, FORCA_TORQUE_BRACO = 0.0012;
+    const FORCA_ESCALADA_CENARIO = 0.045, FORCA_MOVER_CAIXA = 0.038, RAIO_ORBITA_BRACO = 96;
     let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.02);
     let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.02);
     
@@ -438,17 +460,9 @@ function handlePlayerInput(s, p) {
     } else if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel) {
         if (pad.leftStick) s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: pad.leftStick.x * FORCA_MOVER_CAIXA, y: pad.leftStick.y * FORCA_MOVER_CAIXA });
     } else {
-        // ROTAÇÃO DE TORQUE SEGURO: Move a mão livre aplicando pequenos impulsos angulares tangenciais ao redor do corpo. 
-        // Não dita a velocidade linear de forma artificial, anulando 100% o empuxo e estabilizando o agarre
-        if (movendoEsquerdo) {
-            let dx = p.leftHand.position.x - p.body.position.x, dy = p.leftHand.position.y - p.body.position.y, dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist > 10) {
-                let anguloAlvo = Math.atan2(pad.leftStick.y, pad.leftStick.x); let anguloAtual = Math.atan2(dy, dx);
-                let dif = Phaser.Math.Angle.Wrap(anguloAlvo - anguloAtual);
-                s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: -dy / dist * dif * FORCA_TORQUE_BRACO, y: dx / dist * dif * FORCA_TORQUE_BRACO });
-            }
-        }
+        if (movendoEsquerdo) { let a = Math.atan2(pad.leftStick.y, pad.leftStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x)*0.22, y: (posYAlvo - p.leftHand.position.y)*0.22 }); }
     }
+    
     // Mão Direita
     if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.manuseavel) {
         if (pad.rightStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.rightStick.x * FORCA_ESCALADA_CENARIO, y: pad.rightStick.y * FORCA_ESCALADA_CENARIO });
@@ -460,15 +474,7 @@ function handlePlayerInput(s, p) {
     } else if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel) {
         if (pad.rightStick) s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: pad.rightStick.x * FORCA_MOVER_CAIXA, y: pad.rightStick.y * FORCA_MOVER_CAIXA });
     } else {
-        // ROTAÇÃO DE TORQUE SEGURO DIREITA
-        if (movendoDireito) {
-            let dx = p.rightHand.position.x - p.body.position.x, dy = p.rightHand.position.y - p.body.position.y, dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist > 10) {
-                let anguloAlvo = Math.atan2(pad.rightStick.y, pad.rightStick.x); let anguloAtual = Math.atan2(dy, dx);
-                let dif = Phaser.Math.Angle.Wrap(anguloAlvo - anguloAtual);
-                s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: -dy / dist * dif * FORCA_TORQUE_BRACO, y: dx / dist * dif * FORCA_TORQUE_BRACO });
-            }
-        }
+        if (movendoDireito) { let a = Math.atan2(pad.rightStick.y, pad.rightStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x)*0.22, y: (posYAlvo - p.rightHand.position.y)*0.22 }); }
     }
     processarGarra(s, p, p.leftHand, 'leftJoint', lL); processarGarra(s, p, p.rightHand, 'rightJoint', rR);
 }
@@ -476,12 +482,15 @@ function handlePlayerInput(s, p) {
 function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const grp = scene.matter.world.nextGroup(true), flt = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp };
     const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
-    const lH = scene.matter.add.circle(x - 100, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
-    const rH = scene.matter.add.circle(x + 100, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
+    
+    // Configuração de Massa Dinâmica Restaurada: Mão nasce ultra-leve (0.0001) para anular o puxão
+    const lH = scene.matter.add.circle(x - 100, y, 14, { friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
+    const rH = scene.matter.add.circle(x + 100, y, 14, { friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
+    scene.matter.body.setMass(lH, 0.0001); scene.matter.body.setMass(rH, 0.0001);
+    
     lH.corpoTocadoAgora = null; rH.corpoTocadoAgora = null; let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 32, id, grp, lL); createArmSegment(scene, b, rH, 3, 32, id, grp, rL);
-    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
+    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null, framesAcalmar: 0 };
 }
-
 function executarRespawnIndividual(scene, pNum) {
     let p = (pNum === 0) ? player1 : player2; if (!p) return;
     if (p.leftJoint) { scene.matter.world.remove(p.leftJoint); if (p.leftJointPivotBody) scene.matter.world.remove(p.leftJointPivotBody); }
