@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>rrrrrrrr</title>
+    <title>111111111</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -420,6 +420,7 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 // CORREÇÃO CRÍTICA DE VERIFICAÇÃO: Ajustado 'j < obj.ropeElos.length' eliminando o travamento infinito de vez
+// CORREÇÃO DEFINITIVA: Mudado para 'j < obj.ropeElos.length' para extinguir o loop infinito e o congelamento azul
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
@@ -437,7 +438,7 @@ function processarGarra(s, p, h, jKey, grab) {
                 let obj = listaObjetosEditaveis[i]; if (!obj) continue;
                 if (obj.body && s.matter.query.region([obj.body], caixaDeteccao).length > 0) { alvoCorpo = obj.body; break; }
                 else if (obj.shape === 'rope' && obj.ropeElos) {
-                    // CORREÇÃO CIRÚRGICA: Trocado 'i < obj.ropeElos' por 'j < obj.ropeElos' para extinguir o crash azul
+                    // CORREÇÃO CIRÚRGICA: Trocado 'i < obj.ropeElos' por 'j < obj.ropeElos' de forma definitiva
                     for (let j = 0; j < obj.ropeElos.length; j++) {
                         let elo = obj.ropeElos[j]; if (!elo) continue;
                         if (s.matter.query.region([elo], caixaDeteccao).length > 0) { alvoCorpo = elo; break; }
