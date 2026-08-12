@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>111111111111111111111111</title>
+    <title>3333333333333333333333333</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -398,6 +398,7 @@ function desenharJogador(p) {
 // CORREÇÃO DE ALCANCE: Ajusta a caixa de detecção para 16px (raio 14 + 2px de folga), eliminando o agarre no ar
 // CORREÇÃO DE ACESSÓRIO: Acopla restrição relativa local se o objeto for dinâmico, fazendo a mão girar e andar com ele
 // CORREÇÃO DE ACESSÓRIO: Acopla restrição relativa local se o objeto for dinâmico, fazendo a mão girar e andar com ele
+// CORREÇÃO DE MATRIZ: Inverte o ângulo na projeção para mapear o clique perfeitamente dentro de cubos já rotacionados
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
@@ -434,18 +435,21 @@ function processarGarra(s, p, h, jKey, grab) {
 
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
-            // Calcula o ponto local relativo de contato dentro do corpo atingido para objetos em movimento/rotação
+            // Mede o vetor global absoluto na tela entre o centro do cubo e a luva
             let dx = h.position.x - alvoValido.position.x;
             let dy = h.position.y - alvoValido.position.y;
-            let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle);
-            let localOffset = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
+            
+            // CORREÇÃO CIRÚRGICA: Matriz inversa multiplica pelo ângulo negativo para achar o ponto local real dentro do cubo virado
+            let localOffset = {
+                x: dx * Math.cos(-alvoValido.angle) - dy * Math.sin(-alvoValido.angle),
+                y: dx * Math.sin(-alvoValido.angle) + dy * Math.cos(-alvoValido.angle)
+            };
 
-            // CONDICIONAL INTELIGENTE: Se o objeto for imóvel, mantém o worldConstraint estável. Se mover/rodar, amarra no corpo
             if (alvoValido.isStatic) {
                 p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
                 p[jKey] = s.matter.add.worldConstraint(h, 0, 1.0, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 } });
             } else {
-                p[jKey + 'PontoPivorMundo'] = null; // Objetos móveis usam atualização física nativa do Matter
+                p[jKey + 'PontoPivorMundo'] = null; 
                 p[jKey] = s.matter.add.constraint(h, alvoValido, 0, rigidezConexao, { pointA: { x: 0, y: 0 }, pointB: localOffset });
             }
             
