@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>213123123</title>
+    <title>5555555555555</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -401,6 +401,7 @@ function desenharJogador(p) {
 // CORREÇÃO DE MATRIZ: Inverte o ângulo na projeção para mapear o clique perfeitamente dentro de cubos já rotacionados
 // CORREÇÃO DEFINITIVA: Alinha os eixos locais de rotação do Matter para colar a mão no pixel exato do cubo virado
 // CORREÇÃO DEFINITIVA: Usa o getLocalPoint nativo do Matter para achar o pixel exato do toque no cubo já rotacionado
+// CORREÇÃO CIRÚRGICA: Usa a rotação reversa de vetor do Matter para fixar a mão exatamente no pixel do cubo já rodado
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
@@ -437,15 +438,20 @@ function processarGarra(s, p, h, jKey, grab) {
 
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
-            // TRADUÇÃO NATIVA ULTRA-PRECISA: O próprio Matter.js calcula o offset local levando em conta a rotação atual do cubo
-            let localOffset = Phaser.Physics.Matter.Matter.Body.getLocalPoint(alvoValido, { x: h.position.x, y: h.position.y });
+            // 1. Encontra a distância linear global (vetor absoluto) entre o centro do cubo e a luva
+            let vetorMundo = {
+                x: h.position.x - alvoValido.position.x,
+                y: h.position.y - alvoValido.position.y
+            };
+            
+            // 2. CORREÇÃO DEFINITIVA: Aplica a rotação oposta usando a biblioteca de vetores nativa para achar o offset local exato
+            let localOffset = Phaser.Physics.Matter.Matter.Vector.rotate(vetorMundo, -alvoValido.angle);
 
             if (alvoValido.isStatic) {
                 p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
                 p[jKey] = s.matter.add.worldConstraint(h, 0, 1.0, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 } });
             } else {
                 p[jKey + 'PontoPivorMundo'] = null; 
-                // Acopla usando a coordenada local calculada perfeitamente pelo motor interno
                 p[jKey] = s.matter.add.constraint(h, alvoValido, 0, rigidezConexao, { pointA: { x: 0, y: 0 }, pointB: localOffset });
             }
             
