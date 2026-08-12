@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>333333333333333333333</title>
+    <title>55555555555</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -394,7 +394,7 @@ function desenharJogador(p) {
     g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22); const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
-// CORREÇÃO CIRÚRGICA: Usa worldConstraint nativo para amarrar a mão direto no pixel do mundo, eliminando quebras
+// CORREÇÃO ELÁSTICA: Salva a coordenada exata do clique (pontoPivorMundo) para forçar o travamento absoluto no update
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
@@ -424,7 +424,7 @@ function processarGarra(s, p, h, jKey, grab) {
         }
 
         if (alvoCorpo) {
-            console.log(`[GARRAS] Sucesso! Mão ${lado} conectada à superfície. Cravando worldConstraint fixo.`);
+            console.log(`[GARRAS] Sucesso! Mão ${lado} conectada à superfície.`);
             let alvoValido = alvoCorpo.parent ? alvoCorpo.parent : alvoCorpo;
             
             let flashGfx = s.add.graphics().setDepth(20);
@@ -433,24 +433,23 @@ function processarGarra(s, p, h, jKey, grab) {
 
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
-            // CORREÇÃO ABSOLUTA: Amarra a luva direto no ponto X/Y do mundo. Comprimento 0 e rigidez total (stiffness: 1.0)
+            // Salva a coordenada exata do pixel do mundo na estrutura do jogador para travar geometricamente no update
+            p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
+            
+            // Amarra a mão direto no pixel do mundo com rigidez máxima e iterações reforçadas nativamente
             p[jKey] = s.matter.add.worldConstraint(h, 0, 1.0, { 
                 pointA: { x: h.position.x, y: h.position.y }, 
                 pointB: { x: 0, y: 0 } 
             });
             p[jKey + 'Target'] = alvoValido;
-            
-            // Deixa as variáveis auxiliares nulas para o update não tentar forçar posições manuais conflitantes
             p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
             
             s.matter.body.setVelocity(p.body, { x: p.body.velocity.x * 0.1, y: p.body.velocity.y * 0.1 });
-        } else {
-            console.log(`[GARRAS] Ignorado. Região livre no ar.`);
         }
     } else if (!grab && p[jKey]) {
-        // Soltura limpa removendo o worldConstraint nativo
         if (p[jKey]) s.matter.world.remove(p[jKey]);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
+        p[jKey + 'PontoPivorMundo'] = null; // Limpa a trava ao soltar
     }
 }
 
@@ -518,8 +517,8 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
 }
 function executarRespawnIndividual(scene, pNum) {
     let p = (pNum === 0) ? player1 : player2; if (!p) return;
-    if (p.leftJoint) { scene.matter.world.remove(p.leftJoint); if (p.leftJointPivotBody) scene.matter.world.remove(p.leftJointPivotBody); }
-    if (p.rightJoint) { scene.matter.world.remove(p.rightJoint); if (p.rightJointPivotBody) scene.matter.world.remove(p.rightJointPivotBody); }
+    if (p.leftJoint) { scene.matter.world.remove(p.leftJoint); }
+    if (p.rightJoint) { scene.matter.world.remove(p.rightJoint); }
     scene.matter.world.remove(p.body); scene.matter.world.remove(p.leftHand); scene.matter.world.remove(p.rightHand); p.leftElos.forEach(e => scene.matter.world.remove(e)); p.rightElos.forEach(e => scene.matter.world.remove(e)); p.gfx.clear();
     if (pNum === 0) player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, p.pad, 0, 0x00ff00);
     else player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, p.pad, 1, 0xffff00);
@@ -533,6 +532,20 @@ function update() {
         previewGraphicsPoligono.clear(); listaObjetosEditaveis.forEach(obj => { desenharObjetoEditor(obj); }); return;
     }
     if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2); [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10); });
+    
+    // CORREÇÃO DE ELASTICIDADE: Força a posição das mãos agarradas a retornar ao pixel original salvo, anulando folgas elásticas
+    [player1, player2].forEach(p => {
+        if (!p) return;
+        if (p.leftJoint && p.leftJointPontoPivorMundo) {
+            sAct.matter.body.setPosition(p.leftHand, { x: p.leftJointPontoPivorMundo.x, y: p.leftJointPontoPivorMundo.y });
+            sAct.matter.body.setVelocity(p.leftHand, { x: 0, y: 0 });
+        }
+        if (p.rightJoint && p.rightJointPontoPivorMundo) {
+            sAct.matter.body.setPosition(p.rightHand, { x: p.rightJointPontoPivorMundo.x, y: p.rightJointPontoPivorMundo.y });
+            sAct.matter.body.setVelocity(p.rightHand, { x: 0, y: 0 });
+        }
+    });
+
     if (player1) { player1.gfx.clear(); desenharJogador(player1); } if (player2) { player2.gfx.clear(); desenharJogador(player2); } listaObjetosEditaveis.forEach(obj => { if (obj) desenharObjetoEditor(obj); });
     if (player1 && player2) {
         const mX = (player1.body.position.x + player2.body.position.x) / 2, mY = (player1.body.position.y + player2.body.position.y) / 2;
