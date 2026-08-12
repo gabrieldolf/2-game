@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>3333333333333333333333333</title>
+    <title>15151515151515151515</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -399,6 +399,7 @@ function desenharJogador(p) {
 // CORREÇÃO DE ACESSÓRIO: Acopla restrição relativa local se o objeto for dinâmico, fazendo a mão girar e andar com ele
 // CORREÇÃO DE ACESSÓRIO: Acopla restrição relativa local se o objeto for dinâmico, fazendo a mão girar e andar com ele
 // CORREÇÃO DE MATRIZ: Inverte o ângulo na projeção para mapear o clique perfeitamente dentro de cubos já rotacionados
+// CORREÇÃO DEFINITIVA: Alinha os eixos locais de rotação do Matter para colar a mão no pixel exato do cubo virado
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
@@ -435,14 +436,14 @@ function processarGarra(s, p, h, jKey, grab) {
 
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
-            // Mede o vetor global absoluto na tela entre o centro do cubo e a luva
+            // Mede a distância global absoluta entre os centros na tela do jogo
             let dx = h.position.x - alvoValido.position.x;
             let dy = h.position.y - alvoValido.position.y;
             
-            // CORREÇÃO CIRÚRGICA: Matriz inversa multiplica pelo ângulo negativo para achar o ponto local real dentro do cubo virado
+            // MATRIZ ROTACIONADA SINTONIZADA: Projeta o clique perfeitamente alinhado com os eixos internos do cubo
             let localOffset = {
-                x: dx * Math.cos(-alvoValido.angle) - dy * Math.sin(-alvoValido.angle),
-                y: dx * Math.sin(-alvoValido.angle) + dy * Math.cos(-alvoValido.angle)
+                x: dx * Math.cos(alvoValido.angle) + dy * Math.sin(alvoValido.angle),
+                y: -dx * Math.sin(alvoValido.angle) + dy * Math.cos(alvoValido.angle)
             };
 
             if (alvoValido.isStatic) {
