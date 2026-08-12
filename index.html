@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>SAASASASASASASAS</title>
+    <title>123123123123123</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -385,54 +385,56 @@ function desenharJogador(p) {
     g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22); const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
-// CORRIGIDO: Agora varre tanto os objetos do editor quanto as bordas fixas do chão/paredes pretas
+// CORREÇÃO CRÍTICA: Substitui a distância do centro por testes de ponto em vértices para prender no ponto exato do toque
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
-        console.log(`[GARRAS] Botão pressionado para a Mão ${lado}. Iniciando varredura geométrica...`);
+        console.log(`[GARRAS] Botão pressionado para a Mão ${lado}. Analisando superfícies de toque...`);
         
         let alvoCorpo = null;
-        let menorDist = 45; // Mantém o alcance confortável para as mãos longas
         
-        // 1. Varre os objetos dinâmicos criados pelo Editor
-        listaObjetosEditaveis.forEach(obj => {
-            if (!obj) return;
-            if (obj.body) {
-                let dX = h.position.x - obj.body.position.x, dY = h.position.y - obj.body.position.y;
-                let dist = Math.sqrt(dX*dX + dY*dY);
-                if (dist < menorDist) { menorDist = dist; alvoCorpo = obj.body; }
-            } else if (obj.shape === 'rope' && obj.ropeElos) {
-                obj.ropeElos.forEach(elo => {
-                    let dX = h.position.x - elo.position.x, dY = h.position.y - elo.position.y;
-                    let dist = Math.sqrt(dX*dX + dY*dY);
-                    if (dist < menorDist) { menorDist = dist; alvoCorpo = elo; }
-                });
-            }
-        });
+        // 1. Testa primeiro a intersecção de ponto real contra as 4 bordas pretas fixas do cenário
+        for (let i = 0; i < bordasFixasDoCenario.length; i++) {
+            let b = bordasFixasDoCenario[i];
+            if (!b) continue;
+            // query.point checa se a coordenada da luva intercepta qualquer parte do retângulo do chão/parede
+            let encostou = s.matter.query.point([b], { x: h.position.x, y: h.position.y }).length > 0;
+            if (encostou) { alvoCorpo = b; break; }
+        }
         
-        // 2. CORREÇÃO CRÍTICA: Varre também as bordas pretas fixas do cenário para permitir o agarre no chão e paredes
-        bordasFixasDoCenario.forEach(bordaFixa => {
-            if (!bordaFixa) return;
-            let dX = h.position.x - bordaFixa.position.x, dY = h.position.y - bordaFixa.position.y;
-            let dist = Math.sqrt(dX*dX + dY*dY);
-            // Como as bordas fixas são retângulos muito grandes, medimos a distância até os limites da caixa (bounds) se necessário
-            if (dist < menorDist + 100) {
-                let contido = Phaser.Physics.Matter.Matter.Vertices.contains(bordaFixa.vertices, { x: h.position.x, y: h.position.y });
-                // Se a luva estiver colada ou dentro da caixa da parede fixa, força o agarre nela
-                if (contido || dist < menorDist) { menorDist = dist; alvoCorpo = bordaFixa; }
+        // 2. Se não estiver tocando no chão fixo, testa a intersecção contra as caixas e elos dinâmicos do Editor
+        if (!alvoCorpo) {
+            for (let i = 0; i < listaObjetosEditaveis.length; i++) {
+                let obj = listaObjetosEditaveis[i];
+                if (!obj) continue;
+                
+                if (obj.body) {
+                    let encostou = s.matter.query.point([obj.body], { x: h.position.x, y: h.position.y }).length > 0;
+                    if (encostou) { alvoCorpo = obj.body; break; }
+                } else if (obj.shape === 'rope' && obj.ropeElos) {
+                    // Para cordas, testa elo por elo de forma individual
+                    for (let j = 0; i < obj.ropeElos.length; j++) {
+                        let elo = obj.ropeElos[j];
+                        if (!elo) continue;
+                        let encostou = s.matter.query.point([elo], { x: h.position.x, y: h.position.y }).length > 0;
+                        if (encostou) { alvoCorpo = elo; break; }
+                    }
+                    if (alvoCorpo) break;
+                }
             }
-        });
+        }
 
         if (alvoCorpo) {
-            console.log(`[GARRAS] Sucesso! Mão ${lado} encontrou superfície válida ("${alvoCorpo.label}") a ${menorDist.toFixed(1)}px. Cravando.`);
+            console.log(`[GARRAS] Sucesso! Mão ${lado} detectou contato real com "${alvoCorpo.label}". Travando pino invisível.`);
             let alvoValido = alvoCorpo.parent ? alvoCorpo.parent : alvoCorpo;
             let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.85;
             
+            // Desenha o flash indicador piscante no local exato do travamento
             let flashGfx = s.add.graphics().setDepth(20);
-            flashGfx.lineStyle(4, 0xffea00, 1); flashGfx.lineBetween(h.position.x, h.position.y, alvoCorpo.position.x, alvoCorpo.position.y);
+            flashGfx.lineStyle(4, 0xffea00, 1); flashGfx.lineBetween(h.position.x, h.position.y, h.position.x, h.position.y + 4);
             s.time.delayedCall(150, () => { flashGfx.clear(); flashGfx.destroy(); });
 
-            s.matter.body.setDensity(h, 0.02);
+            s.matter.body.setDensity(h, 0.02); // Devolve o peso nativo no frame do agarre para servir de fulcro estável
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
             let pivotLeveCinematico = s.matter.add.circle(h.position.x, h.position.y, 6, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
@@ -443,10 +445,10 @@ function processarGarra(s, p, h, jKey, grab) {
             let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle); 
             p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
         } else {
-            console.log(`[GARRAS] Falha. Mão ${lado} não encontrou blocos ou paredes pretas dentro do raio.`);
+            console.log(`[GARRAS] Ignorado. Mão ${lado} livre no ar (não há nenhuma quina ou colisor sob a coordenada da luva).`);
         }
     } else if (!grab && p[jKey]) {
-        s.matter.body.setDensity(h, 0.0005);
+        s.matter.body.setDensity(h, 0.0005); // Devolve a massa pena da Ideia 2 ao soltar para desativar o empuxo do analógico
         if (p[jKey]) s.matter.world.remove(p[jKey]); if (p[jKey + 'PivotBody']) s.matter.world.remove(p[jKey + 'PivotBody']);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
