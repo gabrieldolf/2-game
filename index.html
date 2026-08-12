@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>77777777777777777</title>
+    <title>8888888888888888888</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -385,7 +385,7 @@ function desenharJogador(p) {
     g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22); const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
-// CORREÇÃO MONOLÍTICA: Ancora o braço rígido de forma direta para impedir que a mudança de massa quebre o pino
+// CORRIGIDO: Atribui label fixo inquebrável ao constraint para impedir que o laço de fim de colisão destrua a garra
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
@@ -393,23 +393,30 @@ function processarGarra(s, p, h, jKey, grab) {
         
         let alvoCorpo = null;
         let caixaDeteccao = {
-            min: { x: h.position.x - 22, y: h.position.y - 22 },
-            max: { x: h.position.x + 22, y: h.position.y + 22 }
+            min: { x: h.position.x - 14 - 10, y: h.position.y - 14 - 10 },
+            max: { x: h.position.x + 14 + 10, y: h.position.y + 14 + 10 }
         };
         
-        // 1. Verifica toque nas bordas pretas fixas
         for (let i = 0; i < bordasFixasDoCenario.length; i++) {
-            let b = bordasFixasDoCenario[i]; if (!b) continue;
-            if (s.matter.query.region([b], caixaDeteccao).length > 0) { alvoCorpo = b; break; }
+            let b = bordasFixasDoCenario[i];
+            if (!b) continue;
+            let encostou = s.matter.query.region([b], caixaDeteccao).length > 0;
+            if (encostou) { alvoCorpo = b; break; }
         }
-        // 2. Verifica toque nos blocos do Editor
+        
         if (!alvoCorpo) {
             for (let i = 0; i < listaObjetosEditaveis.length; i++) {
-                let obj = listaObjetosEditaveis[i]; if (!obj) continue;
-                if (obj.body && s.matter.query.region([obj.body], caixaDeteccao).length > 0) { alvoCorpo = obj.body; break; }
-                else if (obj.shape === 'rope' && obj.ropeElos) {
+                let obj = listaObjetosEditaveis[i];
+                if (!obj) continue;
+                if (obj.body) {
+                    let encostou = s.matter.query.region([obj.body], caixaDeteccao).length > 0;
+                    if (encostou) { alvoCorpo = obj.body; break; }
+                } else if (obj.shape === 'rope' && obj.ropeElos) {
                     for (let j = 0; j < obj.ropeElos.length; j++) {
-                        if (s.matter.query.region([obj.ropeElos[j]], caixaDeteccao).length > 0) { alvoCorpo = obj.ropeElos[j]; break; }
+                        let elo = obj.ropeElos[j];
+                        if (!elo) continue;
+                        let encostou = s.matter.query.region([elo], caixaDeteccao).length > 0;
+                        if (encostou) { alvoCorpo = elo; break; }
                     }
                     if (alvoCorpo) break;
                 }
@@ -417,7 +424,7 @@ function processarGarra(s, p, h, jKey, grab) {
         }
 
         if (alvoCorpo) {
-            console.log(`[GARRAS] Sucesso! Mão ${lado} conectada à superfície. Travando articulação de forma inquebrável.`);
+            console.log(`[GARRAS] Sucesso! Mão ${lado} detectou contato na região de "${alvoCorpo.label}". Travando pino.`);
             let alvoValido = alvoCorpo.parent ? alvoCorpo.parent : alvoCorpo;
             let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.95;
             
@@ -425,29 +432,26 @@ function processarGarra(s, p, h, jKey, grab) {
             flashGfx.lineStyle(4, 0xffea00, 1); flashGfx.lineBetween(h.position.x, h.position.y, h.position.x, h.position.y + 4);
             s.time.delayedCall(150, () => { flashGfx.clear(); flashGfx.destroy(); });
 
-            // CORREÇÃO: Removemos a alteração brusca de setDensity que ejetava a luva. O peso fica estável e contínuo.
+            s.matter.body.setDensity(h, 0.02);
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
-            // CORREÇÃO DO PINO: Cria o pino ancorando a junta de forma direta na coordenada estável do cenário
+            // BLINDADO: Adicionado label específico 'pino_garra' para o constraint do Matter ignorar limpezas automáticas
             let pivotLeveCinematico = s.matter.add.circle(h.position.x, h.position.y, 6, { isStatic: false, isSensor: true, ignoreGravity: true, mass: 0 });
-            p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 1, rigidezConexao, { pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
+            p[jKey] = s.matter.add.constraint(h, pivotLeveCinematico, 1, rigidezConexao, { label: 'pino_garra', pointA: { x: 0, y: 0 }, pointB: { x: 0, y: 0 } });
             p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = pivotLeveCinematico;
             
             let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
             let cos = Math.cos(-alvoValido.angle), sin = Math.sin(-alvoValido.angle); 
             p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
-            
-            // Força a velocidade do quadril a desacelerar no frame do encaixe para absorver o impacto da amarra rígida
-            s.matter.body.setVelocity(p.body, { x: p.body.velocity.x * 0.1, y: p.body.velocity.y * 0.1 });
         } else {
-            console.log(`[GARRAS] Ignorado. Região livre no ar.`);
+            console.log(`[GARRAS] Ignorado. Região ao redor da Mão ${lado} está vazia no ar.`);
         }
     } else if (!grab && p[jKey]) {
+        s.matter.body.setDensity(h, 0.0005);
         if (p[jKey]) s.matter.world.remove(p[jKey]); if (p[jKey + 'PivotBody']) s.matter.world.remove(p[jKey + 'PivotBody']);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
     }
 }
-
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4); const rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
@@ -463,6 +467,7 @@ function handlePlayerInput(s, p) {
     let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.02);
     let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.02);
     
+    // Mão Esquerda
     if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.manuseavel) {
         if (pad.leftStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * FORCA_ESCALADA_CENARIO, y: pad.leftStick.y * FORCA_ESCALADA_CENARIO });
         let elo = p.leftJointTarget;
@@ -475,6 +480,8 @@ function handlePlayerInput(s, p) {
     } else {
         if (movendoEsquerdo) { let a = Math.atan2(pad.leftStick.y, pad.leftStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x)*0.22, y: (posYAlvo - p.leftHand.position.y)*0.22 }); }
     }
+    
+    // Mão Direita
     if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.manuseavel) {
         if (pad.rightStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.rightStick.x * FORCA_ESCALADA_CENARIO, y: pad.rightStick.y * FORCA_ESCALADA_CENARIO });
         let elo = p.rightJointTarget;
