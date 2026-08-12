@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>106</title>
+    <title>107</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -385,14 +385,32 @@ function desenharJogador(p) {
     g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22); const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
-// RESTAURADO: Massa e densidade nativas estáveis. As garras voltam a colidir com força real e grudam de imediato
+// IDEIA 2 MANTIDA: Mãos continuam super leves, mas ganham varredura manual de pixel ao agarrar
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
-        let corpoTocado = h.corpoTocadoAgora;
-        if (corpoTocado) {
-            let alvoValido = corpoTocado.parent ? corpoTocado.parent : corpoTocado;
+        // CORREÇÃO FOCADA: Se o Matter ignorou a colisão pelo peso leve, fazemos uma busca manual por blocos próximos
+        let alvoCorpo = h.corpoTocadoAgora;
+        
+        if (!alvoCorpo) {
+            let corposMundo = s.matter.world.localWorld.bodies;
+            let menorDist = 24; // Raio máximo de detecção milimétrica ao redor da luva
+            for (let i = 0; i < corposMundo.length; i++) {
+                let b = corposMundo[i];
+                if (!b || b.label !== 'ambiente' || b.isStaticBorder) continue;
+                // Mede a distância entre o centro da mão e o centro do bloco
+                let dX = h.position.x - b.position.x;
+                let dY = h.position.y - b.position.y;
+                let dist = Math.sqrt(dX*dX + dY*dY);
+                if (dist < menorDist) { menorDist = dist; alvoCorpo = b; }
+            }
+        }
+
+        if (alvoCorpo) {
+            let alvoValido = alvoCorpo.parent ? alvoCorpo.parent : alvoCorpo;
             let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.85;
             
+            // Força a recuperação da massa nativa de escalada no instante em que o pino prende
+            s.matter.body.setMass(h, 1.5);
             s.matter.body.setVelocity(h, { x: 0, y: 0 });
             s.matter.body.setAngularVelocity(h, 0);
             
@@ -405,6 +423,9 @@ function processarGarra(s, p, h, jKey, grab) {
             p[jKey + 'LocalOffset'] = { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
         }
     } else if (!grab && p[jKey]) {
+        // Soltou: Retorna imediatamente para a Massa Mínima da Ideia 2 para anular o puxão no ar e chão
+        s.matter.body.setMass(h, 0.0001);
+        
         if (p[jKey]) s.matter.world.remove(p[jKey]); 
         if (p[jKey + 'PivotBody']) s.matter.world.remove(p[jKey + 'PivotBody']);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
@@ -437,13 +458,7 @@ function handlePlayerInput(s, p) {
     } else if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel) {
         if (pad.leftStick) s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: pad.leftStick.x * FORCA_MOVER_CAIXA, y: pad.leftStick.y * FORCA_MOVER_CAIXA });
     } else {
-        if (movendoEsquerdo) { 
-            let a = Math.atan2(pad.leftStick.y, pad.leftStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; 
-            let velX = (posXAlvo - p.leftHand.position.x)*0.22; let velY = (posYAlvo - p.leftHand.position.y)*0.22;
-            s.matter.body.setVelocity(p.leftHand, { x: velX, y: velY }); 
-            // FILTRAGEM DE REAÇÃO: Anula o vetor de velocidade transmitido para o corpo pela junta rígida da mão livre
-            s.matter.body.setVelocity(p.body, { x: p.body.velocity.x - velX * 0.015, y: p.body.velocity.y - velY * 0.015 });
-        }
+        if (movendoEsquerdo) { let a = Math.atan2(pad.leftStick.y, pad.leftStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x)*0.22, y: (posYAlvo - p.leftHand.position.y)*0.22 }); }
     }
     
     // Mão Direita
@@ -457,23 +472,19 @@ function handlePlayerInput(s, p) {
     } else if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel) {
         if (pad.rightStick) s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: pad.rightStick.x * FORCA_MOVER_CAIXA, y: pad.rightStick.y * FORCA_MOVER_CAIXA });
     } else {
-        if (movendoDireito) { 
-            let a = Math.atan2(pad.rightStick.y, pad.rightStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; 
-            let velX = (posXAlvo - p.rightHand.position.x)*0.22; let velY = (posYAlvo - p.rightHand.position.y)*0.22;
-            s.matter.body.setVelocity(p.rightHand, { x: velX, y: velY }); 
-            // FILTRAGEM DE REAÇÃO DIREITA
-            s.matter.body.setVelocity(p.body, { x: p.body.velocity.x - velX * 0.015, y: p.body.velocity.y - velY * 0.015 });
-        }
+        if (movendoDireito) { let a = Math.atan2(pad.rightStick.y, pad.rightStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x)*0.22, y: (posYAlvo - p.rightHand.position.y)*0.22 }); }
     }
     processarGarra(s, p, p.leftHand, 'leftJoint', lL); processarGarra(s, p, p.rightHand, 'rightJoint', rR);
 }
+
 function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const grp = scene.matter.world.nextGroup(true), flt = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp };
     const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
     
-    // RESTAURADO: Densidade nativa estável de 0.02. A mão volta a ter peso real para registrar colisões perfeitas e firmes
-    const lH = scene.matter.add.circle(x - 100, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
+    // MÃO ULTRA-LEVE MANTIDA: Massa inicial travada em 0.0001 para anular 100% o puxão e o efeito balão no ar/chão
+    const lH = scene.matter.add.circle(x - 100, y, 14, { friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
     const rH = scene.matter.add.circle(x + 100, y, 14, { density: 0.02, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
+    scene.matter.body.setMass(lH, 0.0001); scene.matter.body.setMass(rH, 0.0001);
     
     lH.corpoTocadoAgora = null; rH.corpoTocadoAgora = null; let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 32, id, grp, lL); createArmSegment(scene, b, rH, 3, 32, id, grp, rL);
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
