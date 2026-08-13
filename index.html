@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>111111111111111111</title>
+    <title>333333333333333</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -146,11 +146,14 @@ function create() {
     this.matter.world.on('collisionstart', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
     this.matter.world.on('collisionactive', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
     this.matter.world.on('collisionend', (event) => { event.pairs.forEach(pair => { quebrarToqueParaContato(pair.bodyA, pair.bodyB); quebrarToqueParaContato(pair.bodyB, pair.bodyA); }); });
-        this.input.on('pointerdown', (p) => {
+    this.input.on('pointerdown', (p) => {
         if (!modoEditorAtivo) return;
         if (document.getElementById('prop-shape').value === 'polygon') {
-            // PONTO 2: Salva as coordenadas brutas no array para renderização contínua pós-clear
+            if (!previewGraphicsPoligono) {
+                previewGraphicsPoligono = this.add.graphics().setDepth(9999);
+            }
             verticesCriacaoAtiva.push({ x: p.worldX, y: p.worldY });
+            console.log(`[POLÍGONO] Vértice adicionado na posição: X=${Math.round(p.worldX)}, Y=${Math.round(p.worldY)}`);
         } else if (ferramentaAtual === 'create') {
             executarCriacaoObjeto(this, p.worldX, p.worldY);
         } else {
@@ -537,26 +540,25 @@ function executarRespawnIndividual(scene, pNum) {
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
     if (modoEditorAtivo && document.getElementById('prop-shape').value === 'polygon') {
-        if (!previewGraphicsPoligono || !previewGraphicsPoligono.scene) {
-            previewGraphicsPoligono = this.add.graphics();
+        if (!previewGraphicsPoligono) {
+            previewGraphicsPoligono = this.add.graphics().setDepth(9999);
         }
-        
         previewGraphicsPoligono.clear();
-        previewGraphicsPoligono.setDepth(999);
         
-        // Desenha as bolinhas guias vermelhas com borda branca em cada quina clicada
+        // Desenha as bolinhas guias vermelhas com contorno branco em cada quina clicada
         verticesCriacaoAtiva.forEach(v => {
             previewGraphicsPoligono.lineStyle(2, 0xffffff, 1);
             previewGraphicsPoligono.fillStyle(0xff0000, 1);
-            previewGraphicsPoligono.fillCircle(v.x, v.y, 6);
-            previewGraphicsPoligono.strokeCircle(v.x, v.y, 6);
+            previewGraphicsPoligono.fillCircle(v.x, v.y, 7);
+            previewGraphicsPoligono.strokeCircle(v.x, v.y, 7);
         });
         
-        // CORREÇÃO CRÍTICA: Ajustado para ler o índice [0] para o início da linha guia do polígono
+        // Conecta os pontos com uma linha guia vermelha visível
         if (verticesCriacaoAtiva.length > 1) {
             previewGraphicsPoligono.lineStyle(3, 0xff0000, 0.9);
             previewGraphicsPoligono.beginPath();
-            previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
+            previewGraphicsPoligono.moveTo(verticesCriacaoAtiva.id ? verticesCriacaoAtiva.id : verticesCriacaoAtiva[0].x, verticesCriacaoAtiva.id ? verticesCriacaoAtiva.id : verticesCriacaoAtiva[0].y);
+            // Corrige a leitura sequencial das linhas do polígono
             for (let i = 1; i < verticesCriacaoAtiva.length; i++) {
                 previewGraphicsPoligono.lineTo(verticesCriacaoAtiva[i].x, verticesCriacaoAtiva[i].y);
             }
