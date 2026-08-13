@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>qqqqqqqqqqq</title>
+    <title>rrrrrrrrrrrrr</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -393,6 +393,7 @@ function desenharJogador(p) {
 // BLINDADO CONTRA TELA AZUL: Adiciona travas contra rotações indefinidas para impedir que coordenadas NaN quebrem a física
 // AJUSTE FINO: Substitui a região quadrada por query.point exato para impedir o agarre fora da área visual do colisor
 // AJUSTE FINO: Mantém a Ideia 2 estável, mas valida se o centro da luva está dentro dos vértices reais do objeto
+// AJUSTE FINO: Usa o Query.collides nativo para validar se as bordas da luva interceptam fisicamente o colisor do objeto
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
@@ -416,16 +417,15 @@ function processarGarra(s, p, h, jKey, grab) {
         }
 
         if (alvoCorpo) {
-            // SOLUÇÃO PROPOSTA: Verifica matematicamente se a coordenada da mão está dentro da área real do colisor
-            let pontoMao = { x: h.position.x, y: h.position.y };
-            let estaDentroDoColisor = Phaser.Physics.Matter.Matter.Vertices.contains(alvoCorpo.vertices, pontoMao);
+            // CORREÇÃO: Verifica se as bordas circulares da mão realmente interceptam o colisor do objeto
+            let colisaoDetectada = s.matter.query.collides(h, [alvoCorpo]).length > 0;
             
-            if (!estaDentroDoColisor) {
-                console.log(`[GARRAS] Ignorado. Mão ${lado} intersectou a caixa limite, mas está fora da área real do colisor.`);
+            if (!colisaoDetectada) {
+                console.log(`[GARRAS] Ignorado. A caixa limite intersectou, mas as bordas da Mão ${lado} não tocam o colisor real.`);
                 return;
             }
 
-            console.log(`[GARRAS] Sucesso! Mão ${lado} confirmada dentro da área de "${alvoCorpo.label}". Conectando.`);
+            console.log(`[GARRAS] Sucesso! Bordas da Mão ${lado} confirmadas tocando o colisor de "${alvoCorpo.label}".`);
             let alvoValido = alvoCorpo.parent ? alvoCorpo.parent : alvoCorpo;
             let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.95;
             
