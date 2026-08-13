@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>55555555555555</title>
+    <title>111111111111111111</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -537,13 +537,12 @@ function executarRespawnIndividual(scene, pNum) {
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
     if (modoEditorAtivo && document.getElementById('prop-shape').value === 'polygon') {
-        // Se por algum motivo o graphics sumiu da cena, força a recriação nativa dele com profundidade máxima
         if (!previewGraphicsPoligono || !previewGraphicsPoligono.scene) {
             previewGraphicsPoligono = this.add.graphics();
         }
         
         previewGraphicsPoligono.clear();
-        previewGraphicsPoligono.setDepth(999); // Coloca acima de absolutamente tudo na tela
+        previewGraphicsPoligono.setDepth(999);
         
         // Desenha as bolinhas guias vermelhas com borda branca em cada quina clicada
         verticesCriacaoAtiva.forEach(v => {
@@ -553,7 +552,7 @@ function update() {
             previewGraphicsPoligono.strokeCircle(v.x, v.y, 6);
         });
         
-        // Desenha as linhas vermelhas conectando os vértices criados
+        // CORREÇÃO CRÍTICA: Ajustado para ler o índice [0] para o início da linha guia do polígono
         if (verticesCriacaoAtiva.length > 1) {
             previewGraphicsPoligono.lineStyle(3, 0xff0000, 0.9);
             previewGraphicsPoligono.beginPath();
@@ -564,7 +563,7 @@ function update() {
             previewGraphicsPoligono.strokePath();
         }
     } else if (previewGraphicsPoligono) {
-        previewGraphicsPoligono.clear(); // Limpa as linhas guias se mudar de ferramenta
+        previewGraphicsPoligono.clear();
     }
     if (modoEditorAtivo) {
         let camSpeed = 12; if (cursorsKeyboard.left.isDown) this.cameras.main.scrollX -= camSpeed; if (cursorsKeyboard.right.isDown) this.cameras.main.scrollX += camSpeed;
