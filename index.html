@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>1212121212121212</title>
+    <title>3333333333335555555555555</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -178,15 +178,6 @@ function create() {
             executarSelecaoObjeto(this, p.worldX, p.worldY, p);
         }
     });
-    function limparBolinhasGuiaDoPoligono(scene) {
-        if (previewGraphicsPoligono) { previewGraphicsPoligono.clear(); }
-        if (scene && scene.listaBolinhasGuiaCena) {
-            scene.listaBolinhasGuiaCena.forEach(bola => {
-                if (bola && bola.destroy) { bola.destroy(); }
-            });
-            scene.listaBolinhasGuiaCena = []; // Esvazia o array para o próximo polígono
-        }
-    }
     this.input.on('pointermove', function(p) {
         if (modoEditorAtivo && ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
             let pos = { x: p.worldX - clickOffsetX, y: p.worldY - clickOffsetY };
@@ -253,6 +244,15 @@ function executarCriacaoObjeto(scene, x, y) {
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel, isStatic: c.isStatic });
 }
+function limparBolinhasGuiaDoPoligono(scene) {
+    if (typeof previewGraphicsPoligono !== 'undefined' && previewGraphicsPoligono) { previewGraphicsPoligono.clear(); }
+    if (scene && scene.listaBolinhasGuiaCena) {
+        scene.listaBolinhasGuiaCena.forEach(bola => {
+            if (bola && bola.destroy) { bola.destroy(); }
+        });
+        scene.listaBolinhasGuiaCena = []; // Esvazia o array limpando a tela
+    }
+}
 function finalizarCriacaoPoligono(scene) {
     if (verticesCriacaoAtiva.length < 3) { alert("Polígonos precisam de pelo menos 3 vértices!"); return; }
     const c = extrairCamposPainel();
@@ -272,6 +272,8 @@ function finalizarCriacaoPoligono(scene) {
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
     let verticesLocaisRelativos = verticesCriacaoAtiva.map(v => { return { x: v.x - centroX, y: v.y - centroY }; });
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: verticesLocaisRelativos, manuseavel: c.manuseavel, isStatic: c.isStatic });
+    
+    // Zera os pontos lidos e executa a trituração síncrona dos círculos visuais guias na tela
     verticesCriacaoAtiva = []; 
     limparBolinhasGuiaDoPoligono(scene);
 }
