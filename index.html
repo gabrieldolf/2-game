@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>333333333333333</title>
+    <title>qqqqqqqqqqqqqqqq</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -146,20 +146,48 @@ function create() {
     this.matter.world.on('collisionstart', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
     this.matter.world.on('collisionactive', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
     this.matter.world.on('collisionend', (event) => { event.pairs.forEach(pair => { quebrarToqueParaContato(pair.bodyA, pair.bodyB); quebrarToqueParaContato(pair.bodyB, pair.bodyA); }); });
+    // CORREÇÃO PONTO 2: Cria bolinhas visíveis no mundo como GameObjects nativos que acompanham a rolagem da câmera
     this.input.on('pointerdown', (p) => {
         if (!modoEditorAtivo) return;
         if (document.getElementById('prop-shape').value === 'polygon') {
-            if (!previewGraphicsPoligono) {
-                previewGraphicsPoligono = this.add.graphics().setDepth(9999);
-            }
+            // Registra o vértice matemático
             verticesCriacaoAtiva.push({ x: p.worldX, y: p.worldY });
             console.log(`[POLÍGONO] Vértice adicionado na posição: X=${Math.round(p.worldX)}, Y=${Math.round(p.worldY)}`);
+            
+            // Inicializa a lista de controle visual se ela não existir
+            if (!window.listaBolinhasGuiaVisual) { window.listaBolinhasGuiaVisual = []; }
+            if (!previewGraphicsPoligono) { previewGraphicsPoligono = this.add.graphics().setDepth(9999); }
+            
+            // Cria uma bolinha visual vermelha de verdade fixada no mundo, que se move com a câmera
+            let bolaVisual = this.add.circle(p.worldX, p.worldY, 7, 0xff0000).setStrokeStyle(2, 0xffffff).setDepth(9999);
+            window.listaBolinhasGuiaVisual.push(bolaVisual);
+            
+            // Desenha apenas as linhas de contorno entre as bolinhas fixadas
+            previewGraphicsPoligono.clear();
+            if (verticesCriacaoAtiva.length > 1) {
+                previewGraphicsPoligono.lineStyle(3, 0xff0000, 0.9);
+                previewGraphicsPoligono.beginPath();
+                previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
+                for (let i = 1; i < verticesCriacaoAtiva.length; i++) {
+                    previewGraphicsPoligono.lineTo(verticesCriacaoAtiva[i].x, verticesCriacaoAtiva[i].y);
+                }
+                previewGraphicsPoligono.strokePath();
+            }
         } else if (ferramentaAtual === 'create') {
             executarCriacaoObjeto(this, p.worldX, p.worldY);
         } else {
             executarSelecaoObjeto(this, p.worldX, p.worldY, p);
         }
     });
+    
+    // CORREÇÃO AUXILIAR: Garante que as bolinhas guia sejam destruídas quando você terminar de criar o polígono
+    function limparBolinhasGuiaDoPoligono() {
+        if (previewGraphicsPoligono) { previewGraphicsPoligono.clear(); }
+        if (window.listaBolinhasGuiaVisual) {
+            window.listaBolinhasGuiaVisual.forEach(bola => { if (bola) bola.destroy(); });
+            window.listaBolinhasGuiaVisual = [];
+        }
+    }
     this.input.on('pointermove', function(p) {
         if (modoEditorAtivo && ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
             let pos = { x: p.worldX - clickOffsetX, y: p.worldY - clickOffsetY };
@@ -240,12 +268,13 @@ function finalizarCriacaoPoligono(scene) {
         if (corpoFatiaPuro) partesFisicasTriangulares.push(corpoFatiaPuro);
     }
     let body = scene.matter.body.create({ parts: partesFisicasTriangulares, isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !c.gravity });
-    body.manuseavel = c.manuseavel; body.label = 'ambiente';
+    body.manuseavel = c.manuseavel;
     scene.matter.world.add(body); scene.matter.body.setPosition(body, { x: centroX, y: centroY });
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
     let verticesLocaisRelativos = verticesCriacaoAtiva.map(v => { return { x: v.x - centroX, y: v.y - centroY }; });
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: verticesLocaisRelativos, manuseavel: c.manuseavel, isStatic: c.isStatic });
-    verticesCriacaoAtiva = []; previewGraphicsPoligono.clear();
+    verticesCriacaoAtiva = []; 
+    limparBolinhasGuiaDoPoligono();
 }
 function executarSelecaoObjeto(scene, x, y, pointer) {
     let prox = null, mDist = Infinity;
