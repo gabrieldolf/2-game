@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>3333333333</title>
+    <title>55555555555555</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -537,17 +537,25 @@ function executarRespawnIndividual(scene, pNum) {
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
     if (modoEditorAtivo && document.getElementById('prop-shape').value === 'polygon') {
+        // Se por algum motivo o graphics sumiu da cena, força a recriação nativa dele com profundidade máxima
+        if (!previewGraphicsPoligono || !previewGraphicsPoligono.scene) {
+            previewGraphicsPoligono = this.add.graphics();
+        }
+        
         previewGraphicsPoligono.clear();
-        // Configura uma profundidade máxima para as bolinhas guias ficarem visíveis acima de qualquer bloco
-        previewGraphicsPoligono.setDepth(99); 
+        previewGraphicsPoligono.setDepth(999); // Coloca acima de absolutamente tudo na tela
+        
+        // Desenha as bolinhas guias vermelhas com borda branca em cada quina clicada
         verticesCriacaoAtiva.forEach(v => {
-            previewGraphicsPoligono.lineStyle(2, 0xffffff, 1); // Borda branca de destaque
-            previewGraphicsPoligono.fillStyle(0xff0000, 1);    // Miolo vermelho sólido
+            previewGraphicsPoligono.lineStyle(2, 0xffffff, 1);
+            previewGraphicsPoligono.fillStyle(0xff0000, 1);
             previewGraphicsPoligono.fillCircle(v.x, v.y, 6);
             previewGraphicsPoligono.strokeCircle(v.x, v.y, 6);
         });
+        
+        // Desenha as linhas vermelhas conectando os vértices criados
         if (verticesCriacaoAtiva.length > 1) {
-            previewGraphicsPoligono.lineStyle(3, 0xff0000, 0.8);
+            previewGraphicsPoligono.lineStyle(3, 0xff0000, 0.9);
             previewGraphicsPoligono.beginPath();
             previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
             for (let i = 1; i < verticesCriacaoAtiva.length; i++) {
@@ -555,6 +563,8 @@ function update() {
             }
             previewGraphicsPoligono.strokePath();
         }
+    } else if (previewGraphicsPoligono) {
+        previewGraphicsPoligono.clear(); // Limpa as linhas guias se mudar de ferramenta
     }
     if (modoEditorAtivo) {
         let camSpeed = 12; if (cursorsKeyboard.left.isDown) this.cameras.main.scrollX -= camSpeed; if (cursorsKeyboard.right.isDown) this.cameras.main.scrollX += camSpeed;
