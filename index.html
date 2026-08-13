@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Heave Ho Physics Sandbox & Editor</title>
+    <title>rrrrrrrrrrrrrrrrrrrrrr</title>
     <script src="https://jsdelivr.net"></script>
     <style>
         body { margin: 0; padding: 0; background: #111; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; user-select: none; }
@@ -667,23 +667,25 @@ function executarRespawnIndividual(scene, pNum) {
 
 function update() {
     let sAct = this;
-    if (cursors.left.isDown) sAct.cameras.main.scrollX -= 10;
-    if (cursors.right.isDown) sAct.cameras.main.scrollX += 10;
-    if (cursors.up.isDown) sAct.cameras.main.scrollY -= 10;
-    if (cursors.down.isDown) sAct.cameras.main.scrollY += 10;
     
-    if (player1 && player1.pad) {
-        processarGarra(sAct, player1, player1.leftHand, 'leftJoint', player1.pad.left.isDown);
-        processarGarra(sAct, player1, player1.rightHand, 'rightJoint', player1.pad.right.isDown);
-        if (player1.pad.up.isDown) executarRespawnIndividual(sAct, 0);
-    }
-    if (player2 && player2.pad) {
-        processarGarra(sAct, player2, player2.leftHand, 'leftJoint', player2.pad.A.isDown);
-        processarGarra(sAct, player2, player2.rightHand, 'rightJoint', player2.pad.D.isDown);
-        if (player2.pad.W.isDown) executarRespawnIndividual(sAct, 1);
-    }
+    // RESTAURADO: Controles e movimentação de câmera originais do teclado mantidos intactos
+    if (cursorsKeyboard.left.isDown) sAct.cameras.main.scrollX -= 12;
+    if (cursorsKeyboard.right.isDown) sAct.cameras.main.scrollX += 12;
+    if (cursorsKeyboard.up.isDown) sAct.cameras.main.scrollY -= 12;
+    if (cursorsKeyboard.down.isDown) sAct.cameras.main.scrollY += 12;
+    
+    // Processamento de jogabilidade para os jogadores baseado nos inputs originais ativos
+    if (player1) handlePlayerInput(sAct, player1);
+    if (player2) handlePlayerInput(sAct, player2);
+    
+    [player1, player2].forEach(p => { 
+        if (!p) return; 
+        aplicarLimiteFrame(sAct, p.body, 10); 
+    });
+    
     if (player1) desenharBonecoHeaveHo(player1);
     if (player2) desenharBonecoHeaveHo(player2);
+
     listaObjetosEditaveis.forEach(obj => {
         if (!obj || !obj.body || obj.body.isStatic) return;
         if (obj.maxVel && obj.maxVel > 0) {
