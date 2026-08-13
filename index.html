@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>123123123123</title>
+    <title>11111111111111111111</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -391,24 +391,30 @@ function desenharJogador(p) {
 // CORREÇÃO CIRÚRGICA DE ENCAIXE: Laço ajustado para 'j < obj.ropeElos.length' eliminando o travamento infinito
 // BLINDADO: Varredura refeita do zero, livre de qualquer laço infinito. Acaba com o problema da tela azul de vez
 // BLINDADO CONTRA TELA AZUL: Adiciona travas contra rotações indefinidas para impedir que coordenadas NaN quebrem a física
+// AJUSTE FINO: Substitui a região quadrada por query.point exato para impedir o agarre fora da área visual do colisor
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
-        console.log(`[GARRAS] Botão pressionado para a Mão ${lado}. Analisando região de toque...`);
+        console.log(`[GARRAS] Botão pressionado para a Mão ${lado}. Analisando geometria de toque...`);
         
         let alvoCorpo = null;
-        let caixaDeteccao = { min: { x: h.position.x - 16, y: h.position.y - 16 }, max: { x: h.position.x + 16, y: h.position.y + 16 } };
+        let coordenadasMao = { x: h.position.x, y: h.position.y };
         
+        // 1. Testa contato exato contra as 4 bordas pretas do cenário fixo
         for (let i = 0; i < bordasFixasDoCenario.length; i++) {
             let b = bordasFixasDoCenario[i]; if (!b) continue;
-            if (s.matter.query.region([b], caixaDeteccao).length > 0) { alvoCorpo = b; break; }
+            // query.point verifica se o ponto exato da luva está tocando a linha física real do colisor
+            let encostou = s.matter.query.point([b], coordenadasMao).length > 0;
+            if (encostou) { alvoCorpo = b; break; }
         }
         
+        // 2. Se não estiver no chão fixo, busca na lista de blocos do Editor usando intersecção geométrica estrita
         if (!alvoCorpo) {
             for (let i = 0; i < listaObjetosEditaveis.length; i++) {
                 let obj = listaObjetosEditaveis[i];
                 if (obj && obj.body) {
-                    if (s.matter.query.region([obj.body], caixaDeteccao).length > 0) { alvoCorpo = obj.body; break; }
+                    let encostou = s.matter.query.point([obj.body], coordenadasMao).length > 0;
+                    if (encostou) { alvoCorpo = obj.body; break; }
                 }
             }
         }
@@ -427,11 +433,9 @@ function processarGarra(s, p, h, jKey, grab) {
             let dx = h.position.x - alvoValido.position.x;
             let dy = h.position.y - alvoValido.position.y;
             
-            // TRAVA ANTICRASH: Garante que a rotação seja um número válido em radianos, eliminando o undefined/NaN de vez
             let anguloRadianosEstavel = alvoValido.rotation ? alvoValido.rotation : 0;
             if (isNaN(anguloRadianosEstavel)) anguloRadianosEstavel = 0;
             
-            // Matriz inversa protegida de erros matemáticos catastróficos
             let localOffset = {
                 x: dx * Math.cos(-anguloRadianosEstavel) - dy * Math.sin(-anguloRadianosEstavel),
                 y: dx * Math.sin(-anguloRadianosEstavel) + dy * Math.cos(-anguloRadianosEstavel)
@@ -447,6 +451,8 @@ function processarGarra(s, p, h, jKey, grab) {
             
             p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = localOffset;
             s.matter.body.setVelocity(p.body, { x: p.body.velocity.x * 0.1, y: p.body.velocity.y * 0.1 });
+        } else {
+            console.log(`[GARRAS] Ignorado. Mão ${lado} fora da área do colisor.`);
         }
     } else if (!grab && p[jKey]) {
         if (p[jKey]) s.matter.world.remove(p[jKey]);
