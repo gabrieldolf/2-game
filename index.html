@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>33333333333333333</title>
+    <title>5555555555555555555</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -146,20 +146,22 @@ function create() {
     this.matter.world.on('collisionstart', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
     this.matter.world.on('collisionactive', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
     this.matter.world.on('collisionend', (event) => { event.pairs.forEach(pair => { quebrarToqueParaContato(pair.bodyA, pair.bodyB); quebrarToqueParaContato(pair.bodyB, pair.bodyA); }); });
-        this.input.on('pointerdown', (p) => {
+    this.input.on('pointerdown', (p) => {
         if (!modoEditorAtivo) return;
         if (ferramentaAtual === 'create') {
             if (document.getElementById('prop-shape').value === 'polygon') {
-                // PONTO 2: Registra o vértice e força o desenho imediato da bolinha guia na tela
+                // PONTO 2: Registra e limpa/redesenha os pontos na tela usando o Graphics global
                 verticesCriacaoAtiva.push({ x: p.worldX, y: p.worldY });
                 previewGraphicsPoligono.clear();
-                previewGraphicsPoligono.lineStyle(2, 0xff0000, 1);
-                previewGraphicsPoligono.fillStyle(0xff0000, 0.7);
-                verticesCriacaoAtiva.forEach(v => previewGraphicsPoligono.fillCircle(v.x, v.y, 5));
+                verticesCriacaoAtiva.forEach(v => {
+                    previewGraphicsPoligono.lineStyle(2, 0xff0000, 1);
+                    previewGraphicsPoligono.fillStyle(0xff0000, 0.9);
+                    previewGraphicsPoligono.fillCircle(v.x, v.y, 6);
+                });
                 if (verticesCriacaoAtiva.length > 1) {
                     previewGraphicsPoligono.beginPath();
                     previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
-                    for (let i = 1; i < verticesCriacaoAtiva.length; i++) previewGraphicsPoligono.lineTo(verticesCriacaoAtiva[i].x, verticesCriacaoAtiva[i].y);
+                    for (let i = 1; i < verticesCriacaoAtiva.length; i++) { previewGraphicsPoligono.lineTo(verticesCriacaoAtiva[i].x, verticesCriacaoAtiva[i].y); }
                     previewGraphicsPoligono.strokePath();
                 }
             } else { executarCriacaoObjeto(this, p.worldX, p.worldY); }
@@ -409,17 +411,9 @@ function desenharJogador(p) {
     g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22); const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
-// CORREÇÃO CIRÚRGICA DE ENCAIXE: Laço ajustado para 'j < obj.ropeElos.length' eliminando o travamento infinito
-// BLINDADO: Varredura refeita do zero, livre de qualquer laço infinito. Acaba com o problema da tela azul de vez
-// BLINDADO CONTRA TELA AZUL: Adiciona travas contra rotações indefinidas para impedir que coordenadas NaN quebrem a física
-// AJUSTE FINO: Substitui a região quadrada por query.point exato para impedir o agarre fora da área visual do colisor
-// AJUSTE FINO: Mantém a Ideia 2 estável, mas valida se o centro da luva está dentro dos vértices reais do objeto
-// AJUSTE FINO: Usa o Query.collides nativo para validar se as bordas da luva interceptam fisicamente o colisor do objeto
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let lado = (jKey === 'leftJoint') ? 'Esquerda' : 'Direita';
-        console.log(`[GARRAS] Botão pressionado para a Mão ${lado}. Analisando região de toque...`);
-        
         let alvoCorpo = null;
         let caixaDeteccao = { min: { x: h.position.x - 16, y: h.position.y - 16 }, max: { x: h.position.x + 16, y: h.position.y + 16 } };
         
@@ -427,61 +421,43 @@ function processarGarra(s, p, h, jKey, grab) {
             let b = bordasFixasDoCenario[i]; if (!b) continue;
             if (s.matter.query.region([b], caixaDeteccao).length > 0) { alvoCorpo = b; break; }
         }
-        
         if (!alvoCorpo) {
             for (let i = 0; i < listaObjetosEditaveis.length; i++) {
-                let obj = listaObjetosEditaveis[i];
-                if (obj && obj.body) {
-                    if (s.matter.query.region([obj.body], caixaDeteccao).length > 0) { alvoCorpo = obj.body; break; }
+                let obj = listaObjetosEditaveis[i]; if (!obj) continue;
+                if (obj.body && s.matter.query.region([obj.body], caixaDeteccao).length > 0) { alvoCorpo = obj.body; break; }
+                // PONTO 6: Varre os elos da corda diretamente pela região geométrica para permitir o agarre nas correntes
+                else if (obj.shape === 'rope' && obj.ropeElos) {
+                    for (let j = 0; j < obj.ropeElos.length; j++) {
+                        if (s.matter.query.region([obj.ropeElos[j]], caixaDeteccao).length > 0) { alvoCorpo = obj.ropeElos[j]; break; }
+                    }
+                    if (alvoCorpo) break;
                 }
             }
         }
-
         if (alvoCorpo) {
-            // CORREÇÃO: Verifica se as bordas circulares da mão realmente interceptam o colisor do objeto
-            let colisaoDetectada = s.matter.query.collides(h, [alvoCorpo]).length > 0;
-            
-            if (!colisaoDetectada) {
-                console.log(`[GARRAS] Ignorado. A caixa limite intersectou, mas as bordas da Mão ${lado} não tocam o colisor real.`);
-                return;
-            }
-
-            console.log(`[GARRAS] Sucesso! Bordas da Mão ${lado} confirmadas tocando o colisor de "${alvoCorpo.label}".`);
             let alvoValido = alvoCorpo.parent ? alvoCorpo.parent : alvoCorpo;
             let rigidezConexao = (alvoValido.manuseavel === true) ? 1.0 : 0.95;
-            
             let flashGfx = s.add.graphics().setDepth(20);
             flashGfx.lineStyle(4, 0xffea00, 1); flashGfx.lineBetween(h.position.x, h.position.y, h.position.x, h.position.y + 4);
             s.time.delayedCall(150, () => { flashGfx.clear(); flashGfx.destroy(); });
-
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
-            let dx = h.position.x - alvoValido.position.x;
-            let dy = h.position.y - alvoValido.position.y;
-            
-            let anguloRadianosEstavel = alvoValido.rotation ? alvoValido.rotation : 0;
-            if (isNaN(anguloRadianosEstavel)) anguloRadianosEstavel = 0;
-            
-            let localOffset = {
-                x: dx * Math.cos(-anguloRadianosEstavel) - dy * Math.sin(-anguloRadianosEstavel),
-                y: dx * Math.sin(-anguloRadianosEstavel) + dy * Math.cos(-anguloRadianosEstavel)
-            };
-
+            let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
+            let r = alvoValido.rotation ? alvoValido.rotation : 0; if (isNaN(r)) r = 0;
+            let localOffset = { x: dx * Math.cos(-r) - dy * Math.sin(-r), y: dx * Math.sin(-r) + dy * Math.cos(-r) };
             if (alvoValido.isStatic) {
                 p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
                 p[jKey] = s.matter.add.worldConstraint(h, 0, 1.0, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 } });
             } else {
-                p[jKey + 'PontoPivorMundo'] = null; 
+                p[jKey + 'PontoPivorMundo'] = null;
                 p[jKey] = s.matter.add.constraint(h, alvoValido, 0, rigidezConexao, { pointA: { x: 0, y: 0 }, pointB: localOffset });
             }
-            
             p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = localOffset;
             s.matter.body.setVelocity(p.body, { x: p.body.velocity.x * 0.1, y: p.body.velocity.y * 0.1 });
         }
     } else if (!grab && p[jKey]) {
         if (p[jKey]) s.matter.world.remove(p[jKey]);
-        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null;
-        p[jKey + 'PontoPivorMundo'] = null;
+        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null; p[jKey + 'PontoPivorMundo'] = null;
     }
 }
 
@@ -538,12 +514,20 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     lH.corpoTocadoAgora = null; rH.corpoTocadoAgora = null; let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 32, id, grp, lL); createArmSegment(scene, b, rH, 3, 32, id, grp, rL);
     return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
 }
-
 function executarRespawnIndividual(scene, pNum) {
     let p = (pNum === 0) ? player1 : player2; if (!p) return;
     if (p.leftJoint) { scene.matter.world.remove(p.leftJoint); }
     if (p.rightJoint) { scene.matter.world.remove(p.rightJoint); }
-    scene.matter.world.remove(p.body); scene.matter.world.remove(p.leftHand); scene.matter.world.remove(p.rightHand); p.leftElos.forEach(e => scene.matter.world.remove(e)); p.rightElos.forEach(e => scene.matter.world.remove(e)); p.gfx.clear();
+    
+    // Destrói fisicamente todas as partes estruturais antigas do motor gráfico
+    scene.matter.world.remove(p.body); 
+    scene.matter.world.remove(p.leftHand); 
+    scene.matter.world.remove(p.rightHand);
+    if (p.leftElos) p.leftElos.forEach(e => scene.matter.world.remove(e));
+    if (p.rightElos) p.rightElos.forEach(e => scene.matter.world.remove(e));
+    if (p.gfx) { p.gfx.clear(); }
+    
+    // Recria o personagem limpando totalmente o cache de renderização do frame
     if (pNum === 0) player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, p.pad, 0, 0x00ff00);
     else player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, p.pad, 1, 0xffff00);
 }
