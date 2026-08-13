@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>qqqqqqqqqqqqqqqqqqqqqq</title>
+    <title>3333333333</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -328,15 +328,33 @@ function desenharObjetoEditor(obj) {
         g.closePath(); g.fillPath(); g.strokePath();
     }
 }
-function createArmSegment(scene, bA, bB, num, len, id, grp, list) {
+function createArmSegment(scene, bA, bB, num, len, id, grp, list, listaJuntas) {
     let last = bA;
     for (let i = 0; i < num; i++) {
         const lastLink = (i === num - 1);
         let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 12, len, { density: 0.005, frictionAir: 0.01, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
         if (!lastLink) list.push(link);
-        scene.matter.add.constraint(last, link, 0, 1.0, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 }, stiffness: 1.0, damping: 0.01 });
+        // Salva a referência da junta gerada na lista de controle
+        let c = scene.matter.add.constraint(last, link, 0, 1.0, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 }, stiffness: 1.0, damping: 0.01 });
+        if (listaJuntas) listaJuntas.push(c);
         last = link;
     }
+}
+
+function createHeaveHoCharacter(scene, x, y, pad, id, col) {
+    const grp = scene.matter.world.nextGroup(true), flt = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp };
+    const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
+    const lH = scene.matter.add.circle(x - 100, y, 14, { density: 0.0005, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
+    const rH = scene.matter.add.circle(x + 100, y, 14, { density: 0.0005, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
+    
+    lH.corpoTocadoAgora = null; rH.corpoTocadoAgora = null; 
+    let lL = [], rL = [], juntasBraço = [];
+    
+    // Passa o array 'juntasBraço' para armazenar os pinos estruturais internos
+    createArmSegment(scene, b, lH, 3, 32, id, grp, lL, juntasBraço);
+    createArmSegment(scene, b, rH, 3, 32, id, grp, rL, juntasBraço);
+    
+    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, juntasEstruturaisDosBramos: juntasBraço, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
 }
 function processarToqueParaContato(h, b, pair) {
     if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
@@ -492,54 +510,49 @@ function handlePlayerInput(s, p) {
     }
     processarGarra(s, p, p.leftHand, 'leftJoint', lL); processarGarra(s, p, p.rightHand, 'rightJoint', rR);
 }
-
-function createHeaveHoCharacter(scene, x, y, pad, id, col) {
-    const grp = scene.matter.world.nextGroup(true), flt = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp };
-    const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
-    
-    // CONFIGURAÇÃO DA IDEIA 2 PURA: As mãos nascem com a densidade ultra-baixa de 0.0005 para anular o empuxo orbital
-    const lH = scene.matter.add.circle(x - 100, y, 14, { density: 0.0005, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
-    const rH = scene.matter.add.circle(x + 100, y, 14, { density: 0.0005, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
-    
-    lH.corpoTocadoAgora = null; rH.corpoTocadoAgora = null; let lL = [], rL = []; createArmSegment(scene, b, lH, 3, 32, id, grp, lL); createArmSegment(scene, b, rH, 3, 32, id, grp, rL);
-    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
-}
 function executarRespawnIndividual(scene, pNum) {
     let p = (pNum === 0) ? player1 : player2; if (!p) return;
     
-    // Varre e remove todas as amarras físicas internas do motor ligadas ao boneco antigo antes de recriá-lo
-    let todasAsJuntasMundo = scene.matter.world.localWorld.constraints;
-    for (let i = todasAsJuntasMundo.length - 1; i >= 0; i--) {
-        let c = todasAsJuntasMundo[i];
-        if (c && (c.bodyA === p.body || c.bodyB === p.body || c.bodyA === p.leftHand || c.bodyB === p.leftHand || c.bodyA === p.rightHand || c.bodyB === p.rightHand)) {
-            scene.matter.world.remove(c);
-        }
-    }
+    // 1. Remove os ganchos ativos de agarre nas quinas
     if (p.leftJoint) { scene.matter.world.remove(p.leftJoint); }
     if (p.rightJoint) { scene.matter.world.remove(p.rightJoint); }
     
-    // Remove os corpos e elos intermediários
-    scene.matter.world.remove(p.body); scene.matter.world.remove(p.leftHand); scene.matter.world.remove(p.rightHand);
+    // 2. Remove todas as juntas e pinos internos que estruturavam o braço ragdoll anterior
+    if (p.juntasEstruturaisDosBramos) {
+        p.juntasEstruturaisDosBramos.forEach(junta => { scene.matter.world.remove(junta); });
+    }
+    
+    // 3. Destrói os círculos físicos e os elos intermediários de massa leve do motor
+    scene.matter.world.remove(p.body); 
+    scene.matter.world.remove(p.leftHand); 
+    scene.matter.world.remove(p.rightHand);
     if (p.leftElos) p.leftElos.forEach(e => scene.matter.world.remove(e));
     if (p.rightElos) p.rightElos.forEach(e => scene.matter.world.remove(e));
-    if (p.gfx) { p.gfx.clear(); }
+    if (p.gfx) { p.gfx.clear(); p.gfx.destroy(); }
     
-    // Spawna o novo boneco com a física totalmente limpa
+    // Spawna o novo personagem com a inércia e a tela de colisões 100% limpas
     if (pNum === 0) player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, p.pad, 0, 0x00ff00);
     else player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, p.pad, 1, 0xffff00);
 }
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
-    // PONTO 2 CORREÇÃO CONTÍNUA: Garante que as bolinhas guias sejam impressas mesmo após o clear de frames do update
     if (modoEditorAtivo && document.getElementById('prop-shape').value === 'polygon') {
         previewGraphicsPoligono.clear();
-        previewGraphicsPoligono.lineStyle(2, 0xff0000, 1);
-        previewGraphicsPoligono.fillStyle(0xff0000, 0.9);
-        verticesCriacaoAtiva.forEach(v => previewGraphicsPoligono.fillCircle(v.x, v.y, 6));
+        // Configura uma profundidade máxima para as bolinhas guias ficarem visíveis acima de qualquer bloco
+        previewGraphicsPoligono.setDepth(99); 
+        verticesCriacaoAtiva.forEach(v => {
+            previewGraphicsPoligono.lineStyle(2, 0xffffff, 1); // Borda branca de destaque
+            previewGraphicsPoligono.fillStyle(0xff0000, 1);    // Miolo vermelho sólido
+            previewGraphicsPoligono.fillCircle(v.x, v.y, 6);
+            previewGraphicsPoligono.strokeCircle(v.x, v.y, 6);
+        });
         if (verticesCriacaoAtiva.length > 1) {
+            previewGraphicsPoligono.lineStyle(3, 0xff0000, 0.8);
             previewGraphicsPoligono.beginPath();
             previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
-            for (let i = 1; i < verticesCriacaoAtiva.length; i++) { previewGraphicsPoligono.lineTo(verticesCriacaoAtiva[i].x, verticesCriacaoAtiva[i].y); }
+            for (let i = 1; i < verticesCriacaoAtiva.length; i++) {
+                previewGraphicsPoligono.lineTo(verticesCriacaoAtiva[i].x, verticesCriacaoAtiva[i].y);
+            }
             previewGraphicsPoligono.strokePath();
         }
     }
