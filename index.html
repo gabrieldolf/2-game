@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>5555555555555555555</title>
+    <title>qqqqqqqqqqqqqqqqqqqqqq</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -146,26 +146,16 @@ function create() {
     this.matter.world.on('collisionstart', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
     this.matter.world.on('collisionactive', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
     this.matter.world.on('collisionend', (event) => { event.pairs.forEach(pair => { quebrarToqueParaContato(pair.bodyA, pair.bodyB); quebrarToqueParaContato(pair.bodyB, pair.bodyA); }); });
-    this.input.on('pointerdown', (p) => {
+        this.input.on('pointerdown', (p) => {
         if (!modoEditorAtivo) return;
-        if (ferramentaAtual === 'create') {
-            if (document.getElementById('prop-shape').value === 'polygon') {
-                // PONTO 2: Registra e limpa/redesenha os pontos na tela usando o Graphics global
-                verticesCriacaoAtiva.push({ x: p.worldX, y: p.worldY });
-                previewGraphicsPoligono.clear();
-                verticesCriacaoAtiva.forEach(v => {
-                    previewGraphicsPoligono.lineStyle(2, 0xff0000, 1);
-                    previewGraphicsPoligono.fillStyle(0xff0000, 0.9);
-                    previewGraphicsPoligono.fillCircle(v.x, v.y, 6);
-                });
-                if (verticesCriacaoAtiva.length > 1) {
-                    previewGraphicsPoligono.beginPath();
-                    previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
-                    for (let i = 1; i < verticesCriacaoAtiva.length; i++) { previewGraphicsPoligono.lineTo(verticesCriacaoAtiva[i].x, verticesCriacaoAtiva[i].y); }
-                    previewGraphicsPoligono.strokePath();
-                }
-            } else { executarCriacaoObjeto(this, p.worldX, p.worldY); }
-        } else { executarSelecaoObjeto(this, p.worldX, p.worldY, p); }
+        if (document.getElementById('prop-shape').value === 'polygon') {
+            // PONTO 2: Salva as coordenadas brutas no array para renderização contínua pós-clear
+            verticesCriacaoAtiva.push({ x: p.worldX, y: p.worldY });
+        } else if (ferramentaAtual === 'create') {
+            executarCriacaoObjeto(this, p.worldX, p.worldY);
+        } else {
+            executarSelecaoObjeto(this, p.worldX, p.worldY, p);
+        }
     });
     this.input.on('pointermove', function(p) {
         if (modoEditorAtivo && ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
@@ -516,23 +506,43 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
 }
 function executarRespawnIndividual(scene, pNum) {
     let p = (pNum === 0) ? player1 : player2; if (!p) return;
+    
+    // Varre e remove todas as amarras físicas internas do motor ligadas ao boneco antigo antes de recriá-lo
+    let todasAsJuntasMundo = scene.matter.world.localWorld.constraints;
+    for (let i = todasAsJuntasMundo.length - 1; i >= 0; i--) {
+        let c = todasAsJuntasMundo[i];
+        if (c && (c.bodyA === p.body || c.bodyB === p.body || c.bodyA === p.leftHand || c.bodyB === p.leftHand || c.bodyA === p.rightHand || c.bodyB === p.rightHand)) {
+            scene.matter.world.remove(c);
+        }
+    }
     if (p.leftJoint) { scene.matter.world.remove(p.leftJoint); }
     if (p.rightJoint) { scene.matter.world.remove(p.rightJoint); }
     
-    // Destrói fisicamente todas as partes estruturais antigas do motor gráfico
-    scene.matter.world.remove(p.body); 
-    scene.matter.world.remove(p.leftHand); 
-    scene.matter.world.remove(p.rightHand);
+    // Remove os corpos e elos intermediários
+    scene.matter.world.remove(p.body); scene.matter.world.remove(p.leftHand); scene.matter.world.remove(p.rightHand);
     if (p.leftElos) p.leftElos.forEach(e => scene.matter.world.remove(e));
     if (p.rightElos) p.rightElos.forEach(e => scene.matter.world.remove(e));
     if (p.gfx) { p.gfx.clear(); }
     
-    // Recria o personagem limpando totalmente o cache de renderização do frame
+    // Spawna o novo boneco com a física totalmente limpa
     if (pNum === 0) player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, p.pad, 0, 0x00ff00);
     else player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, p.pad, 1, 0xffff00);
 }
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
+    // PONTO 2 CORREÇÃO CONTÍNUA: Garante que as bolinhas guias sejam impressas mesmo após o clear de frames do update
+    if (modoEditorAtivo && document.getElementById('prop-shape').value === 'polygon') {
+        previewGraphicsPoligono.clear();
+        previewGraphicsPoligono.lineStyle(2, 0xff0000, 1);
+        previewGraphicsPoligono.fillStyle(0xff0000, 0.9);
+        verticesCriacaoAtiva.forEach(v => previewGraphicsPoligono.fillCircle(v.x, v.y, 6));
+        if (verticesCriacaoAtiva.length > 1) {
+            previewGraphicsPoligono.beginPath();
+            previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
+            for (let i = 1; i < verticesCriacaoAtiva.length; i++) { previewGraphicsPoligono.lineTo(verticesCriacaoAtiva[i].x, verticesCriacaoAtiva[i].y); }
+            previewGraphicsPoligono.strokePath();
+        }
+    }
     if (modoEditorAtivo) {
         let camSpeed = 12; if (cursorsKeyboard.left.isDown) this.cameras.main.scrollX -= camSpeed; if (cursorsKeyboard.right.isDown) this.cameras.main.scrollX += camSpeed;
         if (cursorsKeyboard.up.isDown) this.cameras.main.scrollY -= camSpeed; if (cursorsKeyboard.down.isDown) this.cameras.main.scrollY += camSpeed;
