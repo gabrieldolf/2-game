@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>limite2</title>
+    <title>limite1</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -115,53 +115,55 @@ function alternarVisibilidadeGrade() {
 }
 function preload() {}
 function create() {
+    if (this.input.gamepad) { this.input.gamepad.start(); }
+    this.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 100, true, true, true, true);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    this.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 64, true, true, true, true);
-    
-    // Armazena as 4 bordas pretas limites fixas do mundo Matter para colisões das mãos
-    this.matter.world.walls.left.label = 'borda_fixa';
-    this.matter.world.walls.right.label = 'borda_fixa';
-    this.matter.world.walls.top.label = 'borda_fixa';
-    this.matter.world.walls.bottom.label = 'borda_fixa';
-    bordasFixasDoCenario = [this.matter.world.walls.left, this.matter.world.walls.right, this.matter.world.walls.top, this.matter.world.walls.bottom];
-    
     gridGraphics = this.add.graphics().setDepth(1);
-    previewGraphicsPoligono = this.add.graphics().setDepth(9999);
-    alternarVisibilidadeGrade();
-    
+    previewGraphicsPoligono = this.add.graphics().setDepth(15);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
-    cursors = this.input.keyboard.addKeys({
-        up: Phaser.Input.Keyboard.KeyCodes.W, down: Phaser.Input.Keyboard.KeyCodes.S,
-        left: Phaser.Input.Keyboard.KeyCodes.A, right: Phaser.Input.Keyboard.KeyCodes.D,
-        respawnP1: Phaser.Input.Keyboard.KeyCodes.R, respawnP2: Phaser.Input.Keyboard.KeyCodes.P,
-        actionL1: Phaser.Input.Keyboard.KeyCodes.C, actionR1: Phaser.Input.Keyboard.KeyCodes.V,
-        actionL2: Phaser.Input.Keyboard.KeyCodes.N, actionR2: Phaser.Input.Keyboard.KeyCodes.M
+    
+    this.matter.world.on('beforeupdate', () => {
+        if (modoEditorAtivo) return;
+        [player1, player2].forEach(p => {
+            if (!p || !p.body) return;
+            const RAIO = 22;
+            if (p.leftElos && p.leftElos.length > 0) {
+                let e = p.leftElos[0]; let dX = e.position.x - p.body.position.x, dY = e.position.y - p.body.position.y, d = Math.sqrt(dX*dX + dY*dY);
+                if (d > RAIO) this.matter.body.setPosition(e, { x: p.body.position.x + (dX/d)*RAIO, y: p.body.position.y + (dY/d)*RAIO });
+            }
+            if (p.rightElos && p.rightElos.length > 0) {
+                let e = p.rightElos[0]; let dX = e.position.x - p.body.position.x, dY = e.position.y - p.body.position.y, d = Math.sqrt(dX*dX + dY*dY);
+                if (d > RAIO) this.matter.body.setPosition(e, { x: p.body.position.x + (dX/d)*RAIO, y: p.body.position.y + (dY/d)*RAIO });
+            }
+        });
     });
-
-    this.input.keyboard.on('keydown-ENTER', () => {
-        if (modoEditorAtivo && document.getElementById('prop-shape').value === 'polygon') {
-            finalizarCriacaoPoligono(this);
-        }
-    });
-
-    this.input.keyboard.on('keydown-TAB', (event) => {
-        event.preventDefault();
-        alternarModoEditor();
-    });
-
-    // LISTENER DE CLIQUE: Inicializa o preview e guarda vértices de forma síncrona com a rolagem da câmera
+    const ambConf = { isStatic:true, label:'ambiente', friction:0.8, restitution:0.1, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    const borda = (s, x, y, w, h) => {
+        let b = s.matter.add.rectangle(x, y, w, h, ambConf); 
+        b.isStaticBorder = true; b.manuseavel = false; b.label = 'ambiente'; bordasFixasDoCenario.push(b);
+        s.add.graphics().fillStyle(0x1a1a1a, 1).fillRect(x - w/2, y - h/2, w, h).setDepth(2);
+    };
+    borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50); borda(this, WORLD_WIDTH/2, 25, WORLD_WIDTH, 50);
+    borda(this, 25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT); borda(this, WORLD_WIDTH-25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT);
+    this.matter.world.on('collisionstart', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
+    this.matter.world.on('collisionactive', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
+    this.matter.world.on('collisionend', (event) => { event.pairs.forEach(pair => { quebrarToqueParaContato(pair.bodyA, pair.bodyB); quebrarToqueParaContato(pair.bodyB, pair.bodyA); }); });
     this.input.on('pointerdown', (p) => {
         if (!modoEditorAtivo) return;
         if (document.getElementById('prop-shape').value === 'polygon') {
+            // Registra o vértice matemático
+            verticesCriacaoAtiva.push({ x: p.worldX, y: p.worldY });
+            console.log(`[POLÍGONO] Vértice adicionado na posição: X=${Math.round(p.worldX)}, Y=${Math.round(p.worldY)}`);
+            
+            // Inicializa a lista de controle visual de forma segura dentro da própria cena do jogo
             if (!this.listaBolinhasGuiaCena) { this.listaBolinhasGuiaCena = []; }
             if (!previewGraphicsPoligono) { previewGraphicsPoligono = this.add.graphics().setDepth(9999); }
             
-            verticesCriacaoAtiva.push({ x: p.worldX, y: p.worldY });
-            console.log(`[POLÍGONO] Vértice adicionado: X=${Math.round(p.worldX)}, Y=${Math.round(p.worldY)}`);
-            
+            // Cria a bolinha visual vermelha nativa fixada no mundo tridimensional do cenário
             let bolaVisual = this.add.circle(p.worldX, p.worldY, 7, 0xff0000).setStrokeStyle(2, 0xffffff).setDepth(9999);
             this.listaBolinhasGuiaCena.push(bolaVisual);
             
+            // Desenha as linhas de contorno em tempo real unindo as bolinhas
             previewGraphicsPoligono.clear();
             if (verticesCriacaoAtiva.length > 1) {
                 previewGraphicsPoligono.lineStyle(3, 0xff0000, 0.9);
@@ -178,40 +180,27 @@ function create() {
             executarSelecaoObjeto(this, p.worldX, p.worldY, p);
         }
     });
-
-    configurarEventosDeColisao(this);
-
-    // LIMITADOR ATÔMICO PÓS-ANALÓGICO: Roda no último instante do frame para impedir que o applyForce ignore o teto [2-game/]
-    this.matter.world.on('beforeupdate', () => {
-        if (modoEditorAtivo) return; // Só atua durante a simulação do jogo
-        
-        listaObjetosEditaveis.forEach(obj => {
-            if (!obj || !obj.body || obj.body.isStatic) return;
-
-            // 1. Aplica o teto de velocidade linear (movimento do analógico/gravidade)
-            if (obj.maxVel && obj.maxVel > 0) {
-                let velX = obj.body.velocity.x;
-                let velY = obj.body.velocity.y;
-                let velocidadeLinearCombinada = Math.sqrt(velX * velX + velY * velY);
-                if (velocidadeLinearCombinada > obj.maxVel && velocidadeLinearCombinada > 0) {
-                    this.matter.body.setVelocity(obj.body, {
-                        x: (velX / velocidadeLinearCombinada) * obj.maxVel,
-                        y: (velY / velocidadeLinearCombinada) * obj.maxVel
-                    });
+    this.input.on('pointermove', function(p) {
+        if (modoEditorAtivo && ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
+            let pos = { x: p.worldX - clickOffsetX, y: p.worldY - clickOffsetY };
+            if (document.getElementById('prop-snap-active').checked && objetoSelecionado.shape !== 'polygon' && objetoSelecionado.shape !== 'rope') pos = calcularAlinhamentoPorProximidade(this, pos.x, pos.y, objetoSelecionado.w, objetoSelecionado.h, objetoSelecionado.shape, objetoSelecionado.body);
+            if (objetoSelecionado.body) { this.matter.body.setPosition(objetoSelecionado.body, { x: pos.x, y: pos.y }); this.matter.body.setVelocity(objetoSelecionado.body, { x:0, y:0 }); }
+            else { 
+                objetoSelecionado.visualX = pos.x; objetoSelecionado.visualY = pos.y; 
+                if (objetoSelecionado.shape === 'rope' && objetoSelecionado.ropeElos) {
+                    let dx = pos.x - objetoSelecionado.posicaoTravadaX, dy = pos.y - objetoSelecionado.posicaoTravadaY;
+                    objetoSelecionado.ropeElos.forEach(elo => { this.matter.body.setPosition(elo, { x: elo.position.x + dx, y: elo.position.y + dy }); this.matter.body.setVelocity(elo, { x:0, y:0 }); });
                 }
             }
-
-            // 2. Aplica o teto de velocidade angular (giro por alavanca do analógico)
-            if (obj.maxRot && obj.maxRot > 0) {
-                let velocidadeGiroAtual = obj.body.angularVelocity;
-                if (Math.abs(velocidadeGiroAtual) > obj.maxRot) {
-                    this.matter.body.setAngularVelocity(obj.body, obj.maxRot * Math.sign(velocidadeGiroAtual));
-                }
-            }
-        });
+            objetoSelecionado.posicaoTravadaX = pos.x; objetoSelecionado.posicaoTravadaY = pos.y;
+        }
+    }, this);
+    this.input.keyboard.on('keydown-E', () => { alternarModoEditor(this); });
+    this.input.keyboard.on('keydown-ENTER', () => { if (modoEditorAtivo && ferramentaAtual === 'create' && document.getElementById('prop-shape').value === 'polygon') finalizarCriacaoPoligono(this); });
+    this.input.gamepad.on('down', (pad) => {
+        if (pad.index === 0 && !player1) player1 = createHeaveHoCharacter(this, 300, WORLD_HEIGHT-150, pad, 0, 0x00ff00);
+        if (pad.index === 1 && !player2) player2 = createHeaveHoCharacter(this, 500, WORLD_HEIGHT-150, pad, 1, 0xffff00);
     });
-
-    document.getElementById('prop-manuseavel').checked = false;
     atualizarInterfaceForma();
 }
 function atualizarInterfaceForma() {
@@ -644,7 +633,28 @@ function update() {
 
     if (player1) { player1.gfx.clear(); desenharJogador(player1); } if (player2) { player2.gfx.clear(); desenharJogador(player2); }     // PONTO 5 RESOLVIDO: Se a trava X/Y estiver ativa, zera a velocidade linear e força o retorno à coordenada original sem anular a rotação
     listaObjetosEditaveis.forEach(obj => {
-        // Mantém apenas a trava de Eixo X/Y original operando aqui no update
+        if (obj && obj.body && !obj.body.isStatic) {
+            // 1. LIMITADOR DE VELOCIDADE MOVIMENTO (Linear)
+            if (obj.maxVel && obj.maxVel > 0) {
+                let velX = obj.body.velocity.x;
+                let velY = obj.body.velocity.y;
+                let velocidadeLinearCombinada = Math.sqrt(velX * velX + velY * velY);
+                if (velocidadeLinearCombinada > obj.maxVel) {
+                    game.scene.getScene('default').matter.body.setVelocity(obj.body, {
+                        x: (velX / velocidadeLinearCombinada) * obj.maxVel,
+                        y: (velY / velocidadeLinearCombinada) * obj.maxVel
+                    });
+                }
+            }
+            // 2. LIMITADOR DE VELOCIDADE GIRO (Angular)
+            if (obj.maxRot && obj.maxRot > 0) {
+                let velocidadeGiroAtual = obj.body.angularVelocity;
+                if (Math.abs(velocidadeGiroAtual) > obj.maxRot) {
+                    game.scene.getScene('default').matter.body.setAngularVelocity(obj.body, obj.maxRot * Math.sign(velocidadeGiroAtual));
+                }
+            }
+        }
+        // Trava de Eixo X/Y original mantida intacta operando em paralelo
         if (obj && obj.body && obj.lockPos) {
             if (obj.body.position.x !== obj.posicaoTravadaX || obj.body.position.y !== obj.posicaoTravadaY) {
                 game.scene.getScene('default').matter.body.setPosition(obj.body, { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY });
