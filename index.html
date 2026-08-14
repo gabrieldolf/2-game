@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>limite7</title>
+    <title>limite8</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -122,31 +122,54 @@ function create() {
     previewGraphicsPoligono = this.add.graphics().setDepth(15);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
     
-        // AJUSTE FINO DEFINITIVO: Mudado para 'afterupdate' para capturar e cortar o empuxo do applyForce pós-analógico
+    // LIMITADOR ABSOLUTO PÓS-GARRA: Intercepta translações forçadas por constraints de braço no afterupdate
     this.matter.world.on('afterupdate', () => {
         if (modoEditorAtivo) return; // Só atua durante a simulação ativa do jogo
         
         listaObjetosEditaveis.forEach(obj => {
             if (!obj || !obj.body || obj.body.isStatic) return;
 
-            // 1. Aplica o teto de velocidade linear (bloqueia o empuxo linear bruto do analógico)
+            // 1. LIMITADOR DE MOVIMENTO (Linear) - Corta o empuxo vetorial e a translação mecânica
             if (obj.maxVel && obj.maxVel > 0) {
                 let velX = obj.body.velocity.x;
                 let velY = obj.body.velocity.y;
                 let velocidadeLinearCombinada = Math.sqrt(velX * velX + velY * velY);
+                
                 if (velocidadeLinearCombinada > obj.maxVel && velocidadeLinearCombinada > 0) {
+                    // Força a velocidade do corpo a retornar ao limite configurado
                     this.matter.body.setVelocity(obj.body, {
                         x: (velX / velocidadeLinearCombinada) * obj.maxVel,
                         y: (velY / velocidadeLinearCombinada) * obj.maxVel
                     });
+                    
+                    // CORREÇÃO CIRÚRGICA: Se estiver sendo arrastado via constraint acima do limite, encurta o deslocamento de posição do frame
+                    if (obj.body.positionPrev) {
+                        let dx = obj.body.position.x - obj.body.positionPrev.x;
+                        let dy = obj.body.position.y - obj.body.positionPrev.y;
+                        let distPos = Math.sqrt(dx * dx + dy * dy);
+                        if (distPos > obj.maxVel) {
+                            this.matter.body.setPosition(obj.body, {
+                                x: obj.body.positionPrev.x + (dx / distPos) * obj.maxVel,
+                                y: obj.body.positionPrev.y + (dy / distPos) * obj.maxVel
+                            });
+                        }
+                    }
                 }
             }
 
-            // 2. Aplica o teto de velocidade angular (bloqueia o torque ou giro por alavanca do analógico)
+            // 2. LIMITADOR DE GIRO (Angular) - Corta o torque e a torção forçada por alavanca de braço
             if (obj.maxRot && obj.maxRot > 0) {
                 let velocidadeGiroAtual = obj.body.angularVelocity;
                 if (Math.abs(velocidadeGiroAtual) > obj.maxRot) {
                     this.matter.body.setAngularVelocity(obj.body, obj.maxRot * Math.sign(velocidadeGiroAtual));
+                    
+                    // CORREÇÃO CIRÚRGICA: Se o constraint forçar uma torção de ângulo maior que o teto, corrige o ângulo geométrico
+                    if (obj.body.anglePrev !== undefined) {
+                        let deltaAngulo = obj.body.angle - obj.body.anglePrev;
+                        if (Math.abs(deltaAngulo) > obj.maxRot) {
+                            this.matter.body.setAngle(obj.body, obj.body.anglePrev + obj.maxRot * Math.sign(deltaAngulo));
+                        }
+                    }
                 }
             }
         });
