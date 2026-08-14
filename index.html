@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>limite 6</title>
+    <title>limite2</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -97,27 +97,16 @@ function alternarModoEditor(scene) {
     const panel = document.getElementById('sidebar');
     const aviso = document.getElementById('aviso-modo');
     verticesCriacaoAtiva = []; previewGraphicsPoligono.clear();
-    
     if (modoEditorAtivo) {
         cameraSalvaX = scene.cameras.main.scrollX; cameraSalvaY = scene.cameras.main.scrollY; cameraSalvaZoom = scene.cameras.main.zoom;
         scene.cameras.main.setZoom(1.0); scene.matter.world.pause();
-        panel.style.display = 'flex'; aviso.innerText = "Modo Editor Ativo - Aperte [TAB] para Jogar"; aviso.style.color = "#00ff00";
-        if (player1) { colocarRespawnIndividualSeExistir(scene, 0); player1 = null; }
-        if (player2) { colocarRespawnIndividualSeExistir(scene, 1); player2 = null; }
+        panel.style.display = 'flex'; aviso.innerText = "Modo Editor Ativo - Aperte [E] para Jogar"; aviso.style.color = "#00ff00";
     } else {
         desmarcarObjetoDoEditor(); scene.cameras.main.scrollX = cameraSalvaX; scene.cameras.main.scrollY = cameraSalvaY; scene.cameras.main.setZoom(cameraSalvaZoom);
-        scene.matter.world.resume(); panel.style.display = 'none'; aviso.innerText = "Aperte [TAB] para abrir o Editor"; aviso.style.color = "#fff";
-        
-        // CORREÇÃO DEFINITIVA: Usa o método oficial do Phaser 3 para puxar o controle físico da porta 0 e porta 1
-        let g1 = scene.input.gamepad ? scene.input.gamepad.getPad(0) : null;
-        let g2 = scene.input.gamepad ? scene.input.gamepad.getPad(1) : null;
-        
-        player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, g1, 0, 0x00ff00);
-        player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, g2, 1, 0xffff00);
+        scene.matter.world.resume(); panel.style.display = 'none'; aviso.innerText = "Aperte [E] para abrir o Editor"; aviso.style.color = "#fff";
     }
     alternarVisibilidadeGrade();
 }
-
 function alternarVisibilidadeGrade() {
     gridGraphics.clear(); if (!modoEditorAtivo || !document.getElementById('prop-grid-active').checked) return;
     const gSize = parseInt(document.getElementById('prop-grid-size').value) || 64; gridGraphics.lineStyle(1, 0xffffff, 0.15);
@@ -190,7 +179,7 @@ function create() {
         }
     });
 
-    if (typeof configurarEventosDeColisao === 'function') configurarEventosDeColisao(this);
+    configurarEventosDeColisao(this);
 
     // LIMITADOR ATÔMICO PÓS-ANALÓGICO: Roda no último instante do frame para impedir que o applyForce ignore o teto [2-game/]
     this.matter.world.on('beforeupdate', () => {
@@ -531,20 +520,12 @@ function processarGarra(s, p, h, jKey, grab) {
 }
 
 function handlePlayerInput(s, p) {
-    const pad = p.pad; 
-    // Se o controle físico correspondente não estiver ativamente conectado ou ligado, o boneco ignora a leitura por segurança
-    if (!pad || !pad.connected) return; 
-    
-    // Leitura direta das garras e respawn baseada estritamente nos gatilhos e botões analógicos do Gamepad
-    const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4); 
-    const rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
+    const pad = p.pad; if (!pad) return; 
+    const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4); const rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     if (isButtonPressed(pad, 8)) { executarRespawnIndividual(s, p.id); return; }
-    
     let campoMod = document.getElementById('prop-fall-weight-mod'); let valorModificador = campoMod ? parseFloat(campoMod.value) : 10.0;
     let massaCalculadaCorpo = 6.8; let totalmenteLivreNoVazio = (!p.leftJoint && !p.rightJoint);
-    
-    // Verifica a aceleração de queda baseada puramente nos eixos analógicos do manete esquerdo ou direito
-    if (p.body.velocity.y > 0.5 && ((pad.leftStick && pad.leftStick.y < -0.15) || (pad.rightStick && pad.rightStick.y < -0.15)) && totalmenteLivreNoVazio) {
+    if (p.body.velocity.y > 0.5 && (pad.leftStick?.y < -0.15 || pad.rightStick?.y < -0.15) && totalmenteLivreNoVazio) {
         let deltaYEsq = Math.max(0, p.body.position.y - p.leftHand.position.y); let deltaYDir = Math.max(0, p.body.position.y - p.rightHand.position.y);
         massaCalculadaCorpo += (deltaYEsq + deltaYDir) * valorModificador * 0.1;
     }
@@ -685,4 +666,3 @@ function update() {
 </script>
 </body>
 </html>
-
