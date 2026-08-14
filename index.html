@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>limite4</title>
+    <title>limite5</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -102,42 +102,22 @@ function alternarModoEditor(scene) {
         cameraSalvaX = scene.cameras.main.scrollX; cameraSalvaY = scene.cameras.main.scrollY; cameraSalvaZoom = scene.cameras.main.zoom;
         scene.cameras.main.setZoom(1.0); scene.matter.world.pause();
         panel.style.display = 'flex'; aviso.innerText = "Modo Editor Ativo - Aperte [TAB] para Jogar"; aviso.style.color = "#00ff00";
-        
-        // Remove os jogadores antigos de forma limpa ao voltar para o Editor para não duplicar corpos
         if (player1) { executarRespawnIndividual(scene, 0); player1 = null; }
         if (player2) { executarRespawnIndividual(scene, 1); player2 = null; }
     } else {
         desmarcarObjetoDoEditor(); scene.cameras.main.scrollX = cameraSalvaX; scene.cameras.main.scrollY = cameraSalvaY; scene.cameras.main.setZoom(cameraSalvaZoom);
         scene.matter.world.resume(); panel.style.display = 'none'; aviso.innerText = "Aperte [TAB] para abrir o Editor"; aviso.style.color = "#fff";
         
-        // CORREÇÃO CRÍTICA: Captura os gamepads físicos conectados ao PC ou injeta um emulador compatível com a física
-        let g1 = scene.input.gamepad ? scene.input.gamepad.gamepads[0] : null;
-        let g2 = scene.input.gamepad ? scene.input.gamepad.gamepads[1] : null;
-        
-        // Emulador estrutural do Teclado para o Jogador 1 (caso não tenha controle plugado na porta 0)
-        if (!g1) {
-            g1 = {
-                leftStick: { x: 0, y: 0 }, rightStick: { x: 0, y: 0 },
-                buttons: Array(12).fill({ pressed: false, value: 0 }),
-                tecladoAtivo: true,
-                chaves: scene.input.keyboard.addKeys({ left: 'A', right: 'D', up: 'W', down: 'S', grabL: 'C', grabR: 'V', respawn: 'R' })
-            };
-        }
-        // Emulador estrutural do Teclado para o Jogador 2 (caso não tenha controle plugado na porta 1)
-        if (!g2) {
-            g2 = {
-                leftStick: { x: 0, y: 0 }, rightStick: { x: 0, y: 0 },
-                buttons: Array(12).fill({ pressed: false, value: 0 }),
-                tecladoAtivo: true,
-                chaves: scene.input.keyboard.addKeys({ left: 'LEFT', right: 'RIGHT', up: 'UP', down: 'DOWN', grabL: 'N', grabR: 'M', respawn: 'P' })
-            };
-        }
+        // Puxa as referências puras dos controles físicos anexados à porta 0 e porta 1 do computador
+        let g1 = scene.input.gamepad && scene.input.gamepad.gamepads[0] ? scene.input.gamepad.gamepads[0] : null;
+        let g2 = scene.input.gamepad && scene.input.gamepad.gamepads[1] ? scene.input.gamepad.gamepads[1] : null;
         
         player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, g1, 0, 0x00ff00);
         player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, g2, 1, 0xffff00);
     }
     alternarVisibilidadeGrade();
 }
+
 function alternarVisibilidadeGrade() {
     gridGraphics.clear(); if (!modoEditorAtivo || !document.getElementById('prop-grid-active').checked) return;
     const gSize = parseInt(document.getElementById('prop-grid-size').value) || 64; gridGraphics.lineStyle(1, 0xffffff, 0.15);
@@ -551,24 +531,17 @@ function processarGarra(s, p, h, jKey, grab) {
 }
 
 function handlePlayerInput(s, p) {
-    const pad = p.pad; if (!pad) return;
+    const pad = p.pad; if (!pad) return; // Se o controle físico não estiver conectado na porta, o boneco fica em repouso de segurança
     
-    // Se estiver rodando pelo emulador de teclado, converte as teclas em analógicos virtuais para a física ler
-    if (pad.tecladoAtivo) {
-        pad.leftStick.x = pad.chaves.left.isDown ? -1 : (pad.chaves.right.isDown ? 1 : 0);
-        pad.leftStick.y = pad.chaves.up.isDown ? -1 : (pad.chaves.down.isDown ? 1 : 0);
-        pad.rightStick.x = pad.leftStick.x; pad.rightStick.y = pad.leftStick.y; // Copia órbita síncrona
-        
-        pad.buttons[4] = { pressed: pad.chaves.grabL.isDown, value: pad.chaves.grabL.isDown ? 1 : 0 }; // L1 emulado
-        pad.buttons[5] = { pressed: pad.chaves.grabR.isDown, value: pad.chaves.grabR.isDown ? 1 : 0 }; // R1 emulado
-        pad.buttons[8] = { pressed: pad.chaves.respawn.isDown, value: pad.chaves.respawn.isDown ? 1 : 0 }; // Respawn emulado
-    }
-    
+    // Leitura das garras e respawn baseada exclusivamente nos botões do Gamepad nativo
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4); 
     const rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     if (isButtonPressed(pad, 8)) { executarRespawnIndividual(s, p.id); return; }
+    
     let campoMod = document.getElementById('prop-fall-weight-mod'); let valorModificador = campoMod ? parseFloat(campoMod.value) : 10.0;
     let massaCalculadaCorpo = 6.8; let totalmenteLivreNoVazio = (!p.leftJoint && !p.rightJoint);
+    
+    // Peso de queda calculado apenas se o analógico esquerdo ou direito for puxado para cima em queda livre [0-1.16]
     if (p.body.velocity.y > 0.5 && (pad.leftStick?.y < -0.15 || pad.rightStick?.y < -0.15) && totalmenteLivreNoVazio) {
         let deltaYEsq = Math.max(0, p.body.position.y - p.leftHand.position.y); let deltaYDir = Math.max(0, p.body.position.y - p.rightHand.position.y);
         massaCalculadaCorpo += (deltaYEsq + deltaYDir) * valorModificador * 0.1;
@@ -710,3 +683,4 @@ function update() {
 </script>
 </body>
 </html>
+
