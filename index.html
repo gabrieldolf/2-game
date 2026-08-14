@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>3333333333335555555555555</title>
+    <title>limite1</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -53,6 +53,8 @@
             <div class="prop-row" id="row-lock-rot"><label>Bloquear Rotação:</label><input type="checkbox" id="prop-lock-rot" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" id="row-mass"><label>Massa (Peso):</label><input type="number" id="prop-mass" value="1.0" step="0.1" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" id="row-air"><label>Arrasto Ar:</label><input type="number" id="prop-air" value="0.02" step="0.01" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row" id="row-max-vel"><label style="color:#ffaa00;">Limite Vel. (px):</label><input type="number" id="prop-max-vel" value="0" min="0" max="100" step="1" title="0 significa sem limite" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row" id="row-max-rot"><label style="color:#ffaa00;">Limite Giro (rad):</label><input type="number" id="prop-max-rot" value="0" min="0" max="2" step="0.01" title="0 significa sem limite" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" id="row-bounce"><label>Elasticidade:</label><input type="number" id="prop-bounce" value="0.1" step="0.05" min="0" max="1" onchange="atualizarObjetoExistente()"></div>
         </div>
         <div id="painel-propriedades-corda" style="display:none; background:#8e44ad; padding:8px; border-radius:4px; margin-top:5px; flex-direction:column; gap:6px;">
@@ -215,7 +217,9 @@ function extrairCamposPainel() {
         w: parseFloat(document.getElementById('prop-w').value) || 50, h: parseFloat(document.getElementById('prop-h').value) || 50,
         gravity: document.getElementById('prop-gravity').checked, lockPos: document.getElementById('prop-lock-pos').checked, lockRot: document.getElementById('prop-lock-rot').checked,
         mass: parseFloat(document.getElementById('prop-mass').value) || 1, air: parseFloat(document.getElementById('prop-air').value) || 0.02, bounce: parseFloat(document.getElementById('prop-bounce').value) || 0,
-        ropeLen: parseFloat(document.getElementById('prop-rope-len').value) || 200, ropeSegments: parseInt(document.getElementById('prop-rope-segments').value) || 6, ropeColor: document.getElementById('prop-rope-color').value
+        ropeLen: parseFloat(document.getElementById('prop-rope-len').value) || 200, ropeSegments: parseInt(document.getElementById('prop-rope-segments').value) || 6, ropeColor: document.getElementById('prop-rope-color').value,
+        maxVel: parseFloat(document.getElementById('prop-max-vel').value) || 0,
+        maxRot: parseFloat(document.getElementById('prop-max-rot').value) || 0
     };
 }
 function executarCriacaoObjeto(scene, x, y) {
@@ -235,14 +239,14 @@ function executarCriacaoObjeto(scene, x, y) {
             else constraints.push(scene.matter.add.constraint(lastBody, elo, 0, 1.0, { pointA: { x: 0, y: segmentLen/2 }, pointB: { x: 0, y: -segmentLen/2 } }));
             lastBody = elo;
         }
-        listaObjetosEditaveis.push({ body: null, gfx: scene.add.graphics().setDepth(3), shape: 'rope', w: 14, h: c.ropeLen, ropeElos: elos, ropeConstraints: constraints, ropeColor: c.ropeColor, ropeSegments: c.ropeSegments, ropeLen: c.ropeLen, posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: false });
+        listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel, isStatic: c.isStatic });
         return;
     }
     let conf = { isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass, friction: 0.8, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     let body = (c.shape === 'box') ? scene.matter.add.rectangle(ax, ay, c.w, c.h, conf) : scene.matter.add.circle(ax, ay, c.w, conf);
     body.manuseavel = c.manuseavel; body.label = 'ambiente';
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
-    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel, isStatic: c.isStatic });
+    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel, isStatic: c.isStatic });
 }
 function limparBolinhasGuiaDoPoligono(scene) {
     if (typeof previewGraphicsPoligono !== 'undefined' && previewGraphicsPoligono) { previewGraphicsPoligono.clear(); }
@@ -271,7 +275,7 @@ function finalizarCriacaoPoligono(scene) {
     scene.matter.world.add(body); scene.matter.body.setPosition(body, { x: centroX, y: centroY });
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
     let verticesLocaisRelativos = verticesCriacaoAtiva.map(v => { return { x: v.x - centroX, y: v.y - centroY }; });
-    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: verticesLocaisRelativos, manuseavel: c.manuseavel, isStatic: c.isStatic });
+    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: verticesLocaisRelativos, manuseavel: c.manuseavel, isStatic: c.isStatic });
     
     // Zera os pontos lidos e executa a trituração síncrona dos círculos visuais guias na tela
     verticesCriacaoAtiva = []; 
@@ -298,6 +302,8 @@ function selecionarObjetoDoEditor(obj) {
         document.getElementById('prop-lock-pos').checked = obj.lockPos; document.getElementById('prop-lock-rot').checked = obj.lockRot; document.getElementById('prop-manuseavel').checked = obj.manuseavel;
         document.getElementById('prop-is-static').checked = obj.body ? obj.body.isStatic : obj.isStatic; document.getElementById('prop-mass').value = obj.body ? obj.body.mass.toFixed(1) : obj.mass;
         document.getElementById('prop-air').value = obj.air; document.getElementById('prop-bounce').value = obj.bounce;
+        document.getElementById('prop-max-vel').value = obj.maxVel || 0;
+        document.getElementById('prop-max-rot').value = obj.maxRot || 0;
     }
 }
 function atualizarObjetoExistente() {
@@ -319,7 +325,7 @@ function atualizarObjetoExistente() {
         obj.ropeElos = elos; obj.ropeConstraints = constraints; obj.ropeColor = c.ropeColor; obj.ropeSegments = c.ropeSegments; obj.ropeLen = c.ropeLen; return;
     }
     if (obj.body) scene.matter.world.remove(obj.body); obj.body = null;
-    obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity; obj.lockPos = c.lockPos; obj.lockRot = c.lockRot; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce; obj.visualX = px; obj.visualY = py; obj.manuseavel = c.manuseavel; obj.isStatic = c.isStatic;
+    obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity; obj.lockPos = c.lockPos; obj.lockRot = c.lockRot; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce; obj.maxVel = c.maxVel; obj.maxRot = c.maxRot; obj.visualX = px; obj.visualY = py; obj.manuseavel = c.manuseavel; obj.isStatic = c.isStatic;
     let conf = { isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass, friction: 0.8, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     if (obj.shape === 'box') obj.body = scene.matter.add.rectangle(px, py, obj.w, obj.h, conf);
     else if (obj.shape === 'circle') obj.body = scene.matter.add.circle(px, py, obj.w, conf);
@@ -627,6 +633,28 @@ function update() {
 
     if (player1) { player1.gfx.clear(); desenharJogador(player1); } if (player2) { player2.gfx.clear(); desenharJogador(player2); }     // PONTO 5 RESOLVIDO: Se a trava X/Y estiver ativa, zera a velocidade linear e força o retorno à coordenada original sem anular a rotação
     listaObjetosEditaveis.forEach(obj => {
+        if (obj && obj.body && !obj.body.isStatic) {
+            // 1. LIMITADOR DE VELOCIDADE MOVIMENTO (Linear)
+            if (obj.maxVel && obj.maxVel > 0) {
+                let velX = obj.body.velocity.x;
+                let velY = obj.body.velocity.y;
+                let velocidadeLinearCombinada = Math.sqrt(velX * velX + velY * velY);
+                if (velocidadeLinearCombinada > obj.maxVel) {
+                    game.scene.getScene('default').matter.body.setVelocity(obj.body, {
+                        x: (velX / velocidadeLinearCombinada) * obj.maxVel,
+                        y: (velY / velocidadeLinearCombinada) * obj.maxVel
+                    });
+                }
+            }
+            // 2. LIMITADOR DE VELOCIDADE GIRO (Angular)
+            if (obj.maxRot && obj.maxRot > 0) {
+                let velocidadeGiroAtual = obj.body.angularVelocity;
+                if (Math.abs(velocidadeGiroAtual) > obj.maxRot) {
+                    game.scene.getScene('default').matter.body.setAngularVelocity(obj.body, obj.maxRot * Math.sign(velocidadeGiroAtual));
+                }
+            }
+        }
+        // Trava de Eixo X/Y original mantida intacta operando em paralelo
         if (obj && obj.body && obj.lockPos) {
             if (obj.body.position.x !== obj.posicaoTravadaX || obj.body.position.y !== obj.posicaoTravadaY) {
                 game.scene.getScene('default').matter.body.setPosition(obj.body, { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY });
