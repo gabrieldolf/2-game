@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>limite2</title>
+    <title>limite3</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -412,7 +412,7 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list, listaJuntas) {
         const lastLink = (i === num - 1);
         let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 12, len, { density: 0.005, frictionAir: 0.01, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
         if (!lastLink) list.push(link);
-        let c = scene.matter.add.constraint(last, link, 0, 1.0, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 }, stiffness: 1.0, damping: 0.05 });
+        let c = scene.matter.add.constraint(last, link, 0, 0.9, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 }, stiffness: 0.9 });
         if (listaJuntas) listaJuntas.push(c);
         last = link;
     }
@@ -461,34 +461,7 @@ function aplicarLimiteFrame(scene, body, maxDist) {
 
     [player1, player2].forEach(p => {
         if (!p || p.body !== body) return;
-        const RAIO_CORPO = 22; const DIST_ELOS = 32; const COMPRIMENTO_MAXIMO_BRACO = 96;
-
-        // Trava para evitar que a mão se separe excessivamente do corpo quando segurando objetos
-        if (p.leftJoint) {
-            let dxH = p.leftHand.position.x - p.body.position.x;
-            let dyH = p.leftHand.position.y - p.body.position.y;
-            let distHand = Math.sqrt(dxH * dxH + dyH * dyH);
-            if (distHand > COMPRIMENTO_MAXIMO_BRACO) {
-                let ratio = COMPRIMENTO_MAXIMO_BRACO / distHand;
-                scene.matter.body.setPosition(p.leftHand, {
-                    x: p.body.position.x + dxH * ratio,
-                    y: p.body.position.y + dyH * ratio
-                });
-            }
-        }
-
-        if (p.rightJoint) {
-            let dxH = p.rightHand.position.x - p.body.position.x;
-            let dyH = p.rightHand.position.y - p.body.position.y;
-            let distHand = Math.sqrt(dxH * dxH + dyH * dyH);
-            if (distHand > COMPRIMENTO_MAXIMO_BRACO) {
-                let ratio = COMPRIMENTO_MAXIMO_BRACO / distHand;
-                scene.matter.body.setPosition(p.rightHand, {
-                    x: p.body.position.x + dxH * ratio,
-                    y: p.body.position.y + dyH * ratio
-                });
-            }
-        }
+        const RAIO_CORPO = 22; const DIST_ELOS = 32;
 
         if (p.leftElos && p.leftElos.length > 0 && !p.leftJoint) {
             let elo0 = p.leftElos[0]; if (elo0 && !isNaN(elo0.position.x)) {
@@ -568,13 +541,12 @@ function processarGarra(s, p, h, jKey, grab) {
             let r = alvoValido.rotation ? alvoValido.rotation : 0; if (isNaN(r)) r = 0;
             let localOffset = { x: dx * Math.cos(-r) - dy * Math.sin(-r), y: dx * Math.sin(-r) + dy * Math.cos(-r) };
 
-            // Trava física com amortecimento ajustado para estabilidade absoluta do motor
             if (alvoValido.isStatic) {
                 p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
-                p[jKey] = s.matter.add.worldConstraint(h, 0, 1.0, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 }, stiffness: 1.0, damping: 0.1 });
+                p[jKey] = s.matter.add.worldConstraint(h, 0, 1.0, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 }, stiffness: 1.0, damping: 0 });
             } else {
                 p[jKey + 'PontoPivorMundo'] = null;
-                p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 1.0, { pointA: { x: 0, y: 0 }, pointB: localOffset, stiffness: 1.0, damping: 0.1 });
+                p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 1.0, { pointA: { x: 0, y: 0 }, pointB: localOffset, stiffness: 1.0, damping: 0 });
             }
             p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = localOffset;
             s.matter.body.setVelocity(p.body, { x: p.body.velocity.x * 0.1, y: p.body.velocity.y * 0.1 });
@@ -597,7 +569,7 @@ function handlePlayerInput(s, p) {
     }
     if (p.body.mass !== massaCalculadaCorpo) s.matter.body.setMass(p.body, massaCalculadaCorpo);
 
-    const FORCA_ESCALADA_CENARIO = 0.045, FORCA_MOVER_CAIXA = 0.025, RAIO_ORBITA_BRACO = 96, FORCA_MAXIMA_CAP = 0.015;
+    const FORCA_ESCALADA_CENARIO = 0.045, FORCA_MOVER_CAIXA = 0.025, RAIO_ORBITA_BRACO = 96;
     let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.02);
     let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.02);
     
@@ -611,18 +583,14 @@ function handlePlayerInput(s, p) {
         }
     } else if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel) {
         if (pad.leftStick) {
-            let alvo = p.leftJointTarget;
-            let objEditavel = listaObjetosEditaveis.find(o => o.body === alvo);
-            let ehMovel = !alvo.isStatic && !(objEditavel && objEditavel.lockPos && objEditavel.lockRot);
-            
-            let forcaFinal = FORCA_MOVER_CAIXA;
-            if (ehMovel && alvo.mass < 100) {
-                forcaFinal = FORCA_MOVER_CAIXA * (alvo.mass / 6.8);
-            }
-            
-            let fx = Math.min(Math.max(pad.leftStick.x * forcaFinal, -FORCA_MAXIMA_CAP), FORCA_MAXIMA_CAP);
-            let fy = Math.min(Math.max(pad.leftStick.y * forcaFinal, -FORCA_MAXIMA_CAP), FORCA_MAXIMA_CAP);
+            let fx = pad.leftStick.x * FORCA_MOVER_CAIXA;
+            let fy = pad.leftStick.y * FORCA_MOVER_CAIXA;
+
+            // Ação: Puxa a mão / objeto manuseável
             s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fx, y: fy });
+
+            // Reação (3ª Lei de Newton): Força exatamente oposta no corpo do jogador
+            s.matter.body.applyForce(p.body, p.body.position, { x: -fx, y: -fy });
         }
     } else {
         if (movendoEsquerdo && !p.leftJoint) { let a = Math.atan2(pad.leftStick.y, pad.leftStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x)*0.22, y: (posYAlvo - p.leftHand.position.y)*0.22 }); }
@@ -638,18 +606,14 @@ function handlePlayerInput(s, p) {
         }
     } else if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel) {
         if (pad.rightStick) {
-            let alvo = p.rightJointTarget;
-            let objEditavel = listaObjetosEditaveis.find(o => o.body === alvo);
-            let ehMovel = !alvo.isStatic && !(objEditavel && objEditavel.lockPos && objEditavel.lockRot);
-            
-            let forcaFinal = FORCA_MOVER_CAIXA;
-            if (ehMovel && alvo.mass < 100) {
-                forcaFinal = FORCA_MOVER_CAIXA * (alvo.mass / 6.8);
-            }
+            let fx = pad.rightStick.x * FORCA_MOVER_CAIXA;
+            let fy = pad.rightStick.y * FORCA_MOVER_CAIXA;
 
-            let fx = Math.min(Math.max(pad.rightStick.x * forcaFinal, -FORCA_MAXIMA_CAP), FORCA_MAXIMA_CAP);
-            let fy = Math.min(Math.max(pad.rightStick.y * forcaFinal, -FORCA_MAXIMA_CAP), FORCA_MAXIMA_CAP);
+            // Ação: Puxa a mão / objeto manuseável
             s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fx, y: fy });
+
+            // Reação (3ª Lei de Newton): Força exatamente oposta no corpo do jogador
+            s.matter.body.applyForce(p.body, p.body.position, { x: -fx, y: -fy });
         }
     } else {
         if (movendoDireito && !p.rightJoint) { let a = Math.atan2(pad.rightStick.y, pad.rightStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x)*0.22, y: (posYAlvo - p.rightHand.position.y)*0.22 }); }
