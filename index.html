@@ -666,7 +666,7 @@ function handlePlayerInput(s, p) {
         let elo = p.leftJointTarget;
         if (pad.leftStick) {
             let dX = p.body.position.x - elo.position.x, dY = p.body.position.y - elo.position.y, dist = Math.sqrt(dX*dX + dY*dY);
-            if (dist > 20) { let intensity = Math.sqrt(pad.leftStick.x**2 + pad.leftStick.y**2); let fatorEmbaloX = elo.velocity.x * 0.0015; let forcaX = (dX / dist) * 0.0048 * intensity + fatorEmbaloX; let forcaY = (dY / dist) * 0.0035 * intensity; s.matter.body.applyForce(elo, elo.position, { x: forcaX, y: forcaY }); }
+            if (dist > 20) { let intensity = Math.sqrt(pad.leftStick.x**2 + pad.leftStick.y**2); let forcaX = (dX / dist) * 0.0048 * intensity; let forcaY = (dY / dist) * 0.0035 * intensity; s.matter.body.applyForce(elo, elo.position, { x: forcaX, y: forcaY }); }
         }
     } else if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel) {
         if (pad.leftStick) {
@@ -686,7 +686,7 @@ function handlePlayerInput(s, p) {
         let elo = p.rightJointTarget;
         if (pad.rightStick) {
             let dX = p.body.position.x - elo.position.x, dY = p.body.position.y - elo.position.y, dist = Math.sqrt(dX*dX + dY*dY);
-            if (dist > 20) { let intensity = Math.sqrt(pad.rightStick.x**2 + pad.rightStick.y**2); let fatorEmbaloX = elo.velocity.x * 0.0015; let forcaX = (dX / dist) * 0.0048 * intensity + fatorEmbaloX; let forcaY = (dY / dist) * 0.0035 * intensity; s.matter.body.applyForce(elo, elo.position, { x: forcaX, y: forcaY }); }
+            if (dist > 20) { let intensity = Math.sqrt(pad.rightStick.x**2 + pad.rightStick.y**2); let forcaX = (dX / dist) * 0.0048 * intensity; let forcaY = (dY / dist) * 0.0035 * intensity; s.matter.body.applyForce(elo, elo.position, { x: forcaX, y: forcaY }); }
         }
     } else if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel) {
         if (pad.rightStick) {
