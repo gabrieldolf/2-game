@@ -87,7 +87,7 @@ const config = {
         default: 'matter', 
         matter: { 
             gravity: { y:1.5 }, debug: true,
-            runner: { constraintIterations: 12, positionIterations: 12, velocityIterations: 10 }
+            runner: { constraintIterations: 6, positionIterations: 8, velocityIterations: 6 }
         } 
     },
     input: { gamepad: true }, scene: { preload: preload, create: create, update: update }
@@ -101,11 +101,11 @@ let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002, CAT_ROPE = 0x0004;
 
 const PROFILES_CORDA = {
-    super_light: { frictionAir: 0.02, angularDamping: 0.15, mass: 0.1, stiffness: 0.5, damping: 0.2 },
-    light:       { frictionAir: 0.03, angularDamping: 0.2,  mass: 0.3, stiffness: 0.55, damping: 0.25 },
-    normal:      { frictionAir: 0.05, angularDamping: 0.25, mass: 0.8, stiffness: 0.6,  damping: 0.3 },
-    heavy:       { frictionAir: 0.1,  angularDamping: 0.3,  mass: 2.0, stiffness: 0.65, damping: 0.35 },
-    super_heavy: { frictionAir: 0.18, angularDamping: 0.4,  mass: 5.0, stiffness: 0.7,  damping: 0.4 }
+    super_light: { frictionAir: 0.015, angularDamping: 0.12, mass: 0.15, stiffness: 0.75, damping: 0.15 },
+    light:       { frictionAir: 0.02,  angularDamping: 0.15, mass: 0.35, stiffness: 0.8,  damping: 0.18 },
+    normal:      { frictionAir: 0.03,  angularDamping: 0.18, mass: 0.9,  stiffness: 0.85, damping: 0.2  },
+    heavy:       { frictionAir: 0.06,  angularDamping: 0.22, mass: 2.0,  stiffness: 0.9,  damping: 0.25 },
+    super_heavy: { frictionAir: 0.12,  angularDamping: 0.28, mass: 5.0,  stiffness: 0.93, damping: 0.3  }
 };
 
 // Cria os elos (segmentos) e as junções (constraints) de uma corda a partir do
@@ -147,8 +147,10 @@ function criarSegmentosDeCorda(scene, x, y, c) {
             }));
         }
 
+        // Trava anti-dobra, bem suave: só entra em ação se a corda tentar dobrar
+        // sobre si mesma; não deve competir com a junta principal no uso normal.
         if (i >= 2) {
-            constraints.push(scene.matter.add.constraint(elos[i - 2], elo, segmentLen * 2, 0.2, { damping: 0.1 }));
+            constraints.push(scene.matter.add.constraint(elos[i - 2], elo, segmentLen * 2, 0.03, { damping: 0.2 }));
         }
 
         lastBody = elo;
