@@ -288,13 +288,10 @@ function executarCriacaoObjeto(scene, x, y) {
         let prof = PROFILES_CORDA[c.ropeType] || PROFILES_CORDA.normal;
         let ropeGroup = scene.matter.world.nextGroup(true);
         for (let i = 0; i < c.ropeSegments; i++) {
-            // O primeiro elo fica imóvel (ancoragem real)
-            const isTopAnchor = (i === 0);
-            
             let elo = scene.matter.add.rectangle(ax, ay + (i * segmentLen) + segmentLen/2, 8, segmentLen, { 
-                isStatic: isTopAnchor, 
+                isStatic: false, 
                 isSensor: false, 
-                mass: isTopAnchor ? Infinity : prof.mass, 
+                mass: prof.mass, 
                 frictionAir: prof.frictionAir, 
                 angularDamping: prof.angularDamping,
                 label: 'corpo_elo', 
@@ -305,8 +302,14 @@ function executarCriacaoObjeto(scene, x, y) {
             elo.naoAgarravel = false; 
             elos.push(elo);
         
-            if (i > 0) {
-                constraints.push(scene.matter.add.constraint(lastBody, elo, segmentLen, prof.stiffness, { 
+            if (i === 0) {
+                constraints.push(scene.matter.add.worldConstraint(elo, 0, prof.stiffness, { 
+                    pointA: { x: ax, y: ay }, 
+                    pointB: { x: 0, y: -segmentLen/2 }, 
+                    damping: prof.damping 
+                }));
+            } else {
+                constraints.push(scene.matter.add.constraint(lastBody, elo, 0, prof.stiffness, { 
                     pointA: { x: 0, y: segmentLen / 2 }, 
                     pointB: { x: 0, y: -segmentLen / 2 }, 
                     damping: prof.damping 
