@@ -288,18 +288,30 @@ function executarCriacaoObjeto(scene, x, y) {
         let prof = PROFILES_CORDA[c.ropeType] || PROFILES_CORDA.normal;
         let ropeGroup = scene.matter.world.nextGroup(true);
         for (let i = 0; i < c.ropeSegments; i++) {
+            // O primeiro elo fica imóvel (ancoragem real)
+            const isTopAnchor = (i === 0);
+            
             let elo = scene.matter.add.rectangle(ax, ay + (i * segmentLen) + segmentLen/2, 8, segmentLen, { 
-                isStatic: false, 
+                isStatic: isTopAnchor, 
                 isSensor: false, 
-                mass: prof.mass, 
+                mass: isTopAnchor ? Infinity : prof.mass, 
                 frictionAir: prof.frictionAir, 
                 angularDamping: prof.angularDamping,
                 label: 'corpo_elo', 
                 collisionFilter: { category: CAT_ROPE, mask: CAT_PLAYER | CAT_AMBIENTE, group: ropeGroup } 
             });
-            elo.manuseavel = false; elo.naoAgarravel = false; elos.push(elo);
-            if (i === 0) constraints.push(scene.matter.add.worldConstraint(elo, 0, prof.stiffness, { pointA: { x: ax, y: ay }, pointB: { x: 0, y: -segmentLen/2 }, damping: prof.damping }));
-            else constraints.push(scene.matter.add.constraint(lastBody, elo, 0, prof.stiffness, { pointA: { x: 0, y: segmentLen/2 }, pointB: { x: 0, y: -segmentLen/2 }, damping: prof.damping }));
+            
+            elo.manuseavel = false; 
+            elo.naoAgarravel = false; 
+            elos.push(elo);
+        
+            if (i > 0) {
+                constraints.push(scene.matter.add.constraint(lastBody, elo, segmentLen, prof.stiffness, { 
+                    pointA: { x: 0, y: segmentLen / 2 }, 
+                    pointB: { x: 0, y: -segmentLen / 2 }, 
+                    damping: prof.damping 
+                }));
+            }
             lastBody = elo;
         }
         listaObjetosEditaveis.push({ body: null, ropeElos: elos, ropeConstraints: constraints, shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, ropeLen: c.ropeLen, ropeSegments: c.ropeSegments, ropeColor: c.ropeColor, ropeType: c.ropeType, gfx: scene.add.graphics().setDepth(3), posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: false, naoAgarravel: false, isStatic: true });
