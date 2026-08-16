@@ -267,13 +267,13 @@ function executarCriacaoObjeto(scene, x, y) {
                 isStatic: false, 
                 isSensor: false, 
                 mass: 0.8, 
-                frictionAir: 0.015, 
+                frictionAir: 0.08, 
                 label: 'corpo_elo', 
                 collisionFilter: { category: 0x0002, mask: 0 } 
             });
             elo.manuseavel = false; elo.naoAgarravel = false; elos.push(elo);
-            if (i === 0) constraints.push(scene.matter.add.worldConstraint(elo, 0, 0.35, { pointA: { x: ax, y: ay }, pointB: { x: 0, y: -segmentLen/2 }, damping: 0.1 }));
-            else constraints.push(scene.matter.add.constraint(lastBody, elo, 0, 0.35, { pointA: { x: 0, y: segmentLen/2 }, pointB: { x: 0, y: -segmentLen/2 }, damping: 0.1 }));
+            if (i === 0) constraints.push(scene.matter.add.worldConstraint(elo, 0, 0.15, { pointA: { x: ax, y: ay }, pointB: { x: 0, y: -segmentLen/2 }, damping: 0.2 }));
+            else constraints.push(scene.matter.add.constraint(lastBody, elo, 0, 0.15, { pointA: { x: 0, y: segmentLen/2 }, pointB: { x: 0, y: -segmentLen/2 }, damping: 0.2 }));
             lastBody = elo;
         }
         listaObjetosEditaveis.push({ body: null, ropeElos: elos, ropeConstraints: constraints, shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, ropeLen: c.ropeLen, ropeSegments: c.ropeSegments, ropeColor: c.ropeColor, gfx: scene.add.graphics().setDepth(3), posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: false, naoAgarravel: false, isStatic: true });
@@ -360,13 +360,13 @@ function atualizarObjetoExistente() {
                 isStatic: false, 
                 isSensor: false, 
                 mass: 0.8, 
-                frictionAir: 0.015, 
+                frictionAir: 0.08, 
                 label: 'corpo_elo', 
                 collisionFilter: { category: 0x0002, mask: 0 } 
             });
             elo.manuseavel = false; elo.naoAgarravel = false; elos.push(elo);
-            if (i === 0) constraints.push(scene.matter.add.worldConstraint(elo, 0, 0.35, { pointA: { x: px, y: py }, pointB: { x: 0, y: -segmentLen/2 }, damping: 0.1 }));
-            else constraints.push(scene.matter.add.constraint(lastBody, elo, 0, 0.35, { pointA: { x: 0, y: segmentLen/2 }, pointB: { x: 0, y: -segmentLen/2 }, damping: 0.1 }));
+            if (i === 0) constraints.push(scene.matter.add.worldConstraint(elo, 0, 0.15, { pointA: { x: px, y: py }, pointB: { x: 0, y: -segmentLen/2 }, damping: 0.2 }));
+            else constraints.push(scene.matter.add.constraint(lastBody, elo, 0, 0.15, { pointA: { x: 0, y: segmentLen/2 }, pointB: { x: 0, y: -segmentLen/2 }, damping: 0.2 }));
             lastBody = elo;
         }
         obj.ropeElos = elos; obj.ropeConstraints = constraints; obj.ropeColor = c.ropeColor; obj.ropeSegments = c.ropeSegments; obj.ropeLen = c.ropeLen; return;
@@ -552,12 +552,15 @@ function processarGarra(s, p, h, jKey, grab) {
             let r = alvoValido.rotation ? alvoValido.rotation : 0; if (isNaN(r)) r = 0;
             let localOffset = { x: dx * Math.cos(-r) - dy * Math.sin(-r), y: dx * Math.sin(-r) + dy * Math.cos(-r) };
 
+            let rigidezAgarrar = (alvoValido.label === 'corpo_elo') ? 0.2 : 1.0;
+            let amortecimentoAgarrar = (alvoValido.label === 'corpo_elo') ? 0.1 : 0;
+
             if (alvoValido.isStatic) {
                 p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
-                p[jKey] = s.matter.add.worldConstraint(h, 0, 1.0, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 }, stiffness: 1.0, damping: 0 });
+                p[jKey] = s.matter.add.worldConstraint(h, 0, rigidezAgarrar, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 }, stiffness: rigidezAgarrar, damping: amortecimentoAgarrar });
             } else {
                 p[jKey + 'PontoPivorMundo'] = null;
-                p[jKey] = s.matter.add.constraint(h, alvoValido, 0, 1.0, { pointA: { x: 0, y: 0 }, pointB: localOffset, stiffness: 1.0, damping: 0 });
+                p[jKey] = s.matter.add.constraint(h, alvoValido, 0, rigidezAgarrar, { pointA: { x: 0, y: 0 }, pointB: localOffset, stiffness: rigidezAgarrar, damping: amortecimentoAgarrar });
             }
             p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = localOffset;
             s.matter.body.setVelocity(p.body, { x: p.body.velocity.x * 0.1, y: p.body.velocity.y * 0.1 });
