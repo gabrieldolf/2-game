@@ -101,12 +101,60 @@ let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002, CAT_ROPE = 0x0004;
 
 const PROFILES_CORDA = {
-    super_light: { frictionAir: 0.005, angularDamping: 0.01, mass: 0.1, stiffness: 0.8, damping: 0.05 },
-    light:       { frictionAir: 0.01,  angularDamping: 0.02, mass: 0.3, stiffness: 0.85, damping: 0.08 },
-    normal:      { frictionAir: 0.03,  angularDamping: 0.05, mass: 0.8, stiffness: 0.9,  damping: 0.12 },
-    heavy:       { frictionAir: 0.08,  angularDamping: 0.15, mass: 2.0, stiffness: 0.95, damping: 0.25 },
-    super_heavy: { frictionAir: 0.15,  angularDamping: 0.3,  mass: 5.0, stiffness: 0.98, damping: 0.4 }
+    super_light: { frictionAir: 0.02, angularDamping: 0.15, mass: 0.1, stiffness: 0.5, damping: 0.2 },
+    light:       { frictionAir: 0.03, angularDamping: 0.2,  mass: 0.3, stiffness: 0.55, damping: 0.25 },
+    normal:      { frictionAir: 0.05, angularDamping: 0.25, mass: 0.8, stiffness: 0.6,  damping: 0.3 },
+    heavy:       { frictionAir: 0.1,  angularDamping: 0.3,  mass: 2.0, stiffness: 0.65, damping: 0.35 },
+    super_heavy: { frictionAir: 0.18, angularDamping: 0.4,  mass: 5.0, stiffness: 0.7,  damping: 0.4 }
 };
+
+// Cria os elos (segmentos) e as junções (constraints) de uma corda a partir do
+// ponto (x, y). Usada tanto ao criar uma corda nova quanto ao editar uma existente.
+// Além da junção normal entre elos vizinhos, cada elo também é preso ao elo
+// de 2 posições atrás ("trava anti-dobra") para impedir que a corda dobre
+// sobre si mesma e forme um nó, que era o bug original.
+function criarSegmentosDeCorda(scene, x, y, c) {
+    let elos = [], constraints = [];
+    let segmentLen = c.ropeLen / c.ropeSegments;
+    let prof = PROFILES_CORDA[c.ropeType] || PROFILES_CORDA.normal;
+    let ropeGroup = scene.matter.world.nextGroup(true);
+    let lastBody = null;
+    for (let i = 0; i < c.ropeSegments; i++) {
+        let elo = scene.matter.add.rectangle(x, y + (i * segmentLen) + segmentLen/2, 8, segmentLen, {
+            isStatic: false,
+            isSensor: false,
+            mass: prof.mass,
+            frictionAir: prof.frictionAir,
+            angularDamping: prof.angularDamping,
+            label: 'corpo_elo',
+            collisionFilter: { category: CAT_ROPE, mask: CAT_PLAYER | CAT_AMBIENTE, group: ropeGroup }
+        });
+        elo.manuseavel = false;
+        elo.naoAgarravel = false;
+        elos.push(elo);
+
+        if (i === 0) {
+            constraints.push(scene.matter.add.worldConstraint(elo, 0, prof.stiffness, {
+                pointA: { x: x, y: y },
+                pointB: { x: 0, y: -segmentLen/2 },
+                damping: prof.damping
+            }));
+        } else {
+            constraints.push(scene.matter.add.constraint(lastBody, elo, 0, prof.stiffness, {
+                pointA: { x: 0, y: segmentLen/2 },
+                pointB: { x: 0, y: -segmentLen/2 },
+                damping: prof.damping
+            }));
+        }
+
+        if (i >= 2) {
+            constraints.push(scene.matter.add.constraint(elos[i - 2], elo, segmentLen * 2, 0.2, { damping: 0.1 }));
+        }
+
+        lastBody = elo;
+    }
+    return { elos: elos, constraints: constraints };
+}
 
 function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; }
 function setFerramenta(f) { ferramentaAtual = f; document.getElementById('btn-create').className = f==='create'?'active':''; document.getElementById('btn-select').className = f==='select'?'active':''; }
@@ -284,39 +332,7 @@ function extrairCamposPainel() {
 function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
     if (c.shape === 'rope') {
-        let elos = [], constraints = []; let segmentLen = c.ropeLen / c.ropeSegments; let lastBody = null;
-        let prof = PROFILES_CORDA[c.ropeType] || PROFILES_CORDA.normal;
-        let ropeGroup = scene.matter.world.nextGroup(true);
-        for (let i = 0; i < c.ropeSegments; i++) {
-            let elo = scene.matter.add.rectangle(ax, ay + (i * segmentLen) + segmentLen/2, 8, segmentLen, { 
-                isStatic: false, 
-                isSensor: false, 
-                mass: prof.mass, 
-                frictionAir: prof.frictionAir, 
-                angularDamping: prof.angularDamping,
-                label: 'corpo_elo', 
-                collisionFilter: { category: CAT_ROPE, mask: CAT_PLAYER | CAT_AMBIENTE, group: ropeGroup } 
-            });
-            
-            elo.manuseavel = false; 
-            elo.naoAgarravel = false; 
-            elos.push(elo);
-        
-            if (i === 0) {
-                constraints.push(scene.matter.add.worldConstraint(elo, 0, prof.stiffness, { 
-                    pointA: { x: ax, y: ay }, 
-                    pointB: { x: 0, y: -segmentLen/2 }, 
-                    damping: prof.damping 
-                }));
-            } else {
-                constraints.push(scene.matter.add.constraint(lastBody, elo, 0, prof.stiffness, { 
-                    pointA: { x: 0, y: segmentLen / 2 }, 
-                    pointB: { x: 0, y: -segmentLen / 2 }, 
-                    damping: prof.damping 
-                }));
-            }
-            lastBody = elo;
-        }
+        let { elos, constraints } = criarSegmentosDeCorda(scene, ax, ay, c);
         listaObjetosEditaveis.push({ body: null, ropeElos: elos, ropeConstraints: constraints, shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, ropeLen: c.ropeLen, ropeSegments: c.ropeSegments, ropeColor: c.ropeColor, ropeType: c.ropeType, gfx: scene.add.graphics().setDepth(3), posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: false, naoAgarravel: false, isStatic: true });
         return;
     }
@@ -395,24 +411,7 @@ function atualizarObjetoExistente() {
     if (obj.shape === 'rope') {
         if (obj.ropeConstraints) obj.ropeConstraints.forEach(co => scene.matter.world.remove(co));
         if (obj.ropeElos) obj.ropeElos.forEach(el => scene.matter.world.remove(el));
-        let elos = [], constraints = []; let segmentLen = c.ropeLen / c.ropeSegments; let lastBody = null;
-        let prof = PROFILES_CORDA[c.ropeType] || PROFILES_CORDA.normal;
-        let ropeGroup = scene.matter.world.nextGroup(true);
-        for (let i = 0; i < c.ropeSegments; i++) {
-            let elo = scene.matter.add.rectangle(px, py + (i * segmentLen) + segmentLen/2, 8, segmentLen, { 
-                isStatic: false, 
-                isSensor: false, 
-                mass: prof.mass, 
-                frictionAir: prof.frictionAir, 
-                angularDamping: prof.angularDamping,
-                label: 'corpo_elo', 
-                collisionFilter: { category: CAT_ROPE, mask: CAT_PLAYER | CAT_AMBIENTE, group: ropeGroup } 
-            });
-            elo.manuseavel = false; elo.naoAgarravel = false; elos.push(elo);
-            if (i === 0) constraints.push(scene.matter.add.worldConstraint(elo, 0, prof.stiffness, { pointA: { x: px, y: py }, pointB: { x: 0, y: -segmentLen/2 }, damping: prof.damping }));
-            else constraints.push(scene.matter.add.constraint(lastBody, elo, 0, prof.stiffness, { pointA: { x: 0, y: segmentLen/2 }, pointB: { x: 0, y: -segmentLen/2 }, damping: prof.damping }));
-            lastBody = elo;
-        }
+        let { elos, constraints } = criarSegmentosDeCorda(scene, px, py, c);
         obj.ropeElos = elos; obj.ropeConstraints = constraints; obj.ropeColor = c.ropeColor; obj.ropeSegments = c.ropeSegments; obj.ropeLen = c.ropeLen; obj.ropeType = c.ropeType; return;
     }
     if (obj.body) scene.matter.world.remove(obj.body); obj.body = null;
@@ -740,14 +739,6 @@ function update() {
     
     [player1, player2].forEach(p => {
         if (!p) return;
-        if (p.leftJoint && p.leftJointPontoPivorMundo) {
-            sAct.matter.body.setPosition(p.leftHand, { x: p.leftJointPontoPivorMundo.x, y: p.leftJointPontoPivorMundo.y });
-            sAct.matter.body.setVelocity(p.leftHand, { x: 0, y: 0 });
-        }
-        if (p.rightJoint && p.rightJointPontoPivorMundo) {
-            sAct.matter.body.setPosition(p.rightHand, { x: p.rightJointPontoPivorMundo.x, y: p.rightJointPontoPivorMundo.y });
-            sAct.matter.body.setVelocity(p.rightHand, { x: 0, y: 0 });
-        }
     });
 
     if (player1) { player1.gfx.clear(); desenharJogador(player1); } if (player2) { player2.gfx.clear(); desenharJogador(player2); }
