@@ -101,11 +101,11 @@ let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002, CAT_ROPE = 0x0004;
 
 const PROFILES_CORDA = {
-    super_light: { frictionAir: 0.015, angularDamping: 0.12, mass: 0.15, stiffness: 0.6, damping: 0.2 },
-    light:       { frictionAir: 0.02,  angularDamping: 0.15, mass: 0.35, stiffness: 0.65, damping: 0.22 },
-    normal:      { frictionAir: 0.03,  angularDamping: 0.18, mass: 0.9,  stiffness: 0.7,  damping: 0.25 },
-    heavy:       { frictionAir: 0.06,  angularDamping: 0.22, mass: 2.0,  stiffness: 0.75, damping: 0.28 },
-    super_heavy: { frictionAir: 0.12,  angularDamping: 0.28, mass: 5.0,  stiffness: 0.8,  damping: 0.32 }
+    super_light: { frictionAir: 0.015, angularDamping: 0.12, mass: 0.15, stiffness: 0.6, damping: 0.2,  brace: 0.12 },
+    light:       { frictionAir: 0.02,  angularDamping: 0.15, mass: 0.35, stiffness: 0.65, damping: 0.22, brace: 0.16 },
+    normal:      { frictionAir: 0.03,  angularDamping: 0.18, mass: 0.9,  stiffness: 0.7,  damping: 0.25, brace: 0.22 },
+    heavy:       { frictionAir: 0.06,  angularDamping: 0.25, mass: 2.0,  stiffness: 0.78, damping: 0.3,  brace: 0.35 },
+    super_heavy: { frictionAir: 0.12,  angularDamping: 0.32, mass: 5.0,  stiffness: 0.85, damping: 0.38, brace: 0.5 }
 };
 
 // Cria os elos (segmentos) e as junções (constraints) de uma corda a partir do
@@ -154,9 +154,10 @@ function criarSegmentosDeCorda(scene, x, y, c) {
             }));
         }
 
-        // Trava anti-dobra: impede a corda de dobrar sobre si mesma.
+        // Trava anti-dobra: impede a corda de dobrar sobre si mesma. Precisa ser
+        // mais forte quanto mais pesado for o elo, senão não segura o peso.
         if (i >= 2) {
-            constraints.push(scene.matter.add.constraint(elos[i - 2], elo, segmentLen * 2 + GAP_JUNTA, 0.15, { damping: 0.3 }));
+            constraints.push(scene.matter.add.constraint(elos[i - 2], elo, segmentLen * 2 + GAP_JUNTA, prof.brace, { damping: 0.3 }));
         }
 
         lastBody = elo;
