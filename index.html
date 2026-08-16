@@ -145,6 +145,7 @@ function criarSegmentosDeCorda(scene, x, y, c) {
         });
         elo.manuseavel = false;
         elo.naoAgarravel = false;
+        elo.pesoCorda = prof.mass;
         elos.push(elo);
 
         if (i === 0) {
@@ -519,6 +520,16 @@ function processarToqueParaContato(h, b, pair) {
 function quebrarToqueParaContato(h, b) { if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) { if (h.corpoTocadoAgora === b) { h.corpoTocadoAgora = null; h.pontoDeContatoGlobal = null; } } }
 function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
 
+// Quanto mais pesada a corda que o jogador está segurando, menor a velocidade
+// máxima permitida por quadro — é o que faz uma corda pesada "sentir" pesada,
+// balançando mais devagar em vez de deixar o jogador disparar.
+function calcularLimiteVelocidade(p) {
+    let pesoSegurado = 0;
+    if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.label === 'corpo_elo') pesoSegurado = Math.max(pesoSegurado, p.leftJointTarget.pesoCorda || 0);
+    if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.label === 'corpo_elo') pesoSegurado = Math.max(pesoSegurado, p.rightJointTarget.pesoCorda || 0);
+    return 10 / (1 + pesoSegurado * 0.6);
+}
+
 function aplicarLimiteFrame(scene, body, maxDist) {
     if (!body || !body.position || body.isStatic || isNaN(body.position.x)) return;
     if (body.ultimaPos) { 
@@ -754,7 +765,7 @@ function update() {
         }); return;
     }
     if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2); 
-    [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10); });
+    [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, calcularLimiteVelocidade(p)); });
     
     [player1, player2].forEach(p => {
         if (!p) return;
