@@ -101,18 +101,25 @@ let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002, CAT_ROPE = 0x0004;
 
 const PROFILES_CORDA = {
-    super_light: { frictionAir: 0.015, angularDamping: 0.12, mass: 0.15, stiffness: 0.75, damping: 0.15 },
-    light:       { frictionAir: 0.02,  angularDamping: 0.15, mass: 0.35, stiffness: 0.8,  damping: 0.18 },
-    normal:      { frictionAir: 0.03,  angularDamping: 0.18, mass: 0.9,  stiffness: 0.85, damping: 0.2  },
-    heavy:       { frictionAir: 0.06,  angularDamping: 0.22, mass: 2.0,  stiffness: 0.9,  damping: 0.25 },
-    super_heavy: { frictionAir: 0.12,  angularDamping: 0.28, mass: 5.0,  stiffness: 0.93, damping: 0.3  }
+    super_light: { frictionAir: 0.015, angularDamping: 0.12, mass: 0.15, stiffness: 0.6, damping: 0.2 },
+    light:       { frictionAir: 0.02,  angularDamping: 0.15, mass: 0.35, stiffness: 0.65, damping: 0.22 },
+    normal:      { frictionAir: 0.03,  angularDamping: 0.18, mass: 0.9,  stiffness: 0.7,  damping: 0.25 },
+    heavy:       { frictionAir: 0.06,  angularDamping: 0.22, mass: 2.0,  stiffness: 0.75, damping: 0.28 },
+    super_heavy: { frictionAir: 0.12,  angularDamping: 0.28, mass: 5.0,  stiffness: 0.8,  damping: 0.32 }
 };
 
 // Cria os elos (segmentos) e as junções (constraints) de uma corda a partir do
 // ponto (x, y). Usada tanto ao criar uma corda nova quanto ao editar uma existente.
-// Além da junção normal entre elos vizinhos, cada elo também é preso ao elo
-// de 2 posições atrás ("trava anti-dobra") para impedir que a corda dobre
-// sobre si mesma e forme um nó, que era o bug original.
+//
+// Duas medidas contra o "nó":
+// 1) A junção entre elos vizinhos usa um comprimento mínimo pequeno (GAP_JUNTA),
+//    em vez de exatamente 0. Uma junção de comprimento 0 entre peças rígidas é
+//    ambígua para o solver de física (esticada ou dobrada = mesma distância "0"),
+//    o que pode fazer a corda "saltar" de repente para a forma dobrada. Um
+//    pequeno espaço resolve essa ambiguidade.
+// 2) Cada elo também se prende ao elo de 2 posições atrás (trava anti-dobra),
+//    reforçando que a corda não pode se dobrar sobre si mesma.
+const GAP_JUNTA = 2;
 function criarSegmentosDeCorda(scene, x, y, c) {
     let elos = [], constraints = [];
     let segmentLen = c.ropeLen / c.ropeSegments;
@@ -120,7 +127,7 @@ function criarSegmentosDeCorda(scene, x, y, c) {
     let ropeGroup = scene.matter.world.nextGroup(true);
     let lastBody = null;
     for (let i = 0; i < c.ropeSegments; i++) {
-        let elo = scene.matter.add.rectangle(x, y + (i * segmentLen) + segmentLen/2, 8, segmentLen, {
+        let elo = scene.matter.add.rectangle(x, y + (i * segmentLen) + segmentLen/2, 14, segmentLen, {
             isStatic: false,
             isSensor: false,
             mass: prof.mass,
@@ -134,28 +141,28 @@ function criarSegmentosDeCorda(scene, x, y, c) {
         elos.push(elo);
 
         if (i === 0) {
-            constraints.push(scene.matter.add.worldConstraint(elo, 0, prof.stiffness, {
+            constraints.push(scene.matter.add.worldConstraint(elo, GAP_JUNTA, prof.stiffness, {
                 pointA: { x: x, y: y },
                 pointB: { x: 0, y: -segmentLen/2 },
                 damping: prof.damping
             }));
         } else {
-            constraints.push(scene.matter.add.constraint(lastBody, elo, 0, prof.stiffness, {
+            constraints.push(scene.matter.add.constraint(lastBody, elo, GAP_JUNTA, prof.stiffness, {
                 pointA: { x: 0, y: segmentLen/2 },
                 pointB: { x: 0, y: -segmentLen/2 },
                 damping: prof.damping
             }));
         }
 
-        // Trava anti-dobra, bem suave: só entra em ação se a corda tentar dobrar
-        // sobre si mesma; não deve competir com a junta principal no uso normal.
+        // Trava anti-dobra: impede a corda de dobrar sobre si mesma.
         if (i >= 2) {
-            constraints.push(scene.matter.add.constraint(elos[i - 2], elo, segmentLen * 2, 0.03, { damping: 0.2 }));
+            constraints.push(scene.matter.add.constraint(elos[i - 2], elo, segmentLen * 2 + GAP_JUNTA, 0.15, { damping: 0.3 }));
         }
 
         lastBody = elo;
     }
     return { elos: elos, constraints: constraints };
+
 }
 
 function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; }
