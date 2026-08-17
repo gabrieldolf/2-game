@@ -482,9 +482,11 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list, listaJuntas) {
     let last = bA;
     for (let i = 0; i < num; i++) {
         const lastLink = (i === num - 1);
-        let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 12, len, { density: 0.005, frictionAir: 0.01, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER | CAT_ROPE, group: grp } });
+        let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 12, len, { density: 0.005, frictionAir: 0.01, angularDamping: 0.3, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER | CAT_ROPE, group: grp } });
         if (!lastLink) list.push(link);
-        let c = scene.matter.add.constraint(last, link, 0, 0.9, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 }, stiffness: 0.9 });
+        // damping alto para que, após um impacto forte, o braço pare de "ressoar"
+        // rapidamente em vez de balançar sozinho por muitos segundos.
+        let c = scene.matter.add.constraint(last, link, 0, 0.9, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 }, stiffness: 0.9, damping: 0.4 });
         if (listaJuntas) listaJuntas.push(c);
         last = link;
     }
@@ -528,6 +530,35 @@ function calcularLimiteVelocidade(p) {
     if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.label === 'corpo_elo') pesoSegurado = Math.max(pesoSegurado, p.leftJointTarget.pesoCorda || 0);
     if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.label === 'corpo_elo') pesoSegurado = Math.max(pesoSegurado, p.rightJointTarget.pesoCorda || 0);
     return 10 / (1 + pesoSegurado * 0.6);
+}
+
+// Trava a mão exatamente no ponto do mundo onde ela agarrou algo, recalculado
+// a cada quadro a partir da posição/rotação atual do alvo. Isso garante que a
+// mão nunca "escorregue" do ponto agarrado por imprecisão do solver de física
+// — qualquer folga necessária para a física parecer natural deve aparecer no
+// braço esticando, não na mão se afastando da superfície.
+function travarMaosNoPontoAgarrado(scene, p) {
+    ['leftJoint', 'rightJoint'].forEach(jKey => {
+        if (!p[jKey]) return;
+        let hand = jKey === 'leftJoint' ? p.leftHand : p.rightHand;
+        let target = p[jKey + 'Target'];
+        if (!hand || !target) return;
+        let wx, wy;
+        if (target.isStatic) {
+            let piv = p[jKey + 'PontoPivorMundo'];
+            if (!piv) return;
+            wx = piv.x; wy = piv.y;
+        } else {
+            let off = p[jKey + 'LocalOffset'];
+            if (!off) return;
+            let r = target.angle || 0;
+            wx = target.position.x + (off.x * Math.cos(r) - off.y * Math.sin(r));
+            wy = target.position.y + (off.x * Math.sin(r) + off.y * Math.cos(r));
+        }
+        scene.matter.body.setPosition(hand, { x: wx, y: wy });
+        let vAlvo = target.velocity || { x: 0, y: 0 };
+        scene.matter.body.setVelocity(hand, { x: vAlvo.x, y: vAlvo.y });
+    });
 }
 
 function aplicarLimiteFrame(scene, body, maxDist) {
@@ -662,11 +693,12 @@ function handlePlayerInput(s, p) {
     
     // MÃO ESQUERDA
     if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.manuseavel) {
-        if (pad.leftStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * FORCA_ESCALADA_CENARIO, y: pad.leftStick.y * FORCA_ESCALADA_CENARIO });
+        let fatorPesoEsq = 1 / (1 + (p.leftJointTarget.pesoCorda || 0) * 0.6);
+        if (pad.leftStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * FORCA_ESCALADA_CENARIO * fatorPesoEsq, y: pad.leftStick.y * FORCA_ESCALADA_CENARIO * fatorPesoEsq });
         let elo = p.leftJointTarget;
         if (pad.leftStick) {
             let dX = p.body.position.x - elo.position.x, dY = p.body.position.y - elo.position.y, dist = Math.sqrt(dX*dX + dY*dY);
-            if (dist > 20) { let intensity = Math.sqrt(pad.leftStick.x**2 + pad.leftStick.y**2); let forcaX = (dX / dist) * 0.0048 * intensity; let forcaY = (dY / dist) * 0.0035 * intensity; s.matter.body.applyForce(elo, elo.position, { x: forcaX, y: forcaY }); }
+            if (dist > 20) { let intensity = Math.sqrt(pad.leftStick.x**2 + pad.leftStick.y**2); let forcaX = (dX / dist) * 0.0048 * intensity * fatorPesoEsq; let forcaY = (dY / dist) * 0.0035 * intensity * fatorPesoEsq; s.matter.body.applyForce(elo, elo.position, { x: forcaX, y: forcaY }); }
         }
     } else if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel) {
         if (pad.leftStick) {
@@ -682,11 +714,12 @@ function handlePlayerInput(s, p) {
 
     // MÃO DIREITA
     if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.manuseavel) {
-        if (pad.rightStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.rightStick.x * FORCA_ESCALADA_CENARIO, y: pad.rightStick.y * FORCA_ESCALADA_CENARIO });
+        let fatorPesoDir = 1 / (1 + (p.rightJointTarget.pesoCorda || 0) * 0.6);
+        if (pad.rightStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.rightStick.x * FORCA_ESCALADA_CENARIO * fatorPesoDir, y: pad.rightStick.y * FORCA_ESCALADA_CENARIO * fatorPesoDir });
         let elo = p.rightJointTarget;
         if (pad.rightStick) {
             let dX = p.body.position.x - elo.position.x, dY = p.body.position.y - elo.position.y, dist = Math.sqrt(dX*dX + dY*dY);
-            if (dist > 20) { let intensity = Math.sqrt(pad.rightStick.x**2 + pad.rightStick.y**2); let forcaX = (dX / dist) * 0.0048 * intensity; let forcaY = (dY / dist) * 0.0035 * intensity; s.matter.body.applyForce(elo, elo.position, { x: forcaX, y: forcaY }); }
+            if (dist > 20) { let intensity = Math.sqrt(pad.rightStick.x**2 + pad.rightStick.y**2); let forcaX = (dX / dist) * 0.0048 * intensity * fatorPesoDir; let forcaY = (dY / dist) * 0.0035 * intensity * fatorPesoDir; s.matter.body.applyForce(elo, elo.position, { x: forcaX, y: forcaY }); }
         }
     } else if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel) {
         if (pad.rightStick) {
@@ -769,6 +802,7 @@ function update() {
     
     [player1, player2].forEach(p => {
         if (!p) return;
+        travarMaosNoPontoAgarrado(sAct, p);
     });
 
     if (player1) { player1.gfx.clear(); desenharJogador(player1); } if (player2) { player2.gfx.clear(); desenharJogador(player2); }
