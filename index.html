@@ -556,8 +556,17 @@ function travarMaosNoPontoAgarrado(scene, p) {
             wy = target.position.y + (off.x * Math.sin(r) + off.y * Math.cos(r));
         }
         scene.matter.body.setPosition(hand, { x: wx, y: wy });
+        // Velocidade correta do ponto agarrado = velocidade do centro do alvo
+        // + contribuição da rotação (velocidade angular × distância ao centro).
+        // Sem isso, agarrar algo girando (ex: uma plataforma rotativa) fazia a
+        // mão "teleportar" em círculo sem a velocidade compatível, e a física
+        // interpretava isso como um puxão violento, arremessando o jogador.
         let vAlvo = target.velocity || { x: 0, y: 0 };
-        scene.matter.body.setVelocity(hand, { x: vAlvo.x, y: vAlvo.y });
+        let velAngular = target.angularVelocity || 0;
+        let rx = wx - target.position.x, ry = wy - target.position.y;
+        let vx = vAlvo.x - velAngular * ry;
+        let vy = vAlvo.y + velAngular * rx;
+        scene.matter.body.setVelocity(hand, { x: vx, y: vy });
     });
 }
 
