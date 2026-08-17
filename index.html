@@ -660,7 +660,12 @@ function processarGarra(s, p, h, jKey, grab) {
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
             let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
-            let r = alvoValido.rotation ? alvoValido.rotation : 0; if (isNaN(r)) r = 0;
+            // Corpos do Matter.js usam a propriedade ".angle" para rotação —
+            // ".rotation" não existe e sempre resultava em 0, fazendo o offset
+            // local ser calculado sem considerar a rotação atual do objeto no
+            // momento do agarrão. Isso fazia a mão "teleportar" para um ponto
+            // errado ao reprojetar esse offset junto com a rotação do objeto.
+            let r = alvoValido.angle || 0; if (isNaN(r)) r = 0;
             let localOffset = { x: dx * Math.cos(-r) - dy * Math.sin(-r), y: dx * Math.sin(-r) + dy * Math.cos(-r) };
 
             // A garra precisa ser sempre rígida: a mão não pode se afastar do
