@@ -15,12 +15,34 @@
         input[type="checkbox"] { width:18px; height:18px; cursor: pointer; }
         h3 { margin:0; font-size:12px; color:#aaa; text-transform:uppercase; }
         #aviso-modo { position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.7); color:#fff; padding:8px 12px; border-radius:5px; font-weight:bold; font-size:14px; pointer-events:none; z-index:5; }
+        #painel-salas { background:#16232e; border:1px solid #35566d; padding:8px; border-radius:5px; display:flex; flex-direction:column; gap:6px; }
+        #painel-salas select, #painel-salas input { width:100%; box-sizing:border-box; }
+        .sala-acoes { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+        .sala-acoes button { font-size:11px; padding:7px 4px; }
+        #status-sala { font-size:11px; color:#9bd4ff; line-height:1.35; word-break:break-word; }
+        #input-importar-sala { display:none; }
     </style>
     <script src="phaser.min.js"></script>
 </head>
 <body>
 <div id="sidebar">
     <h2>EDITOR</h2>
+    <div id="painel-salas">
+        <h3 style="color:#7ed6ff; font-weight:bold;">Sala Atual</h3>
+        <div class="prop-row"><label>Nome:</label><input type="text" id="campo-nome-sala" value="Sala Inicial"></div>
+        <div class="prop-row"><label>ID:</label><input type="text" id="campo-id-sala" value="sala_inicial"></div>
+        <select id="lista-salas" onchange="selecionarSalaDaLista()"></select>
+        <div class="sala-acoes">
+            <button style="background:#2980b9;" onclick="criarNovaSala()">Criar Sala</button>
+            <button style="background:#27ae60;" onclick="salvarSalaAtual()">Salvar Sala</button>
+            <button style="background:#8e44ad;" onclick="carregarSalaSelecionada()">Carregar Sala</button>
+            <button style="background:#c0392b;" onclick="deletarSalaAtual()">Deletar Sala</button>
+            <button style="background:#16a085;" onclick="exportarSalaAtual()">Exportar JSON</button>
+            <button style="background:#d35400;" onclick="document.getElementById('input-importar-sala').click()">Importar JSON</button>
+        </div>
+        <input type="file" id="input-importar-sala" accept=".json,application/json" onchange="importarSalaArquivo(event)">
+        <div id="status-sala">Sala em edição: sala_inicial</div>
+    </div>
     <div class="section" style="background:#2c3e50; padding:8px; border-radius:4px; margin-bottom:5px;">
         <h3 style="color:#3498db; font-weight:bold;">Ajuste do Ragdoll</h3>
         <div class="prop-row">
@@ -90,6 +112,359 @@ let clickOffsetX = 0, clickOffsetY = 0;
 let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
 
+// Sistema de salas: os dados são separados da física em execução.
+// O navegador mantém as salas no localStorage e também permitimos exportar/importar JSON.
+const CHAVE_ARMAZENAMENTO_SALAS = 'metroidvania_ho_salas_v1';
+const VERSAO_DADOS_SALA = 1;
+let bancoDeSalas = {};
+let salaAtual = { id: 'sala_inicial', nome: 'Sala Inicial' };
+let salaFoiAlterada = false;
+
+function gerarIdSala(nome) {
+    let base = String(nome || 'sala').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    if (!base) base = 'sala';
+    let id = base, n = 2;
+    while (bancoDeSalas[id]) { id = base + '_' + n++; }
+    return id;
+}
+
+function atualizarStatusSala(texto, cor) {
+    const el = document.getElementById('status-sala');
+    if (!el) return;
+    el.innerText = texto;
+    if (cor) el.style.color = cor;
+}
+
+function normalizarIdSala(id) {
+    return String(id || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+function carregarBancoDeSalas() {
+    try {
+        const bruto = localStorage.getItem(CHAVE_ARMAZENAMENTO_SALAS);
+        bancoDeSalas = bruto ? JSON.parse(bruto) : {};
+        if (!bancoDeSalas || typeof bancoDeSalas !== 'object' || Array.isArray(bancoDeSalas)) bancoDeSalas = {};
+    } catch (erro) {
+        console.error('Não foi possível ler as salas salvas:', erro);
+        bancoDeSalas = {};
+        alert('Não foi possível ler as salas salvas deste navegador.');
+    }
+}
+
+function persistirBancoDeSalas() {
+    try {
+        localStorage.setItem(CHAVE_ARMAZENAMENTO_SALAS, JSON.stringify(bancoDeSalas));
+        return true;
+    } catch (erro) {
+        console.error('Não foi possível salvar as salas:', erro);
+        alert('Não foi possível salvar. O navegador pode estar sem espaço para armazenamento. Use Exportar JSON para guardar uma cópia.');
+        return false;
+    }
+}
+
+function atualizarListaDeSalas() {
+    const select = document.getElementById('lista-salas');
+    if (!select) return;
+    const ids = Object.keys(bancoDeSalas).sort((a, b) => {
+        const na = bancoDeSalas[a]?.nome || a, nb = bancoDeSalas[b]?.nome || b;
+        return na.localeCompare(nb, 'pt-BR');
+    });
+    select.innerHTML = '';
+    ids.forEach(id => {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = (bancoDeSalas[id]?.nome || id) + ' [' + id + ']';
+        select.appendChild(opt);
+    });
+    if (bancoDeSalas[salaAtual.id]) select.value = salaAtual.id;
+}
+
+function atualizarCamposSala() {
+    const nome = document.getElementById('campo-nome-sala');
+    const id = document.getElementById('campo-id-sala');
+    if (nome) nome.value = salaAtual.nome || salaAtual.id;
+    if (id) id.value = salaAtual.id || '';
+    atualizarListaDeSalas();
+    atualizarStatusSala('Sala em edição: ' + salaAtual.id + (salaFoiAlterada ? ' • alterações não salvas' : ' • salva'), salaFoiAlterada ? '#ffea00' : '#9bd4ff');
+}
+
+function marcarSalaComoAlterada() {
+    salaFoiAlterada = true;
+    const id = document.getElementById('campo-id-sala')?.value || salaAtual.id;
+    atualizarStatusSala('Sala em edição: ' + id + ' • alterações não salvas', '#ffea00');
+}
+
+function criarEstruturaSalaVazia(id, nome) {
+    return {
+        versao: VERSAO_DADOS_SALA,
+        tipo: 'sala',
+        id: id,
+        nome: nome,
+        dimensoes: { largura: WORLD_WIDTH, altura: WORLD_HEIGHT },
+        configuracao: {
+            modificadorPesoQueda: parseFloat(document.getElementById('prop-fall-weight-mod')?.value) || 1.0,
+            tamanhoGrade: parseInt(document.getElementById('prop-grid-size')?.value) || 64
+        },
+        pontosDeEntrada: {
+            jogador1: { x: 300, y: WORLD_HEIGHT - 150 },
+            jogador2: { x: 500, y: WORLD_HEIGHT - 150 }
+        },
+        objetos: [],
+        portais: []
+    };
+}
+
+function obterDadosSalaAtual() {
+    const nomeInformado = (document.getElementById('campo-nome-sala')?.value || salaAtual.nome || 'Sala').trim() || 'Sala';
+    let idInformado = normalizarIdSala(document.getElementById('campo-id-sala')?.value || salaAtual.id);
+    if (!idInformado) idInformado = gerarIdSala(nomeInformado);
+
+    const dados = criarEstruturaSalaVazia(idInformado, nomeInformado);
+    dados.dimensoes = { largura: WORLD_WIDTH, altura: WORLD_HEIGHT };
+    dados.configuracao.modificadorPesoQueda = parseFloat(document.getElementById('prop-fall-weight-mod')?.value) || 1.0;
+    dados.configuracao.tamanhoGrade = parseInt(document.getElementById('prop-grid-size')?.value) || 64;
+    dados.objetos = listaObjetosEditaveis.map(serializarObjetoDaSala).filter(Boolean);
+    return dados;
+}
+
+function serializarObjetoDaSala(obj) {
+    if (!obj) return null;
+    const base = {
+        shape: obj.shape,
+        manuseavel: !!obj.manuseavel,
+        naoAgarravel: !!obj.naoAgarravel,
+        isStatic: obj.body ? !!obj.body.isStatic : !!obj.isStatic,
+        w: Number(obj.w) || 0,
+        h: Number(obj.h) || 0,
+        gravity: obj.gravity !== false,
+        lockPos: !!obj.lockPos,
+        lockRot: !!obj.lockRot,
+        mass: Number(obj.mass) || (obj.body ? Number(obj.body.mass) || 1 : 1),
+        air: Number(obj.air) || 0,
+        bounce: Number(obj.bounce) || 0,
+        maxVel: Number(obj.maxVel) || 0,
+        maxRot: Number(obj.maxRot) || 0
+    };
+
+    if (obj.shape === 'rope') {
+        base.x = Number(obj.posicaoTravadaX) || 0;
+        base.y = Number(obj.posicaoTravadaY) || 0;
+        base.ropeLen = Number(obj.ropeLen) || 250;
+        base.ropeSegments = Number(obj.ropeSegments) || 8;
+        base.ropeColor = obj.ropeColor || '#ffffff';
+        return base;
+    }
+
+    const body = obj.body;
+    if (!body) return null;
+    base.x = Number(body.position.x) || 0;
+    base.y = Number(body.position.y) || 0;
+    base.angle = Number(body.angle) || 0;
+    if (obj.shape === 'polygon' && obj.dadosDesenhoVisual) {
+        base.vertices = obj.dadosDesenhoVisual.map(v => ({ x: Number(v.x) || 0, y: Number(v.y) || 0 }));
+    }
+    return base;
+}
+
+function salvarSalaAtual() {
+    const dados = obterDadosSalaAtual();
+    if (bancoDeSalas[dados.id] && dados.id !== salaAtual.id) {
+        if (!confirm('Já existe uma sala com o ID "' + dados.id + '". Substituir?')) return;
+    }
+    if (dados.id !== salaAtual.id && bancoDeSalas[salaAtual.id] && !confirm('O ID da sala mudou de "' + salaAtual.id + '" para "' + dados.id + '". Salvar como uma nova sala?')) return;
+    bancoDeSalas[dados.id] = dados;
+    if (dados.id !== salaAtual.id) delete bancoDeSalas[salaAtual.id];
+    salaAtual = { id: dados.id, nome: dados.nome };
+    salaFoiAlterada = false;
+    persistirBancoDeSalas();
+    atualizarCamposSala();
+    atualizarStatusSala('Sala salva: ' + dados.nome + ' [' + dados.id + '] • ' + dados.objetos.length + ' objeto(s)', '#55ff55');
+}
+
+function criarNovaSala() {
+    if (salaFoiAlterada && !confirm('A sala atual possui alterações não salvas. Criar outra sala mesmo assim?')) return;
+    const nome = prompt('Nome da nova sala:', 'Nova Sala');
+    if (nome === null) return;
+    const nomeFinal = nome.trim() || 'Nova Sala';
+    let id = prompt('ID da nova sala (sem espaços):', gerarIdSala(nomeFinal));
+    if (id === null) return;
+    id = normalizarIdSala(id) || gerarIdSala(nomeFinal);
+    if (bancoDeSalas[id]) { alert('Já existe uma sala com esse ID. Escolha outro.'); return; }
+    bancoDeSalas[id] = criarEstruturaSalaVazia(id, nomeFinal);
+    persistirBancoDeSalas();
+    carregarSalaPorId(id);
+}
+
+function selecionarSalaDaLista() {
+    const select = document.getElementById('lista-salas');
+    if (!select) return;
+    const id = select.value;
+    if (id) atualizarStatusSala('Sala selecionada para carregar: ' + id, '#9bd4ff');
+}
+
+function carregarSalaSelecionada() {
+    const id = document.getElementById('lista-salas')?.value;
+    if (!id) { alert('Nenhuma sala disponível. Crie uma sala primeiro.'); return; }
+    if (salaFoiAlterada && !confirm('Existem alterações não salvas na sala atual. Carregar outra sala mesmo assim?')) return;
+    carregarSalaPorId(id);
+}
+
+function removerCorposDaSalaAtual(scene) {
+    listaObjetosEditaveis.forEach(obj => {
+        if (!obj) return;
+        if (obj.shape === 'rope') {
+            if (obj.ropeConstraints) obj.ropeConstraints.forEach(co => { if (co) scene.matter.world.remove(co); });
+            if (obj.ropeElos) obj.ropeElos.forEach(el => { if (el) scene.matter.world.remove(el); });
+        } else if (obj.body) {
+            scene.matter.world.remove(obj.body);
+        }
+        if (obj.gfx) obj.gfx.destroy();
+    });
+    listaObjetosEditaveis = [];
+    desmarcarObjetoDoEditor();
+    limparBolinhasGuiaDoPoligono(scene);
+}
+
+function adicionarObjetoSerializado(scene, dados) {
+    if (!dados || !dados.shape) return;
+    if (dados.shape === 'rope') {
+        criarCordaAPartirDeDados(scene, dados);
+        return;
+    }
+    if (dados.shape === 'polygon') {
+        criarPoligonoAPartirDeDados(scene, dados);
+        return;
+    }
+    const conf = {
+        isStatic: !!dados.isStatic, label: 'ambiente', ignoreGravity: dados.gravity === false,
+        mass: Number(dados.mass) || 1, friction: 0.8, frictionAir: Number(dados.air) || 0,
+        restitution: Number(dados.bounce) || 0, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE }
+    };
+    let body = dados.shape === 'circle' ? scene.matter.add.circle(Number(dados.x) || 0, Number(dados.y) || 0, Number(dados.w) || 50, conf) : scene.matter.add.rectangle(Number(dados.x) || 0, Number(dados.y) || 0, Number(dados.w) || 50, Number(dados.h) || 50, conf);
+    body.manuseavel = !!dados.manuseavel;
+    body.naoAgarravel = !!dados.naoAgarravel;
+    body.label = 'ambiente';
+    if (!body.isStatic) {
+        scene.matter.body.setInertia(body, dados.lockRot ? Infinity : body.inertia);
+        scene.matter.body.setAngle(body, Number(dados.angle) || 0);
+    }
+    listaObjetosEditaveis.push({ body, gfx: scene.add.graphics().setDepth(3), shape: dados.shape, w: Number(dados.w) || 50, h: Number(dados.h) || 50, gravity: dados.gravity !== false, lockPos: !!dados.lockPos, lockRot: !!dados.lockRot, mass: Number(dados.mass) || 1, air: Number(dados.air) || 0, bounce: Number(dados.bounce) || 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, posicaoTravadaX: Number(dados.x) || 0, posicaoTravadaY: Number(dados.y) || 0, physicsActive: true, visualX: Number(dados.x) || 0, visualY: Number(dados.y) || 0, dadosDesenhoVisual: null, manuseavel: !!dados.manuseavel, naoAgarravel: !!dados.naoAgarravel, isStatic: !!dados.isStatic });
+}
+
+function criarPoligonoAPartirDeDados(scene, dados) {
+    const vertices = Array.isArray(dados.vertices) ? dados.vertices : [];
+    if (vertices.length < 3) return;
+    const centroX = Number(dados.x) || 0, centroY = Number(dados.y) || 0;
+    const absolutos = vertices.map(v => ({ x: centroX + Number(v.x || 0), y: centroY + Number(v.y || 0) }));
+    const conf = { isStatic: !!dados.isStatic, label: 'ambiente', ignoreGravity: dados.gravity === false, mass: (dados.mass || 1) / absolutos.length, friction: 0.8, frictionAir: Number(dados.air) || 0, restitution: Number(dados.bounce) || 0, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    const partes = [];
+    for (let i = 0; i < absolutos.length; i++) {
+        const p1 = absolutos[i], p2 = absolutos[(i + 1) % absolutos.length];
+        const triangulo = [{ x: centroX, y: centroY }, { x: p1.x, y: p1.y }, { x: p2.x, y: p2.y }];
+        const parte = Phaser.Physics.Matter.Matter.Bodies.fromVertices((centroX + p1.x + p2.x) / 3, (centroY + p1.y + p2.y) / 3, triangulo, conf);
+        if (parte) partes.push(parte);
+    }
+    const body = scene.matter.body.create({ parts, isStatic: !!dados.isStatic, label: 'ambiente', ignoreGravity: dados.gravity === false });
+    body.manuseavel = !!dados.manuseavel; body.naoAgarravel = !!dados.naoAgarravel;
+    scene.matter.world.add(body); scene.matter.body.setPosition(body, { x: centroX, y: centroY });
+    if (!body.isStatic) { scene.matter.body.setInertia(body, dados.lockRot ? Infinity : body.inertia); scene.matter.body.setAngle(body, Number(dados.angle) || 0); }
+    listaObjetosEditaveis.push({ body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: dados.gravity !== false, lockPos: !!dados.lockPos, lockRot: !!dados.lockRot, mass: Number(dados.mass) || 1, air: Number(dados.air) || 0, bounce: Number(dados.bounce) || 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: vertices.map(v => ({ x: Number(v.x) || 0, y: Number(v.y) || 0 })), manuseavel: !!dados.manuseavel, naoAgarravel: !!dados.naoAgarravel, isStatic: !!dados.isStatic });
+}
+
+function criarCordaAPartirDeDados(scene, dados) {
+    const ax = Number(dados.x) || 0, ay = Number(dados.y) || 0;
+    const ropeLen = Number(dados.ropeLen) || 250, ropeSegments = Number(dados.ropeSegments) || 8;
+    const ropeColor = dados.ropeColor || '#ffffff';
+    let elos = [], constraints = [], segmentLen = ropeLen / ropeSegments, lastBody = null;
+    for (let i = 0; i < ropeSegments; i++) {
+        let elo = scene.matter.add.rectangle(ax, ay + (i * segmentLen) + segmentLen / 2, 12, segmentLen, { isStatic: false, isSensor: false, mass: 0.8, frictionAir: 0.08, label: 'corpo_elo', collisionFilter: { category: 0x0002, mask: 0 } });
+        elo.manuseavel = false; elo.naoAgarravel = false; elos.push(elo);
+        if (i === 0) constraints.push(scene.matter.add.worldConstraint(elo, 0, 0.15, { pointA: { x: ax, y: ay }, pointB: { x: 0, y: -segmentLen / 2 }, damping: 0.2 }));
+        else constraints.push(scene.matter.add.constraint(lastBody, elo, 0, 0.15, { pointA: { x: 0, y: segmentLen / 2 }, pointB: { x: 0, y: -segmentLen / 2 }, damping: 0.2 }));
+        lastBody = elo;
+    }
+    listaObjetosEditaveis.push({ body: null, ropeElos: elos, ropeConstraints: constraints, shape: 'rope', w: 0, h: 0, gravity: true, lockPos: true, lockRot: false, mass: 0.8, air: 0.08, bounce: 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, ropeLen, ropeSegments, ropeColor, gfx: scene.add.graphics().setDepth(3), posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: false, naoAgarravel: false, isStatic: true });
+}
+
+function carregarSalaPorId(id) {
+    const dados = bancoDeSalas[id];
+    if (!dados) { alert('A sala "' + id + '" não foi encontrada.'); return; }
+    const scene = game.scene.getScene('default');
+    if (!scene) return;
+    removerCorposDaSalaAtual(scene);
+    listaObjetosEditaveis = [];
+    const dimensoes = dados.dimensoes || { largura: WORLD_WIDTH, altura: WORLD_HEIGHT };
+    // Nesta primeira versão todas as salas usam o mesmo tamanho físico global.
+    if (dados.configuracao?.modificadorPesoQueda !== undefined) document.getElementById('prop-fall-weight-mod').value = dados.configuracao.modificadorPesoQueda;
+    if (dados.configuracao?.tamanhoGrade !== undefined) document.getElementById('prop-grid-size').value = dados.configuracao.tamanhoGrade;
+    (dados.objetos || []).forEach(obj => adicionarObjetoSerializado(scene, obj));
+    const entradas = dados.pontosDeEntrada || {};
+    if (player1 && entradas.jogador1) { scene.matter.body.setPosition(player1.body, entradas.jogador1); scene.matter.body.setVelocity(player1.body, { x: 0, y: 0 }); }
+    if (player2 && entradas.jogador2) { scene.matter.body.setPosition(player2.body, entradas.jogador2); scene.matter.body.setVelocity(player2.body, { x: 0, y: 0 }); }
+    salaAtual = { id: dados.id, nome: dados.nome || dados.id };
+    salaFoiAlterada = false;
+    atualizarCamposSala();
+    alternarVisibilidadeGrade();
+    atualizarStatusSala('Sala carregada: ' + salaAtual.nome + ' [' + salaAtual.id + '] • ' + listaObjetosEditaveis.length + ' objeto(s)', '#55ff55');
+}
+
+function deletarSalaAtual() {
+    if (!bancoDeSalas[salaAtual.id]) { alert('A sala atual ainda não foi salva.'); return; }
+    if (!confirm('Deletar permanentemente a sala "' + salaAtual.nome + '"?')) return;
+    delete bancoDeSalas[salaAtual.id];
+    persistirBancoDeSalas();
+    const ids = Object.keys(bancoDeSalas);
+    if (ids.length > 0) carregarSalaPorId(ids[0]);
+    else {
+        const nova = criarEstruturaSalaVazia('sala_inicial', 'Sala Inicial');
+        bancoDeSalas[nova.id] = nova; persistirBancoDeSalas(); carregarSalaPorId(nova.id);
+    }
+}
+
+function baixarArquivoTexto(nome, texto) {
+    const blob = new Blob([texto], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportarSalaAtual() {
+    const dados = obterDadosSalaAtual();
+    baixarArquivoTexto(dados.id + '.json', JSON.stringify(dados, null, 2));
+    atualizarStatusSala('JSON exportado: ' + dados.id + '.json', '#55ff55');
+}
+
+function importarSalaArquivo(event) {
+    const arquivo = event.target.files?.[0];
+    event.target.value = '';
+    if (!arquivo) return;
+    const leitor = new FileReader();
+    leitor.onload = () => {
+        try {
+            const dados = JSON.parse(leitor.result);
+            if (!dados || dados.tipo !== 'sala' || !dados.id || !Array.isArray(dados.objetos)) throw new Error('Formato de sala inválido.');
+            const id = normalizarIdSala(dados.id);
+            if (!id) throw new Error('ID de sala inválido.');
+            dados.id = id; dados.versao = Number(dados.versao) || VERSAO_DADOS_SALA; dados.nome = String(dados.nome || id);
+            if (bancoDeSalas[id] && !confirm('Já existe uma sala com esse ID. Substituir pela sala importada?')) return;
+            bancoDeSalas[id] = dados; persistirBancoDeSalas(); carregarSalaPorId(id);
+        } catch (erro) {
+            console.error(erro); alert('Não foi possível importar a sala: ' + erro.message);
+        }
+    };
+    leitor.readAsText(arquivo);
+}
+
+function inicializarSistemaDeSalas() {
+    carregarBancoDeSalas();
+    if (Object.keys(bancoDeSalas).length === 0) {
+        const inicial = criarEstruturaSalaVazia('sala_inicial', 'Sala Inicial');
+        bancoDeSalas[inicial.id] = inicial;
+        persistirBancoDeSalas();
+    }
+    atualizarCamposSala();
+}
+
 function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; }
 function setFerramenta(f) { ferramentaAtual = f; document.getElementById('btn-create').className = f==='create'?'active':''; document.getElementById('btn-select').className = f==='select'?'active':''; }
 
@@ -125,6 +500,7 @@ function create() {
     gridGraphics = this.add.graphics().setDepth(1);
     previewGraphicsPoligono = this.add.graphics().setDepth(15);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
+    inicializarSistemaDeSalas();
     
     this.matter.world.on('afterupdate', () => {
         if (modoEditorAtivo) return;
@@ -225,14 +601,15 @@ function create() {
                 }
             }
             objetoSelecionado.posicaoTravadaX = pos.x; objetoSelecionado.posicaoTravadaY = pos.y;
+            marcarSalaComoAlterada();
         }
     }, this);
 
     this.input.keyboard.on('keydown-E', () => { alternarModoEditor(this); });
     this.input.keyboard.on('keydown-ENTER', () => { if (modoEditorAtivo && ferramentaAtual === 'create' && document.getElementById('prop-shape').value === 'polygon') finalizarCriacaoPoligono(this); });
     this.input.gamepad.on('down', (pad) => {
-        if (pad.index === 0 && !player1) player1 = createHeaveHoCharacter(this, 300, WORLD_HEIGHT-150, pad, 0, 0x00ff00);
-        if (pad.index === 1 && !player2) player2 = createHeaveHoCharacter(this, 500, WORLD_HEIGHT-150, pad, 1, 0xffff00);
+        if (pad.index === 0 && !player1) { const e = bancoDeSalas[salaAtual.id]?.pontosDeEntrada?.jogador1 || { x: 300, y: WORLD_HEIGHT-150 }; player1 = createHeaveHoCharacter(this, e.x, e.y, pad, 0, 0x00ff00); }
+        if (pad.index === 1 && !player2) { const e = bancoDeSalas[salaAtual.id]?.pontosDeEntrada?.jogador2 || { x: 500, y: WORLD_HEIGHT-150 }; player2 = createHeaveHoCharacter(this, e.x, e.y, pad, 1, 0xffff00); }
     });
     atualizarInterfaceForma();
 }
@@ -277,6 +654,7 @@ function executarCriacaoObjeto(scene, x, y) {
             lastBody = elo;
         }
         listaObjetosEditaveis.push({ body: null, ropeElos: elos, ropeConstraints: constraints, shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, ropeLen: c.ropeLen, ropeSegments: c.ropeSegments, ropeColor: c.ropeColor, gfx: scene.add.graphics().setDepth(3), posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: false, naoAgarravel: false, isStatic: true });
+        marcarSalaComoAlterada();
         return;
     }
     let conf = { isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass, friction: 0.8, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
@@ -284,6 +662,7 @@ function executarCriacaoObjeto(scene, x, y) {
     body.manuseavel = c.manuseavel; body.naoAgarravel = c.lockGrab; body.label = 'ambiente';
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
     listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel, naoAgarravel: c.lockGrab, isStatic: c.isStatic });
+    marcarSalaComoAlterada();
 }
 
 function limparBolinhasGuiaDoPoligono(scene) {
@@ -316,6 +695,7 @@ function finalizarCriacaoPoligono(scene) {
     
     verticesCriacaoAtiva = []; 
     limparBolinhasGuiaDoPoligono(scene);
+    marcarSalaComoAlterada();
 }
 
 function executarSelecaoObjeto(scene, x, y, pointer) {
@@ -369,7 +749,7 @@ function atualizarObjetoExistente() {
             else constraints.push(scene.matter.add.constraint(lastBody, elo, 0, 0.15, { pointA: { x: 0, y: segmentLen/2 }, pointB: { x: 0, y: -segmentLen/2 }, damping: 0.2 }));
             lastBody = elo;
         }
-        obj.ropeElos = elos; obj.ropeConstraints = constraints; obj.ropeColor = c.ropeColor; obj.ropeSegments = c.ropeSegments; obj.ropeLen = c.ropeLen; return;
+        obj.ropeElos = elos; obj.ropeConstraints = constraints; obj.ropeColor = c.ropeColor; obj.ropeSegments = c.ropeSegments; obj.ropeLen = c.ropeLen; marcarSalaComoAlterada(); return;
     }
     if (obj.body) scene.matter.world.remove(obj.body); obj.body = null;
     obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity; obj.lockPos = c.lockPos; obj.lockRot = c.lockRot; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce; obj.maxVel = c.maxVel; obj.maxRot = c.maxRot; obj.visualX = px; obj.visualY = py; obj.manuseavel = c.manuseavel; obj.naoAgarravel = c.lockGrab; obj.isStatic = c.isStatic;
@@ -377,6 +757,7 @@ function atualizarObjetoExistente() {
     if (obj.shape === 'box') obj.body = scene.matter.add.rectangle(px, py, obj.w, obj.h, conf);
     else if (obj.shape === 'circle') obj.body = scene.matter.add.circle(px, py, obj.w, conf);
     if (obj.body) { obj.body.manuseavel = c.manuseavel; obj.body.naoAgarravel = c.lockGrab; obj.body.label = 'ambiente'; if (!obj.body.isStatic) { scene.matter.body.setInertia(obj.body, obj.lockRot ? Infinity : obj.body.inertia); scene.matter.body.setAngle(obj.body, anguloSalvo); } }
+    marcarSalaComoAlterada();
 }
 
 function deletarObjetoSelecionado() {
@@ -385,7 +766,7 @@ function deletarObjetoSelecionado() {
         if (objetoSelecionado.ropeConstraints) objetoSelecionado.ropeConstraints.forEach(co => scene.matter.world.remove(co));
         if (objetoSelecionado.ropeElos) objetoSelecionado.ropeElos.forEach(el => scene.matter.world.remove(el));
     } else if (objetoSelecionado.body) { scene.matter.world.remove(objetoSelecionado.body); }
-    objetoSelecionado.gfx.clear(); objetoSelecionado.gfx.destroy(); listaObjetosEditaveis = listaObjetosEditaveis.filter(o => o !== objetoSelecionado); desmarcarObjetoDoEditor();
+    objetoSelecionado.gfx.clear(); objetoSelecionado.gfx.destroy(); listaObjetosEditaveis = listaObjetosEditaveis.filter(o => o !== objetoSelecionado); desmarcarObjetoDoEditor(); marcarSalaComoAlterada();
 }
 
 function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorpo) {
@@ -674,8 +1055,9 @@ function executarRespawnIndividual(scene, pNum) {
     if (p.rightElos) p.rightElos.forEach(e => scene.matter.world.remove(e));
     if (p.gfx) { p.gfx.clear(); p.gfx.destroy(); }
     
-    if (pNum === 0) player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, p.pad, 0, 0x00ff00);
-    else player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, p.pad, 1, 0xffff00);
+    const entradas = bancoDeSalas[salaAtual.id]?.pontosDeEntrada || {};
+    if (pNum === 0) { const e = entradas.jogador1 || { x: 300, y: WORLD_HEIGHT - 150 }; player1 = createHeaveHoCharacter(scene, e.x, e.y, p.pad, 0, 0x00ff00); }
+    else { const e = entradas.jogador2 || { x: 500, y: WORLD_HEIGHT - 150 }; player2 = createHeaveHoCharacter(scene, e.x, e.y, p.pad, 1, 0xffff00); }
 }
 
 function update() {
