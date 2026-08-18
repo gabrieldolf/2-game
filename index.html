@@ -29,8 +29,10 @@
     <h2>EDITOR</h2>
     <div id="painel-salas">
         <h3 style="color:#7ed6ff; font-weight:bold;">Sala Atual</h3>
-        <div class="prop-row"><label>Nome:</label><input type="text" id="campo-nome-sala" value="Sala Inicial"></div>
-        <div class="prop-row"><label>ID:</label><input type="text" id="campo-id-sala" value="sala_inicial"></div>
+        <div class="prop-row"><label>Nome:</label><input type="text" id="campo-nome-sala" value="Sala Inicial" onchange="marcarSalaComoAlterada()"></div>
+        <div class="prop-row"><label>ID:</label><input type="text" id="campo-id-sala" value="sala_inicial" onchange="marcarSalaComoAlterada()"></div>
+        <div class="prop-row"><label>Largura (px):</label><input type="number" id="campo-largura-sala" value="3000" min="100" max="10000" step="50" onchange="alterarDimensoesSalaEditor()"></div>
+        <div class="prop-row"><label>Altura (px):</label><input type="number" id="campo-altura-sala" value="2000" min="100" max="10000" step="50" onchange="alterarDimensoesSalaEditor()"></div>
         <select id="lista-salas" onchange="selecionarSalaDaLista()"></select>
         <div class="sala-acoes">
             <button style="background:#2980b9;" onclick="criarNovaSala()">Criar Sala</button>
@@ -41,6 +43,10 @@
             <button style="background:#d35400;" onclick="document.getElementById('input-importar-sala').click()">Importar JSON</button>
         </div>
         <input type="file" id="input-importar-sala" accept=".json,application/json" onchange="importarSalaArquivo(event)">
+        <div class="sala-acoes">
+            <button style="background:#34495e;" onclick="iniciarNovaSessaoDeJogo()">Nova Sessão de Jogo</button>
+            <button style="background:#7f8c8d;" onclick="capturarEstadoSessaoDaSalaAtual()">Salvar Estado da Sala</button>
+        </div>
         <div id="status-sala">Sala em edição: sala_inicial</div>
     </div>
     <div class="section" style="background:#2c3e50; padding:8px; border-radius:4px; margin-bottom:5px;">
@@ -56,6 +62,11 @@
         <button id="btn-select" style="margin-top:5px;" onclick="setFerramenta('select')">Selecionar e Mover</button>
     </div>
     <div class="section">
+        <h3>Construção da Sala</h3>
+        <button id="btn-grid-build" style="background:#e67e22;" onclick="alternarModoConstrucaoGrade()">Construir Sala por Grade (50 px)</button>
+        <p style="font-size:10px; color:#aaa; margin:0;">Cada quadrado tem 50 × 50 px. Clique para alternar entre bloco e vazio.</p>
+    </div>
+    <div class="section">
         <h3>Auxílios</h3>
         <div class="prop-row"><label>Mostrar Grade:</label><input type="checkbox" id="prop-grid-active" onchange="alternarVisibilidadeGrade()"></div>
         <div class="prop-row"><label>Tamanho Grade:</label><input type="number" id="prop-grid-size" value="64" min="8" max="128" onchange="alternarVisibilidadeGrade()"></div>
@@ -63,11 +74,13 @@
     </div>
     <div class="section">
         <h3 id="status-modo" style="color:#55ff55;">Criando novos objetos</h3>
-        <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option><option value="rope">Corda / Corrente</option></select></div>
+        <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option><option value="rope">Corda / Corrente</option><option value="portal">Portal / Conexão</option><option value="respawn1">Respawn Jogador 1</option><option value="respawn2">Respawn Jogador 2</option></select></div>
         <div id="painel-propriedades-comuns">
             <div class="prop-row" style="background:#27ae60; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Objeto Manuseável:</label><input type="checkbox" id="prop-manuseavel" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" style="background:#e74c3c; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Trava Agarrar (Não Agarrável):</label><input type="checkbox" id="prop-lock-grab" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" style="background:#2980b9; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Fixar no Ar (isStatic):</label><input type="checkbox" id="prop-is-static" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row" style="background:#9b59b6; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Guardar Estado na Sessão:</label><input type="checkbox" id="prop-persistir-sessao" onchange="atualizarInterfaceForma(); atualizarObjetoExistente()"></div>
+            <div class="prop-row" id="row-id-persistente"><label>ID Persistente:</label><input type="text" id="prop-id-persistente" value="" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" id="row-w"><label id="label-w">Largura (px):</label><input type="number" id="prop-w" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" id="row-h"><label>Altura (px):</label><input type="number" id="prop-h" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" id="row-gravity"><label>Gravidade:</label><input type="checkbox" id="prop-gravity" checked onchange="atualizarObjetoExistente()"></div>
@@ -78,6 +91,12 @@
             <div class="prop-row" id="row-max-vel"><label style="color:#ffaa00;">Limite Vel. (px):</label><input type="number" id="prop-max-vel" value="0" min="0" max="100" step="1" title="0 significa sem limite" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" id="row-max-rot"><label style="color:#ffaa00;">Limite Giro (rad):</label><input type="number" id="prop-max-rot" value="0" min="0" max="2" step="0.01" title="0 significa sem limite" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" id="row-bounce"><label>Elasticidade:</label><input type="number" id="prop-bounce" value="0.1" step="0.05" min="0" max="1" onchange="atualizarObjetoExistente()"></div>
+        </div>
+        <div id="painel-propriedades-especiais" style="display:none; background:#16a085; padding:8px; border-radius:4px; margin-top:5px; flex-direction:column; gap:6px;">
+            <h3 style="color:#fff; font-weight:bold;">Ajustes do Elemento Especial</h3>
+            <div class="prop-row" id="row-portal-destino"><label>Sala destino:</label><input type="text" id="prop-portal-destino-sala" value="" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row" id="row-portal-ponto"><label>Portal destino:</label><input type="text" id="prop-portal-destino-ponto" value="" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>ID / Nome do ponto:</label><input type="text" id="prop-nome-ponto" value="" onchange="atualizarObjetoExistente()"></div>
         </div>
         <div id="painel-propriedades-corda" style="display:none; background:#8e44ad; padding:8px; border-radius:4px; margin-top:5px; flex-direction:column; gap:6px;">
             <h3 style="color:#fff; font-weight:bold;">Ajustes da Corda</h3>
@@ -92,7 +111,10 @@
     <div id="aviso-modo">Aperte [E] para abrir o Editor</div>
 </div>
 <script>
-const SCREEN_WIDTH = 1024, SCREEN_HEIGHT = 768, WORLD_WIDTH = 3000, WORLD_HEIGHT = 2000;
+const SCREEN_WIDTH = 1024, SCREEN_HEIGHT = 768;
+let WORLD_WIDTH = 3000, WORLD_HEIGHT = 2000;
+const TAMANHO_BLOCO_GRADE = 50;
+const LIMITE_DIMENSAO_SALA = 10000;
 const config = {
     type: Phaser.AUTO, width: SCREEN_WIDTH, height: SCREEN_HEIGHT, parent: 'canvas-container', backgroundColor: '#4488aa',
     physics: { 
@@ -106,11 +128,16 @@ const config = {
 };
 const game = new Phaser.Game(config);
 let player1, player2, ferramentaAtual = 'create', objetoSelecionado = null, listaObjetosEditaveis = [];
-let gridGraphics, bordasFixasDoCenario = [], cursorsKeyboard;
+let gridGraphics, bordasFixasDoCenario = [], graficosBordasFixas = [], cursorsKeyboard;
+let blocosGradeFisicos = [], blocosGradeSala = [], graficosBlocosGradeFisicos = [];
+let gradeConstrucaoGraphics = null, modoConstrucaoGrade = false;
 let modoEditorAtivo = false, cameraSalvaX = 0, cameraSalvaY = 0, cameraSalvaZoom = 1;
 let clickOffsetX = 0, clickOffsetY = 0;
 let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
+const CHAVE_ARMAZENAMENTO_SESSAO = 'metroidvania_ho_sessao_jogo_v1';
+let estadoSessaoJogo = null;
+let salaEmJogoAtual = null;
 
 // Sistema de salas: os dados são separados da física em execução.
 // O navegador mantém as salas no localStorage e também permitimos exportar/importar JSON.
@@ -184,6 +211,13 @@ function atualizarCamposSala() {
     const id = document.getElementById('campo-id-sala');
     if (nome) nome.value = salaAtual.nome || salaAtual.id;
     if (id) id.value = salaAtual.id || '';
+    const dadosSala = bancoDeSalas[salaAtual.id];
+    if (dadosSala?.dimensoes) {
+        const campoL = document.getElementById('campo-largura-sala');
+        const campoA = document.getElementById('campo-altura-sala');
+        if (campoL) campoL.value = dadosSala.dimensoes.largura;
+        if (campoA) campoA.value = dadosSala.dimensoes.altura;
+    }
     atualizarListaDeSalas();
     atualizarStatusSala('Sala em edição: ' + salaAtual.id + (salaFoiAlterada ? ' • alterações não salvas' : ' • salva'), salaFoiAlterada ? '#ffea00' : '#9bd4ff');
 }
@@ -195,23 +229,49 @@ function marcarSalaComoAlterada() {
 }
 
 function criarEstruturaSalaVazia(id, nome) {
+    const largura = Math.max(TAMANHO_BLOCO_GRADE * 2, Math.round(WORLD_WIDTH / TAMANHO_BLOCO_GRADE) * TAMANHO_BLOCO_GRADE);
+    const altura = Math.max(TAMANHO_BLOCO_GRADE * 2, Math.round(WORLD_HEIGHT / TAMANHO_BLOCO_GRADE) * TAMANHO_BLOCO_GRADE);
     return {
         versao: VERSAO_DADOS_SALA,
         tipo: 'sala',
         id: id,
         nome: nome,
-        dimensoes: { largura: WORLD_WIDTH, altura: WORLD_HEIGHT },
+        dimensoes: { largura, altura },
         configuracao: {
             modificadorPesoQueda: parseFloat(document.getElementById('prop-fall-weight-mod')?.value) || 1.0,
             tamanhoGrade: parseInt(document.getElementById('prop-grid-size')?.value) || 64
         },
         pontosDeEntrada: {
-            jogador1: { x: 300, y: WORLD_HEIGHT - 150 },
-            jogador2: { x: 500, y: WORLD_HEIGHT - 150 }
+            jogador1: { x: 300, y: Math.max(100, altura - 150) },
+            jogador2: { x: 500, y: Math.max(100, altura - 150) }
         },
+        blocosGrade: [],
         objetos: [],
         portais: []
     };
+}
+
+function obterDimensoesInformadas() {
+    let largura = parseInt(document.getElementById('campo-largura-sala')?.value) || WORLD_WIDTH;
+    let altura = parseInt(document.getElementById('campo-altura-sala')?.value) || WORLD_HEIGHT;
+    largura = Phaser.Math.Clamp(Math.round(largura / TAMANHO_BLOCO_GRADE) * TAMANHO_BLOCO_GRADE, TAMANHO_BLOCO_GRADE * 2, LIMITE_DIMENSAO_SALA);
+    altura = Phaser.Math.Clamp(Math.round(altura / TAMANHO_BLOCO_GRADE) * TAMANHO_BLOCO_GRADE, TAMANHO_BLOCO_GRADE * 2, LIMITE_DIMENSAO_SALA);
+    return { largura, altura };
+}
+
+function obterPontosEspeciaisDaSala() {
+    const entradas = {
+        jogador1: { x: 300, y: Math.max(100, WORLD_HEIGHT - 150) },
+        jogador2: { x: 500, y: Math.max(100, WORLD_HEIGHT - 150) }
+    };
+    listaObjetosEditaveis.forEach(obj => {
+        if (!obj) return;
+        const x = obj.body ? obj.body.position.x : Number(obj.visualX ?? obj.posicaoTravadaX) || 0;
+        const y = obj.body ? obj.body.position.y : Number(obj.visualY ?? obj.posicaoTravadaY) || 0;
+        if (obj.shape === 'respawn1') entradas.jogador1 = { x, y };
+        if (obj.shape === 'respawn2') entradas.jogador2 = { x, y };
+    });
+    return entradas;
 }
 
 function obterDadosSalaAtual() {
@@ -219,11 +279,15 @@ function obterDadosSalaAtual() {
     let idInformado = normalizarIdSala(document.getElementById('campo-id-sala')?.value || salaAtual.id);
     if (!idInformado) idInformado = gerarIdSala(nomeInformado);
 
+    const dimensoes = obterDimensoesInformadas();
     const dados = criarEstruturaSalaVazia(idInformado, nomeInformado);
-    dados.dimensoes = { largura: WORLD_WIDTH, altura: WORLD_HEIGHT };
+    dados.dimensoes = dimensoes;
     dados.configuracao.modificadorPesoQueda = parseFloat(document.getElementById('prop-fall-weight-mod')?.value) || 1.0;
     dados.configuracao.tamanhoGrade = parseInt(document.getElementById('prop-grid-size')?.value) || 64;
+    dados.pontosDeEntrada = obterPontosEspeciaisDaSala();
+    dados.blocosGrade = blocosGradeSala.map(c => ({ coluna: c.coluna, linha: c.linha }));
     dados.objetos = listaObjetosEditaveis.map(serializarObjetoDaSala).filter(Boolean);
+    dados.portais = dados.objetos.filter(obj => obj && obj.shape === 'portal');
     return dados;
 }
 
@@ -231,6 +295,8 @@ function serializarObjetoDaSala(obj) {
     if (!obj) return null;
     const base = {
         shape: obj.shape,
+        idPersistente: obj.idPersistente || null,
+        persistirSessao: !!obj.persistirSessao,
         manuseavel: !!obj.manuseavel,
         naoAgarravel: !!obj.naoAgarravel,
         isStatic: obj.body ? !!obj.body.isStatic : !!obj.isStatic,
@@ -245,6 +311,16 @@ function serializarObjetoDaSala(obj) {
         maxVel: Number(obj.maxVel) || 0,
         maxRot: Number(obj.maxRot) || 0
     };
+
+    if (['portal', 'respawn1', 'respawn2'].includes(obj.shape)) {
+        base.x = Number(obj.visualX) || 0;
+        base.y = Number(obj.visualY) || 0;
+        base.angle = Number(obj.angle) || 0;
+        base.portalDestinoSala = obj.portalDestinoSala || '';
+        base.portalDestinoPonto = obj.portalDestinoPonto || '';
+        base.nomePonto = obj.nomePonto || '';
+        return base;
+    }
 
     if (obj.shape === 'rope') {
         base.x = Number(obj.posicaoTravadaX) || 0;
@@ -264,6 +340,134 @@ function serializarObjetoDaSala(obj) {
         base.vertices = obj.dadosDesenhoVisual.map(v => ({ x: Number(v.x) || 0, y: Number(v.y) || 0 }));
     }
     return base;
+}
+
+
+function gerarIdObjetoPersistente() {
+    let n = 1, id;
+    const usados = new Set(listaObjetosEditaveis.map(o => o && o.idPersistente).filter(Boolean));
+    do { id = 'obj_especial_' + n++; } while (usados.has(id));
+    return id;
+}
+
+function carregarEstadoSessaoPersistido() {
+    try {
+        const bruto = sessionStorage.getItem(CHAVE_ARMAZENAMENTO_SESSAO);
+        estadoSessaoJogo = bruto ? JSON.parse(bruto) : null;
+    } catch (erro) {
+        console.warn('Não foi possível carregar a sessão do jogo:', erro);
+        estadoSessaoJogo = null;
+    }
+}
+
+function persistirEstadoSessaoJogo() {
+    if (!estadoSessaoJogo) return;
+    try { sessionStorage.setItem(CHAVE_ARMAZENAMENTO_SESSAO, JSON.stringify(estadoSessaoJogo)); }
+    catch (erro) { console.warn('Não foi possível persistir a sessão do jogo:', erro); }
+}
+
+function iniciarNovaSessaoDeJogo() {
+    estadoSessaoJogo = { versao: 1, salas: {}, iniciadaEm: Date.now() };
+    salaEmJogoAtual = null;
+    persistirEstadoSessaoJogo();
+}
+
+function garantirSessaoDeJogo() {
+    if (!estadoSessaoJogo) carregarEstadoSessaoPersistido();
+    if (!estadoSessaoJogo || typeof estadoSessaoJogo !== 'object' || !estadoSessaoJogo.salas) iniciarNovaSessaoDeJogo();
+}
+
+function capturarEstadoSessaoDaSalaAtual() {
+    if (!salaEmJogoAtual || !estadoSessaoJogo) return;
+    const estadoSala = {};
+    listaObjetosEditaveis.forEach(obj => {
+        if (!obj || !obj.persistirSessao || !obj.idPersistente) return;
+        if (obj.body) {
+            estadoSala[obj.idPersistente] = {
+                shape: obj.shape,
+                x: Number(obj.body.position.x) || 0,
+                y: Number(obj.body.position.y) || 0,
+                angle: Number(obj.body.angle) || 0
+            };
+        } else if (obj.shape === 'rope') {
+            estadoSala[obj.idPersistente] = {
+                shape: obj.shape,
+                x: Number(obj.posicaoTravadaX) || 0,
+                y: Number(obj.posicaoTravadaY) || 0
+            };
+        }
+    });
+    estadoSessaoJogo.salas[salaEmJogoAtual] = estadoSala;
+    persistirEstadoSessaoJogo();
+}
+
+function aplicarEstadoSessaoNaSalaAtual() {
+    if (!salaEmJogoAtual || !estadoSessaoJogo?.salas?.[salaEmJogoAtual]) return;
+    const estadoSala = estadoSessaoJogo.salas[salaEmJogoAtual];
+    listaObjetosEditaveis.forEach(obj => {
+        if (!obj || !obj.persistirSessao || !obj.idPersistente) return;
+        const estado = estadoSala[obj.idPersistente];
+        if (!estado) return;
+        if (obj.body && estado.shape === obj.shape) {
+            game.scene.getScene('default').matter.body.setPosition(obj.body, { x: estado.x, y: estado.y });
+            game.scene.getScene('default').matter.body.setVelocity(obj.body, { x: 0, y: 0 });
+            game.scene.getScene('default').matter.body.setAngularVelocity(obj.body, 0);
+            game.scene.getScene('default').matter.body.setAngle(obj.body, Number(estado.angle) || 0);
+            obj.posicaoTravadaX = estado.x;
+            obj.posicaoTravadaY = estado.y;
+        } else if (obj.shape === 'rope') {
+            const dx = Number(estado.x) - obj.posicaoTravadaX;
+            const dy = Number(estado.y) - obj.posicaoTravadaY;
+            if (obj.ropeElos) obj.ropeElos.forEach(elo => {
+                game.scene.getScene('default').matter.body.setPosition(elo, { x: elo.position.x + dx, y: elo.position.y + dy });
+                game.scene.getScene('default').matter.body.setVelocity(elo, { x: 0, y: 0 });
+            });
+            obj.posicaoTravadaX = Number(estado.x) || obj.posicaoTravadaX;
+            obj.posicaoTravadaY = Number(estado.y) || obj.posicaoTravadaY;
+        }
+    });
+}
+
+function entrarNaSalaDuranteJogo(id, portalEntradaId) {
+    garantirSessaoDeJogo();
+    if (salaEmJogoAtual) capturarEstadoSessaoDaSalaAtual();
+    const dados = bancoDeSalas[id];
+    if (!dados) return false;
+    const scene = game.scene.getScene('default');
+    if (!scene) return false;
+    carregarSalaFisicamente(scene, dados);
+    salaAtual = { id: dados.id, nome: dados.nome || dados.id };
+    salaEmJogoAtual = dados.id;
+    aplicarEstadoSessaoNaSalaAtual();
+    const portal = (dados.objetos || []).find(o => o.shape === 'portal' && o.nomePonto === portalEntradaId);
+    const entradas = dados.pontosDeEntrada || {};
+    const posicaoEntrada = portal ? { x: portal.x, y: portal.y } : (entradas.jogador1 || { x: 300, y: Math.max(100, dados.dimensoes.altura - 150) });
+    if (player1) reposicionarJogadorCompleto(scene, player1, posicaoEntrada);
+    if (player2) reposicionarJogadorCompleto(scene, player2, entradas.jogador2 || posicaoEntrada);
+    return true;
+}
+
+function reposicionarJogadorCompleto(scene, p, pos) {
+    if (!p || !p.body) return;
+    if (p.leftJoint) { scene.matter.world.remove(p.leftJoint); p.leftJoint = null; }
+    if (p.rightJoint) { scene.matter.world.remove(p.rightJoint); p.rightJoint = null; }
+    p.leftJointTarget = p.rightJointTarget = null;
+    p.leftJointPontoPivorMundo = p.rightJointPontoPivorMundo = null;
+    scene.matter.body.setPosition(p.body, { x: Number(pos.x) || 0, y: Number(pos.y) || 0 });
+    scene.matter.body.setVelocity(p.body, { x: 0, y: 0 });
+    scene.matter.body.setAngularVelocity(p.body, 0);
+}
+
+function carregarSalaFisicamente(scene, dados) {
+    removerCorposDaSalaAtual(scene);
+    removerBlocosGradeFisicos(scene);
+    const dimensoes = dados.dimensoes || { largura: WORLD_WIDTH, altura: WORLD_HEIGHT };
+    aplicarDimensoesDaSala(scene, Number(dimensoes.largura) || 3000, Number(dimensoes.altura) || 2000);
+    if (dados.configuracao?.modificadorPesoQueda !== undefined) document.getElementById('prop-fall-weight-mod').value = dados.configuracao.modificadorPesoQueda;
+    if (dados.configuracao?.tamanhoGrade !== undefined) document.getElementById('prop-grid-size').value = dados.configuracao.tamanhoGrade;
+    blocosGradeSala = normalizarBlocosGrade(dados.blocosGrade);
+    reconstruirBlocosGradeFisicos(scene);
+    (dados.objetos || []).forEach(obj => adicionarObjetoSerializado(scene, obj));
 }
 
 function salvarSalaAtual() {
@@ -391,19 +595,14 @@ function carregarSalaPorId(id) {
     if (!dados) { alert('A sala "' + id + '" não foi encontrada.'); return; }
     const scene = game.scene.getScene('default');
     if (!scene) return;
-    removerCorposDaSalaAtual(scene);
-    listaObjetosEditaveis = [];
-    const dimensoes = dados.dimensoes || { largura: WORLD_WIDTH, altura: WORLD_HEIGHT };
-    // Nesta primeira versão todas as salas usam o mesmo tamanho físico global.
-    if (dados.configuracao?.modificadorPesoQueda !== undefined) document.getElementById('prop-fall-weight-mod').value = dados.configuracao.modificadorPesoQueda;
-    if (dados.configuracao?.tamanhoGrade !== undefined) document.getElementById('prop-grid-size').value = dados.configuracao.tamanhoGrade;
-    (dados.objetos || []).forEach(obj => adicionarObjetoSerializado(scene, obj));
+    carregarSalaFisicamente(scene, dados);
     const entradas = dados.pontosDeEntrada || {};
-    if (player1 && entradas.jogador1) { scene.matter.body.setPosition(player1.body, entradas.jogador1); scene.matter.body.setVelocity(player1.body, { x: 0, y: 0 }); }
-    if (player2 && entradas.jogador2) { scene.matter.body.setPosition(player2.body, entradas.jogador2); scene.matter.body.setVelocity(player2.body, { x: 0, y: 0 }); }
+    if (player1 && entradas.jogador1) reposicionarJogadorCompleto(scene, player1, entradas.jogador1);
+    if (player2 && entradas.jogador2) reposicionarJogadorCompleto(scene, player2, entradas.jogador2);
     salaAtual = { id: dados.id, nome: dados.nome || dados.id };
     salaFoiAlterada = false;
     atualizarCamposSala();
+    atualizarVisibilidadeGradeConstrucao();
     alternarVisibilidadeGrade();
     atualizarStatusSala('Sala carregada: ' + salaAtual.nome + ' [' + salaAtual.id + '] • ' + listaObjetosEditaveis.length + ' objeto(s)', '#55ff55');
 }
@@ -455,6 +654,10 @@ function importarSalaArquivo(event) {
     leitor.readAsText(arquivo);
 }
 
+window.addEventListener('beforeunload', () => {
+    if (salaEmJogoAtual && estadoSessaoJogo) capturarEstadoSessaoDaSalaAtual();
+});
+
 function inicializarSistemaDeSalas() {
     carregarBancoDeSalas();
     if (Object.keys(bancoDeSalas).length === 0) {
@@ -462,11 +665,23 @@ function inicializarSistemaDeSalas() {
         bancoDeSalas[inicial.id] = inicial;
         persistirBancoDeSalas();
     }
+    const primeiraSala = bancoDeSalas[salaAtual.id] ? salaAtual.id : Object.keys(bancoDeSalas)[0];
+    salaAtual = { id: primeiraSala, nome: bancoDeSalas[primeiraSala]?.nome || primeiraSala };
     atualizarCamposSala();
 }
 
 function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; }
-function setFerramenta(f) { ferramentaAtual = f; document.getElementById('btn-create').className = f==='create'?'active':''; document.getElementById('btn-select').className = f==='select'?'active':''; }
+function setFerramenta(f) {
+    if (modoConstrucaoGrade && f !== 'create') {
+        modoConstrucaoGrade = false;
+        const btnGrid = document.getElementById('btn-grid-build');
+        if (btnGrid) { btnGrid.className = ''; btnGrid.innerText = 'Construir Sala por Grade (50 px)'; }
+        desenharGradeConstrucao();
+    }
+    ferramentaAtual = f;
+    document.getElementById('btn-create').className = f==='create'?'active':'';
+    document.getElementById('btn-select').className = f==='select'?'active':'';
+}
 
 function alternarModoEditor(scene) {
     modoEditorAtivo = !modoEditorAtivo;
@@ -478,29 +693,181 @@ function alternarModoEditor(scene) {
         scene.cameras.main.setZoom(1.0); scene.matter.world.pause();
         panel.style.display = 'flex'; aviso.innerText = "Modo Editor Ativo - Aperte [E] para Jogar"; aviso.style.color = "#00ff00";
     } else {
+        modoConstrucaoGrade = false;
+        const btnGrid = document.getElementById('btn-grid-build');
+        if (btnGrid) { btnGrid.className = ''; btnGrid.innerText = 'Construir Sala por Grade (50 px)'; }
         desmarcarObjetoDoEditor(); scene.cameras.main.scrollX = cameraSalvaX; scene.cameras.main.scrollY = cameraSalvaY; scene.cameras.main.setZoom(cameraSalvaZoom);
         scene.matter.world.resume(); panel.style.display = 'none'; aviso.innerText = "Aperte [E] para abrir o Editor"; aviso.style.color = "#fff";
     }
     alternarVisibilidadeGrade();
+    desenharGradeConstrucao();
+}
+
+
+function aplicarDimensoesDaSala(scene, largura, altura) {
+    WORLD_WIDTH = Phaser.Math.Clamp(Math.round(largura / TAMANHO_BLOCO_GRADE) * TAMANHO_BLOCO_GRADE, TAMANHO_BLOCO_GRADE * 2, LIMITE_DIMENSAO_SALA);
+    WORLD_HEIGHT = Phaser.Math.Clamp(Math.round(altura / TAMANHO_BLOCO_GRADE) * TAMANHO_BLOCO_GRADE, TAMANHO_BLOCO_GRADE * 2, LIMITE_DIMENSAO_SALA);
+    scene.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 50, true, true, true, true);
+    scene.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    reconstruirLimitesDaSala(scene);
+    if (document.getElementById('campo-largura-sala')) document.getElementById('campo-largura-sala').value = WORLD_WIDTH;
+    if (document.getElementById('campo-altura-sala')) document.getElementById('campo-altura-sala').value = WORLD_HEIGHT;
+}
+
+function reconstruirLimitesDaSala(scene) {
+    if (!scene) return;
+    bordasFixasDoCenario.forEach(b => { if (b) scene.matter.world.remove(b); });
+    bordasFixasDoCenario = [];
+    graficosBordasFixas.forEach(g => { if (g) g.destroy(); });
+    graficosBordasFixas = [];
+    const ambConf = { isStatic:true, label:'ambiente', friction:0.8, restitution:0.1, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
+    const esp = 50;
+    const borda = (x, y, w, h) => {
+        let b = scene.matter.add.rectangle(x, y, w, h, ambConf);
+        b.isStaticBorder = true; b.manuseavel = false; b.naoAgarravel = false; b.label = 'ambiente';
+        bordasFixasDoCenario.push(b);
+        const g = scene.add.graphics().fillStyle(0x1a1a1a, 1).fillRect(x - w/2, y - h/2, w, h).setDepth(2);
+        graficosBordasFixas.push(g);
+    };
+    borda(WORLD_WIDTH / 2, WORLD_HEIGHT - esp / 2, WORLD_WIDTH, esp);
+    borda(WORLD_WIDTH / 2, esp / 2, WORLD_WIDTH, esp);
+    borda(esp / 2, WORLD_HEIGHT / 2, esp, WORLD_HEIGHT);
+    borda(WORLD_WIDTH - esp / 2, WORLD_HEIGHT / 2, esp, WORLD_HEIGHT);
+}
+
+function normalizarBlocosGrade(blocos) {
+    if (!Array.isArray(blocos)) return [];
+    const maxCol = Math.ceil(WORLD_WIDTH / TAMANHO_BLOCO_GRADE);
+    const maxLin = Math.ceil(WORLD_HEIGHT / TAMANHO_BLOCO_GRADE);
+    const mapa = new Set();
+    blocos.forEach(b => {
+        const coluna = Number.isFinite(Number(b?.coluna)) ? Number(b.coluna) : -1;
+        const linha = Number.isFinite(Number(b?.linha)) ? Number(b.linha) : -1;
+        if (coluna >= 0 && linha >= 0 && coluna < maxCol && linha < maxLin) mapa.add(coluna + ':' + linha);
+    });
+    return Array.from(mapa).map(k => {
+        const [coluna, linha] = k.split(':').map(Number);
+        return { coluna, linha };
+    });
+}
+
+function removerBlocosGradeFisicos(scene) {
+    blocosGradeFisicos.forEach(b => { if (b) scene.matter.world.remove(b); });
+    blocosGradeFisicos = [];
+    graficosBlocosGradeFisicos.forEach(g => { if (g) g.destroy(); });
+    graficosBlocosGradeFisicos = [];
+}
+
+function reconstruirBlocosGradeFisicos(scene) {
+    removerBlocosGradeFisicos(scene);
+    blocosGradeSala = normalizarBlocosGrade(blocosGradeSala);
+    blocosGradeSala.forEach(celula => {
+        const x = celula.coluna * TAMANHO_BLOCO_GRADE + TAMANHO_BLOCO_GRADE / 2;
+        const y = celula.linha * TAMANHO_BLOCO_GRADE + TAMANHO_BLOCO_GRADE / 2;
+        const body = scene.matter.add.rectangle(x, y, TAMANHO_BLOCO_GRADE, TAMANHO_BLOCO_GRADE, {
+            isStatic: true, label: 'ambiente',
+            friction: 0.8, restitution: 0.1,
+            collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE }
+        });
+        body.isGradeBlock = true; body.manuseavel = false; body.naoAgarravel = false;
+        blocosGradeFisicos.push(body);
+        const gfx = scene.add.graphics().setDepth(2.5);
+        gfx.fillStyle(0x2c3e50, 1); gfx.fillRect(celula.coluna * TAMANHO_BLOCO_GRADE, celula.linha * TAMANHO_BLOCO_GRADE, TAMANHO_BLOCO_GRADE, TAMANHO_BLOCO_GRADE);
+        gfx.lineStyle(1, 0x111111, 0.8); gfx.strokeRect(celula.coluna * TAMANHO_BLOCO_GRADE, celula.linha * TAMANHO_BLOCO_GRADE, TAMANHO_BLOCO_GRADE, TAMANHO_BLOCO_GRADE);
+        graficosBlocosGradeFisicos.push(gfx);
+    });
+}
+
+function desenharGradeConstrucao() {
+    if (!gradeConstrucaoGraphics) return;
+    gradeConstrucaoGraphics.clear();
+    if (!modoEditorAtivo || !modoConstrucaoGrade) return;
+    const cols = Math.ceil(WORLD_WIDTH / TAMANHO_BLOCO_GRADE);
+    const rows = Math.ceil(WORLD_HEIGHT / TAMANHO_BLOCO_GRADE);
+    const ocupados = new Set(blocosGradeSala.map(c => c.coluna + ':' + c.linha));
+    gradeConstrucaoGraphics.lineStyle(1, 0x222222, 0.45);
+    for (let linha = 0; linha < rows; linha++) {
+        for (let coluna = 0; coluna < cols; coluna++) {
+            const x = coluna * TAMANHO_BLOCO_GRADE;
+            const y = linha * TAMANHO_BLOCO_GRADE;
+            const ocupado = ocupados.has(coluna + ':' + linha);
+            gradeConstrucaoGraphics.fillStyle(ocupado ? 0xff6500 : 0xffffff, ocupado ? 1 : 0.92);
+            gradeConstrucaoGraphics.fillRect(x + 3, y + 3, TAMANHO_BLOCO_GRADE - 6, TAMANHO_BLOCO_GRADE - 6);
+            gradeConstrucaoGraphics.strokeRect(x, y, TAMANHO_BLOCO_GRADE, TAMANHO_BLOCO_GRADE);
+        }
+    }
+}
+
+function atualizarVisibilidadeGradeConstrucao() {
+    desenharGradeConstrucao();
+}
+
+function alternarModoConstrucaoGrade() {
+    if (!modoEditorAtivo) return;
+    modoConstrucaoGrade = !modoConstrucaoGrade;
+    const btn = document.getElementById('btn-grid-build');
+    if (btn) {
+        btn.className = modoConstrucaoGrade ? 'active' : '';
+        btn.innerText = modoConstrucaoGrade ? 'Sair da Construção por Grade' : 'Construir Sala por Grade (50 px)';
+    }
+    if (modoConstrucaoGrade) {
+        ferramentaAtual = 'create';
+        document.getElementById('btn-create').className = 'active'; document.getElementById('btn-select').className = '';
+        desmarcarObjetoDoEditor();
+        atualizarStatusSala('Modo de construção por grade ativo • clique nos quadrados para alternar bloco/vazio', '#ff9f43');
+    } else {
+        atualizarStatusSala('Modo de construção por grade encerrado', '#9bd4ff');
+    }
+    desenharGradeConstrucao();
+}
+
+function alternarBlocoDaGrade(scene, worldX, worldY) {
+    if (!modoConstrucaoGrade) return;
+    const coluna = Math.floor(worldX / TAMANHO_BLOCO_GRADE);
+    const linha = Math.floor(worldY / TAMANHO_BLOCO_GRADE);
+    if (coluna < 0 || linha < 0 || coluna >= Math.ceil(WORLD_WIDTH / TAMANHO_BLOCO_GRADE) || linha >= Math.ceil(WORLD_HEIGHT / TAMANHO_BLOCO_GRADE)) return;
+    const indice = blocosGradeSala.findIndex(c => c.coluna === coluna && c.linha === linha);
+    if (indice >= 0) blocosGradeSala.splice(indice, 1);
+    else blocosGradeSala.push({ coluna, linha });
+    reconstruirBlocosGradeFisicos(scene);
+    marcarSalaComoAlterada();
+    desenharGradeConstrucao();
+}
+
+function alterarDimensoesSalaEditor() {
+    if (!modoEditorAtivo) return;
+    const scene = game.scene.getScene('default');
+    if (!scene) return;
+    const d = obterDimensoesInformadas();
+    aplicarDimensoesDaSala(scene, d.largura, d.altura);
+    blocosGradeSala = normalizarBlocosGrade(blocosGradeSala);
+    reconstruirBlocosGradeFisicos(scene);
+    marcarSalaComoAlterada();
+    desenharGradeConstrucao();
+    alternarVisibilidadeGrade();
 }
 
 function alternarVisibilidadeGrade() {
-    gridGraphics.clear(); if (!modoEditorAtivo || !document.getElementById('prop-grid-active').checked) return;
+    gridGraphics.clear(); if (!modoEditorAtivo || !document.getElementById('prop-grid-active').checked) { desenharGradeConstrucao(); return; }
     const gSize = parseInt(document.getElementById('prop-grid-size').value) || 64; gridGraphics.lineStyle(1, 0xffffff, 0.15);
-    for (let x = 0; x < WORLD_WIDTH; x += gSize) gridGraphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    for (let y = 0; y < WORLD_HEIGHT; y += gSize) gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
+    for (let x = 0; x <= WORLD_WIDTH; x += gSize) gridGraphics.lineBetween(x, 0, x, WORLD_HEIGHT);
+    for (let y = 0; y <= WORLD_HEIGHT; y += gSize) gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
+    desenharGradeConstrucao();
 }
 
 function preload() {}
 
 function create() {
     if (this.input.gamepad) { this.input.gamepad.start(); }
-    this.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 100, true, true, true, true);
+    this.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 50, true, true, true, true);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     gridGraphics = this.add.graphics().setDepth(1);
+    gradeConstrucaoGraphics = this.add.graphics().setDepth(0.5);
     previewGraphicsPoligono = this.add.graphics().setDepth(15);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
     inicializarSistemaDeSalas();
+    reconstruirLimitesDaSala(this);
+    carregarSalaPorId(salaAtual.id);
     
     this.matter.world.on('afterupdate', () => {
         if (modoEditorAtivo) return;
@@ -548,14 +915,7 @@ function create() {
         });
     });
 
-    const ambConf = { isStatic:true, label:'ambiente', friction:0.8, restitution:0.1, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
-    const borda = (s, x, y, w, h) => {
-        let b = s.matter.add.rectangle(x, y, w, h, ambConf); 
-        b.isStaticBorder = true; b.manuseavel = false; b.naoAgarravel = false; b.label = 'ambiente'; bordasFixasDoCenario.push(b);
-        s.add.graphics().fillStyle(0x1a1a1a, 1).fillRect(x - w/2, y - h/2, w, h).setDepth(2);
-    };
-    borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50); borda(this, WORLD_WIDTH/2, 25, WORLD_WIDTH, 50);
-    borda(this, 25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT); borda(this, WORLD_WIDTH-25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT);
+    reconstruirLimitesDaSala(this);
     
     this.matter.world.on('collisionstart', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
     this.matter.world.on('collisionactive', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
@@ -563,6 +923,10 @@ function create() {
     
     this.input.on('pointerdown', (p) => {
         if (!modoEditorAtivo) return;
+        if (modoConstrucaoGrade) {
+            alternarBlocoDaGrade(this, p.worldX, p.worldY);
+            return;
+        }
         if (document.getElementById('prop-shape').value === 'polygon') {
             verticesCriacaoAtiva.push({ x: p.worldX, y: p.worldY });
             if (!this.listaBolinhasGuiaCena) { this.listaBolinhasGuiaCena = []; }
@@ -608,6 +972,10 @@ function create() {
     this.input.keyboard.on('keydown-E', () => { alternarModoEditor(this); });
     this.input.keyboard.on('keydown-ENTER', () => { if (modoEditorAtivo && ferramentaAtual === 'create' && document.getElementById('prop-shape').value === 'polygon') finalizarCriacaoPoligono(this); });
     this.input.gamepad.on('down', (pad) => {
+        if (!salaEmJogoAtual && !modoEditorAtivo) {
+            garantirSessaoDeJogo();
+            salaEmJogoAtual = salaAtual.id;
+        }
         if (pad.index === 0 && !player1) { const e = bancoDeSalas[salaAtual.id]?.pontosDeEntrada?.jogador1 || { x: 300, y: WORLD_HEIGHT-150 }; player1 = createHeaveHoCharacter(this, e.x, e.y, pad, 0, 0x00ff00); }
         if (pad.index === 1 && !player2) { const e = bancoDeSalas[salaAtual.id]?.pontosDeEntrada?.jogador2 || { x: 500, y: WORLD_HEIGHT-150 }; player2 = createHeaveHoCharacter(this, e.x, e.y, pad, 1, 0xffff00); }
     });
@@ -616,27 +984,56 @@ function create() {
 
 function atualizarInterfaceForma() {
     const s = document.getElementById('prop-shape').value;
-    document.getElementById('painel-propriedades-comuns').style.display = (s === 'rope') ? 'none' : 'block';
+    const especial = ['portal', 'respawn1', 'respawn2'].includes(s);
+    const fisico = !especial && s !== 'rope';
+    document.getElementById('painel-propriedades-comuns').style.display = fisico ? 'block' : 'none';
     document.getElementById('painel-propriedades-corda').style.display = (s === 'rope') ? 'flex' : 'none';
-    document.getElementById('row-h').style.display = (s === 'circle' || s === 'polygon' || s === 'rope') ? 'none' : 'flex';
-    document.getElementById('row-w').style.display = (s === 'polygon' || s === 'rope') ? 'none' : 'flex';
+    document.getElementById('painel-propriedades-especiais').style.display = especial ? 'flex' : 'none';
+    document.getElementById('row-h').style.display = (s === 'circle' || s === 'polygon' || s === 'rope' || especial) ? 'none' : 'flex';
+    document.getElementById('row-w').style.display = (s === 'polygon' || s === 'rope' || especial) ? 'none' : 'flex';
+    document.getElementById('row-id-persistente').style.display = (especial || document.getElementById('prop-persistir-sessao').checked) ? 'flex' : 'none';
+    document.getElementById('row-portal-destino').style.display = s === 'portal' ? 'flex' : 'none';
+    document.getElementById('row-portal-ponto').style.display = s === 'portal' ? 'flex' : 'none';
     document.getElementById('label-w').innerText = s === 'circle' ? "Raio (px):" : "Largura (px):";
 }
 
 function extrairCamposPainel() {
     return {
-        shape: document.getElementById('prop-shape').value, manuseavel: document.getElementById('prop-manuseavel').checked, lockGrab: document.getElementById('prop-lock-grab').checked, isStatic: document.getElementById('prop-is-static').checked,
+        shape: document.getElementById('prop-shape').value,
+        manuseavel: document.getElementById('prop-manuseavel').checked,
+        lockGrab: document.getElementById('prop-lock-grab').checked,
+        isStatic: document.getElementById('prop-is-static').checked,
+        persistirSessao: document.getElementById('prop-persistir-sessao').checked,
+        idPersistente: document.getElementById('prop-id-persistente').value.trim(),
         w: parseFloat(document.getElementById('prop-w').value) || 50, h: parseFloat(document.getElementById('prop-h').value) || 50,
         gravity: document.getElementById('prop-gravity').checked, lockPos: document.getElementById('prop-lock-pos').checked, lockRot: document.getElementById('prop-lock-rot').checked,
         mass: parseFloat(document.getElementById('prop-mass').value) || 1, air: parseFloat(document.getElementById('prop-air').value) || 0.02, bounce: parseFloat(document.getElementById('prop-bounce').value) || 0,
         ropeLen: parseFloat(document.getElementById('prop-rope-len').value) || 250, ropeSegments: parseInt(document.getElementById('prop-rope-segments').value) || 8, ropeColor: document.getElementById('prop-rope-color').value,
         maxVel: parseFloat(document.getElementById('prop-max-vel').value) || 0,
-        maxRot: parseFloat(document.getElementById('prop-max-rot').value) || 0
+        maxRot: parseFloat(document.getElementById('prop-max-rot').value) || 0,
+        portalDestinoSala: document.getElementById('prop-portal-destino-sala').value.trim(),
+        portalDestinoPonto: document.getElementById('prop-portal-destino-ponto').value.trim(),
+        nomePonto: document.getElementById('prop-nome-ponto').value.trim()
     };
 }
 
 function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
+    if (['portal', 'respawn1', 'respawn2'].includes(c.shape)) {
+        const idPersistente = c.idPersistente || gerarIdObjetoPersistente();
+        const obj = {
+            body: null, gfx: scene.add.graphics().setDepth(6), shape: c.shape,
+            w: 50, h: 50, gravity: false, lockPos: true, lockRot: true, mass: 1, air: 0, bounce: 0,
+            maxVel: 0, maxRot: 0, posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay,
+            manuseavel: false, naoAgarravel: true, isStatic: true,
+            idPersistente, persistirSessao: false,
+            portalDestinoSala: c.portalDestinoSala, portalDestinoPonto: c.portalDestinoPonto, nomePonto: c.nomePonto || idPersistente
+        };
+        listaObjetosEditaveis.push(obj);
+        selecionarObjetoDoEditor(obj);
+        marcarSalaComoAlterada();
+        return;
+    }
     if (c.shape === 'rope') {
         let elos = [], constraints = []; let segmentLen = c.ropeLen / c.ropeSegments; let lastBody = null;
         for (let i = 0; i < c.ropeSegments; i++) {
@@ -653,7 +1050,7 @@ function executarCriacaoObjeto(scene, x, y) {
             else constraints.push(scene.matter.add.constraint(lastBody, elo, 0, 0.15, { pointA: { x: 0, y: segmentLen/2 }, pointB: { x: 0, y: -segmentLen/2 }, damping: 0.2 }));
             lastBody = elo;
         }
-        listaObjetosEditaveis.push({ body: null, ropeElos: elos, ropeConstraints: constraints, shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, ropeLen: c.ropeLen, ropeSegments: c.ropeSegments, ropeColor: c.ropeColor, gfx: scene.add.graphics().setDepth(3), posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: false, naoAgarravel: false, isStatic: true });
+        listaObjetosEditaveis.push({ body: null, ropeElos: elos, ropeConstraints: constraints, shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, ropeLen: c.ropeLen, ropeSegments: c.ropeSegments, ropeColor: c.ropeColor, gfx: scene.add.graphics().setDepth(3), posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: false, naoAgarravel: false, isStatic: true, idPersistente: c.persistirSessao ? (c.idPersistente || gerarIdObjetoPersistente()) : null, persistirSessao: !!c.persistirSessao });
         marcarSalaComoAlterada();
         return;
     }
@@ -661,7 +1058,7 @@ function executarCriacaoObjeto(scene, x, y) {
     let body = (c.shape === 'box') ? scene.matter.add.rectangle(ax, ay, c.w, c.h, conf) : scene.matter.add.circle(ax, ay, c.w, conf);
     body.manuseavel = c.manuseavel; body.naoAgarravel = c.lockGrab; body.label = 'ambiente';
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
-    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel, naoAgarravel: c.lockGrab, isStatic: c.isStatic });
+    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel, naoAgarravel: c.lockGrab, isStatic: c.isStatic, idPersistente: c.persistirSessao ? (c.idPersistente || gerarIdObjetoPersistente()) : null, persistirSessao: !!c.persistirSessao });
     marcarSalaComoAlterada();
 }
 
@@ -691,7 +1088,7 @@ function finalizarCriacaoPoligono(scene) {
     scene.matter.world.add(body); scene.matter.body.setPosition(body, { x: centroX, y: centroY });
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
     let verticesLocaisRelativos = verticesCriacaoAtiva.map(v => { return { x: v.x - centroX, y: v.y - centroY }; });
-    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: verticesLocaisRelativos, manuseavel: c.manuseavel, naoAgarravel: c.lockGrab, isStatic: c.isStatic });
+    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: verticesLocaisRelativos, manuseavel: c.manuseavel, naoAgarravel: c.lockGrab, isStatic: c.isStatic, idPersistente: c.persistirSessao ? (c.idPersistente || gerarIdObjetoPersistente()) : null, persistirSessao: !!c.persistirSessao });
     
     verticesCriacaoAtiva = []; 
     limparBolinhasGuiaDoPoligono(scene);
@@ -703,7 +1100,10 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
     listaObjetosEditaveis.forEach(obj => {
         let colidiu = false;
         if (obj.body) colidiu = Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices, { x: x, y: y });
-        else if (obj.shape === 'rope' && obj.ropeElos) { obj.ropeElos.forEach(elo => { if (Phaser.Physics.Matter.Matter.Vertices.contains(elo.vertices, { x: x, y: y })) colidiu = true; }); }
+        else if (['portal', 'respawn1', 'respawn2'].includes(obj.shape)) {
+            const px = Number(obj.visualX) || 0, py = Number(obj.visualY) || 0;
+            colidiu = Math.abs(x - px) <= 28 && Math.abs(y - py) <= 28;
+        } else if (obj.shape === 'rope' && obj.ropeElos) { obj.ropeElos.forEach(elo => { if (Phaser.Physics.Matter.Matter.Vertices.contains(elo.vertices, { x: x, y: y })) colidiu = true; }); }
         if (colidiu) { let posX = obj.body ? obj.body.position.x : obj.visualX; let posY = obj.body ? obj.body.position.y : obj.visualY; let dist = Math.sqrt((posX - x)**2 + (posY - y)**2); if (dist < mDist) { mDist = dist; prox = obj; } }
     });
     if (prox) { selecionarObjetoDoEditor(prox); let posX = prox.body ? prox.body.position.x : prox.visualX; let posY = prox.body ? prox.body.position.y : prox.visualY; clickOffsetX = x - posX; clickOffsetY = y - posY; }
@@ -714,7 +1114,16 @@ function selecionarObjetoDoEditor(obj) {
     objetoSelecionado = obj; document.getElementById('btn-delete').style.display = 'block';
     let s = document.getElementById('status-modo'); s.innerText = "Editando selecionado"; s.style.color = "#ffea00";
     document.getElementById('prop-shape').value = obj.shape; atualizarInterfaceForma();
+    document.getElementById('prop-persistir-sessao').checked = !!obj.persistirSessao;
+    document.getElementById('prop-id-persistente').value = obj.idPersistente || '';
+    document.getElementById('prop-portal-destino-sala').value = obj.portalDestinoSala || '';
+    document.getElementById('prop-portal-destino-ponto').value = obj.portalDestinoPonto || '';
+    document.getElementById('prop-nome-ponto').value = obj.nomePonto || '';
     if (obj.shape === 'rope') { document.getElementById('prop-rope-len').value = obj.ropeLen; document.getElementById('prop-rope-segments').value = obj.ropeSegments; document.getElementById('prop-rope-color').value = obj.ropeColor; }
+    else if (['portal', 'respawn1', 'respawn2'].includes(obj.shape)) {
+        document.getElementById('prop-w').value = obj.w || 50;
+        document.getElementById('prop-h').value = obj.h || 50;
+    }
     else {
         document.getElementById('prop-w').value = obj.w; document.getElementById('prop-h').value = obj.h; document.getElementById('prop-gravity').checked = obj.gravity; 
         document.getElementById('prop-lock-pos').checked = obj.lockPos; document.getElementById('prop-lock-rot').checked = obj.lockRot; document.getElementById('prop-manuseavel').checked = obj.manuseavel;
@@ -731,6 +1140,23 @@ function atualizarObjetoExistente() {
     let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
     let px = obj.body ? obj.body.position.x : obj.visualX; let py = obj.body ? obj.body.position.y : obj.visualY;
     let anguloSalvo = obj.body ? obj.body.angle : 0;
+    if (['portal', 'respawn1', 'respawn2'].includes(obj.shape) || ['portal', 'respawn1', 'respawn2'].includes(c.shape)) {
+        if (obj.shape === 'rope') {
+            if (obj.ropeConstraints) obj.ropeConstraints.forEach(co => scene.matter.world.remove(co));
+            if (obj.ropeElos) obj.ropeElos.forEach(el => scene.matter.world.remove(el));
+        } else if (obj.body) {
+            scene.matter.world.remove(obj.body);
+        }
+        obj.body = null; obj.ropeElos = null; obj.ropeConstraints = null;
+        obj.shape = c.shape; obj.visualX = px; obj.visualY = py; obj.w = 50; obj.h = 50;
+        obj.idPersistente = c.idPersistente || obj.idPersistente || gerarIdObjetoPersistente();
+        obj.persistirSessao = false;
+        obj.portalDestinoSala = c.portalDestinoSala;
+        obj.portalDestinoPonto = c.portalDestinoPonto;
+        obj.nomePonto = c.nomePonto || obj.idPersistente;
+        marcarSalaComoAlterada();
+        return;
+    }
     if (obj.shape === 'rope') {
         if (obj.ropeConstraints) obj.ropeConstraints.forEach(co => scene.matter.world.remove(co));
         if (obj.ropeElos) obj.ropeElos.forEach(el => scene.matter.world.remove(el));
@@ -749,10 +1175,10 @@ function atualizarObjetoExistente() {
             else constraints.push(scene.matter.add.constraint(lastBody, elo, 0, 0.15, { pointA: { x: 0, y: segmentLen/2 }, pointB: { x: 0, y: -segmentLen/2 }, damping: 0.2 }));
             lastBody = elo;
         }
-        obj.ropeElos = elos; obj.ropeConstraints = constraints; obj.ropeColor = c.ropeColor; obj.ropeSegments = c.ropeSegments; obj.ropeLen = c.ropeLen; marcarSalaComoAlterada(); return;
+        obj.ropeElos = elos; obj.ropeConstraints = constraints; obj.ropeColor = c.ropeColor; obj.ropeSegments = c.ropeSegments; obj.ropeLen = c.ropeLen; obj.idPersistente = c.persistirSessao ? (c.idPersistente || obj.idPersistente || gerarIdObjetoPersistente()) : null; obj.persistirSessao = !!c.persistirSessao; marcarSalaComoAlterada(); return;
     }
     if (obj.body) scene.matter.world.remove(obj.body); obj.body = null;
-    obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity; obj.lockPos = c.lockPos; obj.lockRot = c.lockRot; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce; obj.maxVel = c.maxVel; obj.maxRot = c.maxRot; obj.visualX = px; obj.visualY = py; obj.manuseavel = c.manuseavel; obj.naoAgarravel = c.lockGrab; obj.isStatic = c.isStatic;
+    obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity; obj.lockPos = c.lockPos; obj.lockRot = c.lockRot; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce; obj.maxVel = c.maxVel; obj.maxRot = c.maxRot; obj.visualX = px; obj.visualY = py; obj.manuseavel = c.manuseavel; obj.naoAgarravel = c.lockGrab; obj.isStatic = c.isStatic; obj.idPersistente = c.persistirSessao ? (c.idPersistente || obj.idPersistente || gerarIdObjetoPersistente()) : null; obj.persistirSessao = !!c.persistirSessao;
     let conf = { isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass, friction: 0.8, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
     if (obj.shape === 'box') obj.body = scene.matter.add.rectangle(px, py, obj.w, obj.h, conf);
     else if (obj.shape === 'circle') obj.body = scene.matter.add.circle(px, py, obj.w, conf);
@@ -802,7 +1228,7 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list, listaJuntas) {
     let last = bA;
     for (let i = 0; i < num; i++) {
         const lastLink = (i === num - 1);
-        let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 12, len, { density: 0.005, frictionAir: 0.01, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
+        let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 12, len, { density: 0.005, frictionAir: 0.025, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp } });
         if (!lastLink) list.push(link);
         let c = scene.matter.add.constraint(last, link, 0, 0.9, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 }, stiffness: 0.9 });
         if (listaJuntas) listaJuntas.push(c);
@@ -952,21 +1378,51 @@ function processarGarra(s, p, h, jKey, grab) {
     }
 }
 
+
+function obterAnalogoComDeadzone(stick, deadzone = 0.10) {
+    if (!stick) return { x: 0, y: 0, magnitude: 0, ativo: false };
+    const x = Number(stick.x) || 0, y = Number(stick.y) || 0;
+    const mag = Math.sqrt(x * x + y * y);
+    if (mag < deadzone) return { x: 0, y: 0, magnitude: 0, ativo: false };
+    const fator = Math.min(1, (mag - deadzone) / (1 - deadzone));
+    return { x: (x / mag) * fator, y: (y / mag) * fator, magnitude: fator, ativo: true };
+}
+
+function estabilizarBracosSemEntrada(scene, p, esquerdoAtivo, direitoAtivo) {
+    const amortecer = (body, fator) => {
+        if (!body || body.isStatic) return;
+        scene.matter.body.setVelocity(body, { x: body.velocity.x * fator, y: body.velocity.y * fator });
+        scene.matter.body.setAngularVelocity(body, body.angularVelocity * fator);
+        if (Math.abs(body.velocity.x) < 0.015 && Math.abs(body.velocity.y) < 0.015) scene.matter.body.setVelocity(body, { x: 0, y: 0 });
+        if (Math.abs(body.angularVelocity) < 0.001) scene.matter.body.setAngularVelocity(body, 0);
+    };
+    if (!esquerdoAtivo && !p.leftJoint) {
+        p.leftElos?.forEach(e => amortecer(e, 0.62));
+        amortecer(p.leftHand, 0.58);
+    }
+    if (!direitoAtivo && !p.rightJoint) {
+        p.rightElos?.forEach(e => amortecer(e, 0.62));
+        amortecer(p.rightHand, 0.58);
+    }
+}
+
 function handlePlayerInput(s, p) {
     const pad = p.pad; if (!pad) return; 
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4); const rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     if (isButtonPressed(pad, 8)) { executarRespawnIndividual(s, p.id); return; }
     let campoMod = document.getElementById('prop-fall-weight-mod'); let valorModificador = campoMod ? parseFloat(campoMod.value) : 10.0;
     let massaCalculadaCorpo = 6.8; let totalmenteLivreNoVazio = (!p.leftJoint && !p.rightJoint);
-    if (p.body.velocity.y > 0.5 && (pad.leftStick?.y < -0.15 || pad.rightStick?.y < -0.15) && totalmenteLivreNoVazio) {
+    if (p.body.velocity.y > 0.5 && (analogoEsquerdo?.y < -0.15 || analogoDireito?.y < -0.15) && totalmenteLivreNoVazio) {
         let deltaYEsq = Math.max(0, p.body.position.y - p.leftHand.position.y); let deltaYDir = Math.max(0, p.body.position.y - p.rightHand.position.y);
         massaCalculadaCorpo += (deltaYEsq + deltaYDir) * valorModificador * 0.1;
     }
     if (p.body.mass !== massaCalculadaCorpo) s.matter.body.setMass(p.body, massaCalculadaCorpo);
 
     const FORCA_ESCALADA_CENARIO = 0.045, FORCA_MOVER_CAIXA = 0.025, RAIO_ORBITA_BRACO = 96;
-    let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.02);
-    let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.02);
+    const analogoEsquerdo = obterAnalogoComDeadzone(pad.leftStick, 0.10);
+    const analogoDireito = obterAnalogoComDeadzone(pad.rightStick, 0.10);
+    const movendoEsquerdo = analogoEsquerdo.ativo;
+    const movendoDireito = analogoDireito.ativo;
     
     // PONTO 2: TRANSMISSÃO DE FORÇA E EMBALO (IMPULSO PENDULAR AO USAR ANALÓGICOS)
     const aplicarImpulsoPendular = (pivoMao, analogico) => {
@@ -994,47 +1450,48 @@ function handlePlayerInput(s, p) {
 
     // MÃO ESQUERDA
     if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.manuseavel) {
-        if (pad.leftStick) {
-            aplicarImpulsoPendular(p.leftHand, pad.leftStick);
+        if (analogoEsquerdo.ativo) {
+            aplicarImpulsoPendular(p.leftHand, analogoEsquerdo);
         }
         let elo = p.leftJointTarget;
-        if (pad.leftStick && elo.body) {
+        if (analogoEsquerdo.ativo && elo.body) {
             let dX = p.body.position.x - elo.position.x, dY = p.body.position.y - elo.position.y, dist = Math.sqrt(dX*dX + dY*dY);
-            if (dist > 20) { let intensity = Math.sqrt(pad.leftStick.x**2 + pad.leftStick.y**2); let fatorEmbaloX = elo.velocity.x * 0.0015; let forcaX = (dX / dist) * 0.0048 * intensity + fatorEmbaloX; let forcaY = (dY / dist) * 0.0035 * intensity; s.matter.body.applyForce(elo, elo.position, { x: forcaX, y: forcaY }); }
+            if (dist > 20) { let intensity = Math.sqrt(analogoEsquerdo.x**2 + analogoEsquerdo.y**2); let fatorEmbaloX = elo.velocity.x * 0.0015; let forcaX = (dX / dist) * 0.0048 * intensity + fatorEmbaloX; let forcaY = (dY / dist) * 0.0035 * intensity; s.matter.body.applyForce(elo, elo.position, { x: forcaX, y: forcaY }); }
         }
     } else if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel) {
-        if (pad.leftStick) {
-            let fx = pad.leftStick.x * FORCA_MOVER_CAIXA;
-            let fy = pad.leftStick.y * FORCA_MOVER_CAIXA;
+        if (analogoEsquerdo.ativo) {
+            let fx = analogoEsquerdo.x * FORCA_MOVER_CAIXA;
+            let fy = analogoEsquerdo.y * FORCA_MOVER_CAIXA;
 
             s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fx, y: fy });
             s.matter.body.applyForce(p.body, p.body.position, { x: -fx, y: -fy });
         }
     } else {
-        if (movendoEsquerdo && !p.leftJoint) { let a = Math.atan2(pad.leftStick.y, pad.leftStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x)*0.22, y: (posYAlvo - p.leftHand.position.y)*0.22 }); }
+        if (movendoEsquerdo && !p.leftJoint) { let a = Math.atan2(analogoEsquerdo.y, analogoEsquerdo.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x)*0.22, y: (posYAlvo - p.leftHand.position.y)*0.22 }); }
     }
 
     // MÃO DIREITA
     if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.manuseavel) {
-        if (pad.rightStick) {
-            aplicarImpulsoPendular(p.rightHand, pad.rightStick);
+        if (analogoDireito.ativo) {
+            aplicarImpulsoPendular(p.rightHand, analogoDireito);
         }
         let elo = p.rightJointTarget;
-        if (pad.rightStick && elo.body) {
+        if (analogoDireito.ativo && elo.body) {
             let dX = p.body.position.x - elo.position.x, dY = p.body.position.y - elo.position.y, dist = Math.sqrt(dX*dX + dY*dY);
-            if (dist > 20) { let intensity = Math.sqrt(pad.rightStick.x**2 + pad.rightStick.y**2); let fatorEmbaloX = elo.velocity.x * 0.0015; let forcaX = (dX / dist) * 0.0048 * intensity + fatorEmbaloX; let forcaY = (dY / dist) * 0.0035 * intensity; s.matter.body.applyForce(elo, elo.position, { x: forcaX, y: forcaY }); }
+            if (dist > 20) { let intensity = Math.sqrt(analogoDireito.x**2 + analogoDireito.y**2); let fatorEmbaloX = elo.velocity.x * 0.0015; let forcaX = (dX / dist) * 0.0048 * intensity + fatorEmbaloX; let forcaY = (dY / dist) * 0.0035 * intensity; s.matter.body.applyForce(elo, elo.position, { x: forcaX, y: forcaY }); }
         }
     } else if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel) {
-        if (pad.rightStick) {
-            let fx = pad.rightStick.x * FORCA_MOVER_CAIXA;
-            let fy = pad.rightStick.y * FORCA_MOVER_CAIXA;
+        if (analogoDireito.ativo) {
+            let fx = analogoDireito.x * FORCA_MOVER_CAIXA;
+            let fy = analogoDireito.y * FORCA_MOVER_CAIXA;
 
             s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fx, y: fy });
             s.matter.body.applyForce(p.body, p.body.position, { x: -fx, y: -fy });
         }
     } else {
-        if (movendoDireito && !p.rightJoint) { let a = Math.atan2(pad.rightStick.y, pad.rightStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x)*0.22, y: (posYAlvo - p.rightHand.position.y)*0.22 }); }
+        if (movendoDireito && !p.rightJoint) { let a = Math.atan2(analogoDireito.y, analogoDireito.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x)*0.22, y: (posYAlvo - p.rightHand.position.y)*0.22 }); }
     }
+    estabilizarBracosSemEntrada(s, p, movendoEsquerdo, movendoDireito);
     processarGarra(s, p, p.leftHand, 'leftJoint', lL); processarGarra(s, p, p.rightHand, 'rightJoint', rR);
 }
 
@@ -1091,6 +1548,7 @@ function update() {
         let camSpeed = 12; if (cursorsKeyboard.left.isDown) this.cameras.main.scrollX -= camSpeed; if (cursorsKeyboard.right.isDown) this.cameras.main.scrollX += camSpeed;
         if (cursorsKeyboard.up.isDown) this.cameras.main.scrollY -= camSpeed; if (cursorsKeyboard.down.isDown) this.cameras.main.scrollY += camSpeed;
         previewGraphicsPoligono.clear();
+        desenharGradeConstrucao();
         listaObjetosEditaveis.forEach(obj => {
             if (obj && obj.body && obj.lockPos) {
                 if (obj.body.position.x !== obj.posicaoTravadaX || obj.body.position.y !== obj.posicaoTravadaY) {
