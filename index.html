@@ -1,845 +1,361 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <title>jogo de física multiplayer</title>
-    <style>
-        body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
-        #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
-        #canvas-container { flex-grow:1; display:flex; justify-content:center; align-items:center; position:relative; }
-        button { background:#444; color:white; border:none; padding:8px; cursor:pointer; border-radius:4px; font-weight:bold; width:100%; }
-        button:hover { background:#555; } button.active { background:#00ff00; color:black; }
-        .section { border-top:1px solid #444; padding-top:10px; display:flex; flex-direction:column; gap:6px; }
-        .prop-row { display:flex; justify-content:space-between; align-items:center; gap:10px; }
-        input[type="number"], input[type="color"], select { width:80px; background:#333; color:white; border:1px solid #555; padding:4px; border-radius:4px; }
-        input[type="checkbox"] { width:18px; height:18px; cursor: pointer; }
-        h3 { margin:0; font-size:12px; color:#aaa; text-transform:uppercase; }
-        #aviso-modo { position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.7); color:#fff; padding:8px 12px; border-radius:5px; font-weight:bold; font-size:14px; pointer-events:none; z-index:5; }
-    </style>
-    <script src="phaser.min.js"></script>
+<meta charset="UTF-8">
+<title>Protótipo — Física de Agarrar (estilo Heave Ho)</title>
+<style>
+  body { margin:0; background:#0d1117; color:#e6edf3; font-family:'Segoe UI',Arial,sans-serif; overflow:hidden; }
+  #hud { position:absolute; top:10px; left:10px; z-index:5; background:rgba(0,0,0,.55); padding:10px 14px;
+         border-radius:8px; font-size:13px; line-height:1.5; pointer-events:none; max-width:300px; }
+  #hud b { color:#7ee787; }
+  #canvas-container { display:flex; justify-content:center; align-items:center; height:100vh; }
+  canvas { display:block; }
+</style>
 </head>
 <body>
-<div id="sidebar">
-    <h2>EDITOR</h2>
-    <div class="section" style="background:#2c3e50; padding:8px; border-radius:4px; margin-bottom:5px;">
-        <h3 style="color:#3498db; font-weight:bold;">Ajuste do Ragdoll</h3>
-        <div class="prop-row">
-            <label style="color:#fff; font-size:11px;">Modificador Peso Queda:</label>
-            <input type="number" id="prop-fall-weight-mod" value="1.0" min="0.0" step="0.1" onchange="if(this.value<0)this.value=0;">
-        </div>
-    </div>
-    <div class="section"><h3>Controles</h3><p style="font-size:11px; color:#aaa; margin:0;">Use as <b>Setas</b> para mover a câmera. No modo Polígono, clique na tela para criar vértices e aperte Enter para finalizar.</p></div>
-    <div>
-        <button id="btn-create" class="active" onclick="setFerramenta('create')">Criar Novo Objeto</button>
-        <button id="btn-select" style="margin-top:5px;" onclick="setFerramenta('select')">Selecionar e Mover</button>
-    </div>
-    <div class="section">
-        <h3>Auxílios</h3>
-        <div class="prop-row"><label>Mostrar Grade:</label><input type="checkbox" id="prop-grid-active" onchange="alternarVisibilidadeGrade()"></div>
-        <div class="prop-row"><label>Tamanho Grade:</label><input type="number" id="prop-grid-size" value="64" min="8" max="128" onchange="alternarVisibilidadeGrade()"></div>
-        <div class="prop-row"><label style="color:#55ff55; font-weight:bold;">Alinhamento Ímã:</label><input type="checkbox" id="prop-snap-active" checked></div>
-    </div>
-    <div class="section">
-        <h3 id="status-modo" style="color:#55ff55;">Criando novos objetos</h3>
-        <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option><option value="rope">Corda / Corrente</option></select></div>
-        <div id="painel-propriedades-comuns">
-            <div class="prop-row" style="background:#27ae60; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Objeto Manuseável:</label><input type="checkbox" id="prop-manuseavel" onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row" style="background:#e74c3c; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Trava Agarrar (Não Agarrável):</label><input type="checkbox" id="prop-lock-grab" onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row" style="background:#2980b9; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Fixar no Ar (isStatic):</label><input type="checkbox" id="prop-is-static" onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row" id="row-w"><label id="label-w">Largura (px):</label><input type="number" id="prop-w" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row" id="row-h"><label>Altura (px):</label><input type="number" id="prop-h" value="100" min="10" max="400" onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row" id="row-gravity"><label>Gravidade:</label><input type="checkbox" id="prop-gravity" checked onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row" id="row-lock-pos"><label style="color:#3498db; font-weight:bold;">Fixar Posição (Eixo X/Y):</label><input type="checkbox" id="prop-lock-pos" onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row" id="row-lock-rot"><label>Bloquear Rotação:</label><input type="checkbox" id="prop-lock-rot" onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row" id="row-mass"><label>Massa (Peso):</label><input type="number" id="prop-mass" value="1.0" step="0.1" onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row" id="row-air"><label>Arrasto Ar:</label><input type="number" id="prop-air" value="0.02" step="0.01" onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row" id="row-max-vel"><label style="color:#ffaa00;">Limite Vel. (px):</label><input type="number" id="prop-max-vel" value="0" min="0" max="100" step="1" title="0 significa sem limite" onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row" id="row-max-rot"><label style="color:#ffaa00;">Limite Giro (rad):</label><input type="number" id="prop-max-rot" value="0" min="0" max="2" step="0.01" title="0 significa sem limite" onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row" id="row-bounce"><label>Elasticidade:</label><input type="number" id="prop-bounce" value="0.1" step="0.05" min="0" max="1" onchange="atualizarObjetoExistente()"></div>
-        </div>
-        <div id="painel-propriedades-corda" style="display:none; background:#8e44ad; padding:8px; border-radius:4px; margin-top:5px; flex-direction:column; gap:6px;">
-            <h3 style="color:#fff; font-weight:bold;">Ajustes da Corda</h3>
-            <div class="prop-row">
-                <label style="color:#fff; font-weight:bold;">Tipo de Corda:</label>
-                <select id="prop-rope-type" onchange="atualizarObjetoExistente()">
-                    <option value="super_light">Super Leve e Rápida</option>
-                    <option value="light">Leve e Um Pouco Rápida</option>
-                    <option value="normal" selected>Normal Padrão</option>
-                    <option value="heavy">Um Pouco Pesada e Um Pouco Lenta</option>
-                    <option value="super_heavy">Super Pesada e Super Lenta</option>
-                </select>
-            </div>
-            <div class="prop-row"><label>Comprimento Total:</label><input type="number" id="prop-rope-len" value="250" min="30" max="800" onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row"><label>Número de Juntas:</label><input type="number" id="prop-rope-segments" value="8" min="2" max="25" onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row"><label>Cor da Corda:</label><input type="color" id="prop-rope-color" value="#ffffff" onchange="atualizarObjetoExistente()"></div>
-        </div>
-        <button id="btn-delete" style="background:#ff4757; display:none; margin-top:10px;" onclick="deletarObjetoSelecionado()">Deletar Objeto</button>
-    </div>
+<div id="hud">
+  <b>Gamepad (padrão PC/Xbox):</b> analógico esquerdo/direito move cada mão · LB agarra/solta esquerda · RB agarra/solta direita<br>
+  <b>Teclado (alternativa):</b> WASD move mão esq. (F agarra) · setas move mão dir. (K agarra)<br>
+  <b>R</b> reposiciona o boneco · <b>G</b> mostra/esconde este texto<br>
+  <span style="opacity:.7">Wireframe = corpos de física (Matter.js), sem arte ainda — é um protótipo de jogabilidade.</span>
 </div>
-<div id="canvas-container">
-    <div id="aviso-modo">Aperte [E] para abrir o Editor</div>
-</div>
+<div id="canvas-container"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
 <script>
-const SCREEN_WIDTH = 1024, SCREEN_HEIGHT = 768, WORLD_WIDTH = 3000, WORLD_HEIGHT = 2000;
-const config = {
-    type: Phaser.AUTO, width: SCREEN_WIDTH, height: SCREEN_HEIGHT, parent: 'canvas-container', backgroundColor: '#4488aa',
-    physics: { 
-        default: 'matter', 
-        matter: { 
-            gravity: { y:1.5 }, debug: true,
-            runner: { constraintIterations: 6, positionIterations: 8, velocityIterations: 6 }
-        } 
-    },
-    input: { gamepad: true }, scene: { preload: preload, create: create, update: update }
-};
-const game = new Phaser.Game(config);
-let player1, player2, ferramentaAtual = 'create', objetoSelecionado = null, listaObjetosEditaveis = [];
-let gridGraphics, bordasFixasDoCenario = [], cursorsKeyboard;
-let modoEditorAtivo = false, cameraSalvaX = 0, cameraSalvaY = 0, cameraSalvaZoom = 1;
-let clickOffsetX = 0, clickOffsetY = 0;
-let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
-const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002, CAT_ROPE = 0x0004;
+/*
+ * PROTÓTIPO — física de "agarrar" ao estilo Heave Ho, construído do zero.
+ *
+ * Decisões de física deste protótipo (lições aprendidas ao corrigir o projeto anterior):
+ *  - Nenhuma junta usa comprimento exatamente 0 numa CADEIA de várias juntas seguidas
+ *    (corrente). Comprimento 0 encadeado é ambíguo pro solver: esticado e dobrado
+ *    ficam com a mesma "distância zero", o que pode fazer a cadeia colapsar do nada.
+ *    Uma junta ISOLADA (mão -> alvo) não sofre desse problema, então essa pode ter
+ *    comprimento 0 sem risco.
+ *  - Nenhum elo tem massa "inventada" desproporcional ao seu tamanho. Toda massa vem
+ *    de "density" consistente — "sensação de peso" vem de frictionAir (arrasto do ar),
+ *    não de multiplicar a massa por 10x, que desestabiliza o solver.
+ *  - Toda junta em cadeia tem damping (amortecimento) > 0, e todo segmento tem
+ *    angularDamping > 0. Sem isso, depois de qualquer choque forte o sistema "ressoa"
+ *    (balança sozinho) por muito tempo.
+ *  - Ao agarrar algo, o deslocamento local (offset) é calculado com a propriedade
+ *    CORRETA do Matter.js: body.angle (não existe "body.rotation").
+ *  - A cada quadro, a mão é recolocada exatamente no ponto do mundo agarrado,
+ *    recalculado a partir da posição/ângulo atuais do alvo — e a velocidade da mão
+ *    é a velocidade física correta desse ponto: v = v_do_centro + velocidadeAngular × r.
+ *    Isso é o que permite agarrar algo girando ou se movendo sem "explodir".
+ *  - Plataformas que giram/andam são cinemáticas: nós mesmos definimos a posição e a
+ *    velocidade delas a cada quadro (Matter não empurra corpos estáticos sozinho).
+ */
 
-// A "massa" de cada elo é mantida numa faixa estreita, próxima da massa
-// natural que o Matter.js calcularia para um retângulo desse tamanho (~0.4).
-// Pedir massas muito maiores que isso (como 5.0) cria uma desproporção entre
-// elos vizinhos que deixa o solver de física instável — foi essa a causa das
-// cordas pesadas ainda embolando mesmo com a trava anti-dobra reforçada. A
-// sensação de "peso" vem principalmente do arrasto do ar (frictionAir), que
-// deixa a corda mais lenta e resistente ao movimento sem desestabilizar nada.
-const PROFILES_CORDA = {
-    super_light: { frictionAir: 0.01,  angularDamping: 0.1,  mass: 0.2, stiffness: 0.6,  damping: 0.15, brace: 0.15 },
-    light:       { frictionAir: 0.02,  angularDamping: 0.13, mass: 0.4, stiffness: 0.65, damping: 0.18, brace: 0.18 },
-    normal:      { frictionAir: 0.035, angularDamping: 0.16, mass: 0.7, stiffness: 0.7,  damping: 0.22, brace: 0.22 },
-    heavy:       { frictionAir: 0.08,  angularDamping: 0.2,  mass: 1.0, stiffness: 0.75, damping: 0.28, brace: 0.28 },
-    super_heavy: { frictionAir: 0.15,  angularDamping: 0.25, mass: 1.4, stiffness: 0.8,  damping: 0.35, brace: 0.35 }
-};
+const LARGURA = 1000, ALTURA = 620;
 
-// Cria os elos (segmentos) e as junções (constraints) de uma corda a partir do
-// ponto (x, y). Usada tanto ao criar uma corda nova quanto ao editar uma existente.
-//
-// Duas medidas contra o "nó":
-// 1) A junção entre elos vizinhos usa um comprimento mínimo pequeno (GAP_JUNTA),
-//    em vez de exatamente 0. Uma junção de comprimento 0 entre peças rígidas é
-//    ambígua para o solver de física (esticada ou dobrada = mesma distância "0"),
-//    o que pode fazer a corda "saltar" de repente para a forma dobrada. Um
-//    pequeno espaço resolve essa ambiguidade.
-// 2) Cada elo também se prende ao elo de 2 posições atrás (trava anti-dobra),
-//    reforçando que a corda não pode se dobrar sobre si mesma.
-const GAP_JUNTA = 2;
-function criarSegmentosDeCorda(scene, x, y, c) {
-    let elos = [], constraints = [];
-    let segmentLen = c.ropeLen / c.ropeSegments;
-    let prof = PROFILES_CORDA[c.ropeType] || PROFILES_CORDA.normal;
-    let ropeGroup = scene.matter.world.nextGroup(true);
-    let lastBody = null;
-    for (let i = 0; i < c.ropeSegments; i++) {
-        let elo = scene.matter.add.rectangle(x, y + (i * segmentLen) + segmentLen/2, 14, segmentLen, {
-            isStatic: false,
-            isSensor: false,
-            mass: prof.mass,
-            frictionAir: prof.frictionAir,
-            angularDamping: prof.angularDamping,
-            label: 'corpo_elo',
-            collisionFilter: { category: CAT_ROPE, mask: CAT_PLAYER | CAT_AMBIENTE, group: ropeGroup }
+const CAT_CHAO   = 0x0001;
+const CAT_JOGADOR= 0x0002;
+const CAT_OBJETO = 0x0004;
+const CAT_CORRENTE = 0x0008;
+
+// ---------------------------------------------------------------------------
+// Utilitário: velocidade real de um ponto do mundo pertencente a um corpo,
+// considerando a rotação dele. v_ponto = v_centro + ω × r
+// ---------------------------------------------------------------------------
+function velocidadeDoPonto(corpo, px, py) {
+    const rx = px - corpo.position.x, ry = py - corpo.position.y;
+    const w = corpo.angularVelocity || 0;
+    const v = corpo.velocity || { x: 0, y: 0 };
+    return { x: v.x - w * ry, y: v.y + w * rx };
+}
+
+// ---------------------------------------------------------------------------
+// Corrente: cadeia de elos presa num ponto fixo do mundo.
+// ---------------------------------------------------------------------------
+function criarCorrente(scene, x, y, numElos, tamanhoElo) {
+    const GAP = 2; // pequena folga proposital — evita a ambiguidade de juntas de comprimento 0 em cadeia
+    const grupo = scene.matter.world.nextGroup(true);
+    const elos = [], juntas = [];
+    let anterior = null;
+
+    for (let i = 0; i < numElos; i++) {
+        const elo = scene.matter.add.rectangle(x, y + i * tamanhoElo + tamanhoElo / 2, 14, tamanhoElo, {
+            density: 0.0025,
+            frictionAir: 0.03,
+            angularDamping: 0.2,
+            label: 'elo_corrente',
+            collisionFilter: { category: CAT_CORRENTE, mask: CAT_CHAO | CAT_OBJETO | CAT_JOGADOR, group: grupo }
         });
-        elo.manuseavel = false;
-        elo.naoAgarravel = false;
-        elo.pesoCorda = prof.mass;
         elos.push(elo);
 
         if (i === 0) {
-            constraints.push(scene.matter.add.worldConstraint(elo, GAP_JUNTA, prof.stiffness, {
-                pointA: { x: x, y: y },
-                pointB: { x: 0, y: -segmentLen/2 },
-                damping: prof.damping
+            juntas.push(scene.matter.add.worldConstraint(elo, GAP, 0.8, {
+                pointA: { x, y }, pointB: { x: 0, y: -tamanhoElo / 2 }, damping: 0.25
             }));
         } else {
-            constraints.push(scene.matter.add.constraint(lastBody, elo, GAP_JUNTA, prof.stiffness, {
-                pointA: { x: 0, y: segmentLen/2 },
-                pointB: { x: 0, y: -segmentLen/2 },
-                damping: prof.damping
+            juntas.push(scene.matter.add.constraint(anterior, elo, GAP, 0.8, {
+                pointA: { x: 0, y: tamanhoElo / 2 }, pointB: { x: 0, y: -tamanhoElo / 2 }, damping: 0.25
             }));
         }
-
-        // Trava anti-dobra: impede a corda de dobrar sobre si mesma. Precisa ser
-        // mais forte quanto mais pesado for o elo, senão não segura o peso.
+        // trava anti-dobra: impede a corrente de virar um nó sobre si mesma
         if (i >= 2) {
-            constraints.push(scene.matter.add.constraint(elos[i - 2], elo, segmentLen * 2 + GAP_JUNTA, prof.brace, { damping: 0.3 }));
+            juntas.push(scene.matter.add.constraint(elos[i - 2], elo, tamanhoElo * 2 + GAP, 0.2, { damping: 0.3 }));
         }
-
-        lastBody = elo;
+        anterior = elo;
     }
-    return { elos: elos, constraints: constraints };
-
+    return { elos, juntas };
 }
 
-function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; }
-function setFerramenta(f) { ferramentaAtual = f; document.getElementById('btn-create').className = f==='create'?'active':''; document.getElementById('btn-select').className = f==='select'?'active':''; }
-
-function alternarModoEditor(scene) {
-    modoEditorAtivo = !modoEditorAtivo;
-    const panel = document.getElementById('sidebar');
-    const aviso = document.getElementById('aviso-modo');
-    verticesCriacaoAtiva = []; previewGraphicsPoligono.clear();
-    if (modoEditorAtivo) {
-        cameraSalvaX = scene.cameras.main.scrollX; cameraSalvaY = scene.cameras.main.scrollY; cameraSalvaZoom = scene.cameras.main.zoom;
-        scene.cameras.main.setZoom(1.0); scene.matter.world.pause();
-        panel.style.display = 'flex'; aviso.innerText = "Modo Editor Ativo - Aperte [E] para Jogar"; aviso.style.color = "#00ff00";
-    } else {
-        desmarcarObjetoDoEditor(); scene.cameras.main.scrollX = cameraSalvaX; scene.cameras.main.scrollY = cameraSalvaY; scene.cameras.main.setZoom(cameraSalvaZoom);
-        scene.matter.world.resume(); panel.style.display = 'none'; aviso.innerText = "Aperte [E] para abrir o Editor"; aviso.style.color = "#fff";
+// ---------------------------------------------------------------------------
+// Braço: cadeia de elos entre o tronco e a mão.
+// ---------------------------------------------------------------------------
+// Braço = uma pequena "corrente" entre o tronco e a mão, usando a mesma
+// técnica anti-nó da função criarCorrente. É isso que dá o alongamento
+// elástico característico do Heave Ho, em vez de um braço rígido de 2 peças.
+function criarBraco(scene, tronco, mao, grupo, numElos, tamanhoElo) {
+    const GAP = 2;
+    const elos = [], juntas = [];
+    let anterior = tronco;
+    for (let i = 0; i < numElos; i++) {
+        const elo = scene.matter.add.rectangle(tronco.position.x, tronco.position.y, 10, tamanhoElo, {
+            density: 0.0035, frictionAir: 0.02, angularDamping: 0.22, label: 'braco',
+            collisionFilter: { category: CAT_JOGADOR, mask: CAT_CHAO | CAT_OBJETO | CAT_CORRENTE, group: grupo }
+        });
+        elos.push(elo);
+        const c = scene.matter.add.constraint(anterior, elo, GAP, 0.8, {
+            pointA: anterior === tronco ? { x: 0, y: 0 } : { x: 0, y: tamanhoElo / 2 },
+            pointB: { x: 0, y: -tamanhoElo / 2 },
+            damping: 0.3
+        });
+        juntas.push(c);
+        if (i >= 2) juntas.push(scene.matter.add.constraint(elos[i - 2], elo, tamanhoElo * 2 + GAP, 0.15, { damping: 0.3 }));
+        anterior = elo;
     }
-    alternarVisibilidadeGrade();
+    const cFinal = scene.matter.add.constraint(anterior, mao, GAP, 0.85, { pointA: { x: 0, y: tamanhoElo / 2 }, pointB: { x: 0, y: 0 }, damping: 0.3 });
+    juntas.push(cFinal);
+    return { elos, juntas };
 }
 
-function alternarVisibilidadeGrade() {
-    gridGraphics.clear(); if (!modoEditorAtivo || !document.getElementById('prop-grid-active').checked) return;
-    const gSize = parseInt(document.getElementById('prop-grid-size').value) || 64; gridGraphics.lineStyle(1, 0xffffff, 0.15);
-    for (let x = 0; x < WORLD_WIDTH; x += gSize) gridGraphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    for (let y = 0; y < WORLD_HEIGHT; y += gSize) gridGraphics.lineBetween(0, y, WORLD_WIDTH, y);
+// ---------------------------------------------------------------------------
+// Personagem
+// ---------------------------------------------------------------------------
+function criarPersonagem(scene, x, y) {
+    const grupo = scene.matter.world.nextGroup(true);
+    const filtro = { category: CAT_JOGADOR, mask: CAT_CHAO | CAT_OBJETO | CAT_CORRENTE | CAT_JOGADOR, group: grupo };
+
+    const corpo = scene.matter.add.circle(x, y, 22, { density: 0.02, friction: 0.5, frictionAir: 0.02, label: 'personagem_corpo', collisionFilter: filtro });
+    const maoEsq = scene.matter.add.circle(x - 60, y, 12, { density: 0.0008, friction: 0.6, frictionAir: 0.015, label: 'personagem_mao', collisionFilter: filtro });
+    const maoDir = scene.matter.add.circle(x + 60, y, 12, { density: 0.0008, friction: 0.6, frictionAir: 0.015, label: 'personagem_mao', collisionFilter: filtro });
+
+    const braçoEsq = criarBraco(scene, corpo, maoEsq, grupo, 4, 16);
+    const braçoDir = criarBraco(scene, corpo, maoDir, grupo, 4, 16);
+
+    return {
+        corpo, maoEsq, maoDir,
+        juntasBraco: [...braçoEsq.juntas, ...braçoDir.juntas],
+        // estado de garra, por mão
+        garraEsq: null, alvoEsq: null, offsetEsq: null,
+        garraDir: null, alvoDir: null, offsetDir: null,
+    };
 }
 
-function preload() {}
+// ---------------------------------------------------------------------------
+// Agarrar / soltar
+// ---------------------------------------------------------------------------
+function processarGarra(scene, p, lado, querAgarrar, listaAgarraveis) {
+    const mao = lado === 'esq' ? p.maoEsq : p.maoDir;
+    const chaveGarra = lado === 'esq' ? 'garraEsq' : 'garraDir';
+    const chaveAlvo = lado === 'esq' ? 'alvoEsq' : 'alvoDir';
+    const chaveOffset = lado === 'esq' ? 'offsetEsq' : 'offsetDir';
+
+    if (querAgarrar && !p[chaveGarra]) {
+        const caixa = { min: { x: mao.position.x - 18, y: mao.position.y - 18 }, max: { x: mao.position.x + 18, y: mao.position.y + 18 } };
+        let alvo = null;
+        for (const candidato of listaAgarraveis()) {
+            if (!candidato) continue;
+            if (scene.matter.query.region([candidato], caixa).length > 0) { alvo = candidato; break; }
+        }
+        if (!alvo) return;
+
+        const dx = mao.position.x - alvo.position.x, dy = mao.position.y - alvo.position.y;
+        const r = alvo.angle || 0; // .angle é a propriedade correta do Matter.js (não ".rotation")
+        const offsetLocal = { x: dx * Math.cos(-r) - dy * Math.sin(-r), y: dx * Math.sin(-r) + dy * Math.cos(-r) };
+
+        scene.matter.body.setVelocity(mao, { x: 0, y: 0 });
+
+        // Uma junta comum (não worldConstraint) funciona corretamente com QUALQUER
+        // alvo — parado, girando (plataforma cinemática) ou dinâmico — porque o
+        // Matter sempre respeita a posição/ângulo atuais do corpo alvo, mesmo se
+        // ele for isStatic. Não é necessário (nem correto) tratar isStatic como
+        // "ponto fixo do mundo": plataformas giratórias/móveis também são
+        // isStatic (controle cinemático), mas SE MOVEM — um worldConstraint fixo
+        // as ignoraria e prenderia a mão num ponto vazio do ar.
+        p[chaveGarra] = scene.matter.add.constraint(mao, alvo, 0, 1, { pointA: { x: 0, y: 0 }, pointB: offsetLocal, damping: 0.2 });
+        p[chaveAlvo] = alvo; p[chaveOffset] = offsetLocal;
+    } else if (!querAgarrar && p[chaveGarra]) {
+        scene.matter.world.remove(p[chaveGarra]);
+        p[chaveGarra] = null; p[chaveAlvo] = null; p[chaveOffset] = null;
+    }
+}
+
+// Trava a mão exatamente no ponto agarrado a cada quadro (posição + velocidade corretas)
+function travarMaos(scene, p) {
+    [['esq', p.maoEsq], ['dir', p.maoDir]].forEach(([lado, mao]) => {
+        const chaveGarra = lado === 'esq' ? 'garraEsq' : 'garraDir';
+        if (!p[chaveGarra]) return;
+        const alvo = lado === 'esq' ? p.alvoEsq : p.alvoDir;
+        const offset = lado === 'esq' ? p.offsetEsq : p.offsetDir;
+        const r = alvo.angle || 0;
+        const wx = alvo.position.x + (offset.x * Math.cos(r) - offset.y * Math.sin(r));
+        const wy = alvo.position.y + (offset.x * Math.sin(r) + offset.y * Math.cos(r));
+        scene.matter.body.setPosition(mao, { x: wx, y: wy });
+        const v = velocidadeDoPonto(alvo, wx, wy);
+        scene.matter.body.setVelocity(mao, v);
+    });
+}
+
+// Força de escalada: puxa o tronco na direção do analógico/teclas quando a mão está presa
+function aplicarForcaEscalada(scene, p, lado, dirX, dirY) {
+    const chaveGarra = lado === 'esq' ? 'garraEsq' : 'garraDir';
+    if (!p[chaveGarra]) return;
+    const F = 0.05;
+    scene.matter.body.applyForce(p.corpo, p.corpo.position, { x: dirX * F, y: dirY * F });
+}
+
+// ---------------------------------------------------------------------------
+// Cena principal
+// ---------------------------------------------------------------------------
+const config = {
+    type: Phaser.AUTO,
+    width: LARGURA, height: ALTURA,
+    parent: 'canvas-container',
+    backgroundColor: '#4a7fa5',
+    physics: {
+        default: 'matter',
+        matter: {
+            gravity: { y: 1 },
+            runner: { constraintIterations: 5, positionIterations: 6, velocityIterations: 4 },
+            debug: { showBody: true, showStaticBody: true, showJoint: true, lineColor: 0x00ff88, jointColor: 0xffe066, showVelocity: false }
+        }
+    },
+    scene: { create, update }
+};
+
+let jogador, plataformaGiratoria, plataformaMovel, corrente, chao, saliencia;
+let teclas, hudVisible = true, hudEl;
 
 function create() {
-    if (this.input.gamepad) { this.input.gamepad.start(); }
-    this.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 100, true, true, true, true);
-    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    gridGraphics = this.add.graphics().setDepth(1);
-    previewGraphicsPoligono = this.add.graphics().setDepth(15);
-    cursorsKeyboard = this.input.keyboard.createCursorKeys();
-    
-    this.matter.world.on('afterupdate', () => {
-        if (modoEditorAtivo) return;
-        
-        listaObjetosEditaveis.forEach(obj => {
-            if (!obj || !obj.body || obj.body.isStatic) return;
+    hudEl = document.getElementById('hud');
+    const scene = this;
 
-            if (obj.maxVel && obj.maxVel > 0) {
-                let velX = obj.body.velocity.x;
-                let velY = obj.body.velocity.y;
-                let velocidadeLinearCombinada = Math.sqrt(velX * velX + velY * velY);
-                
-                if (velocidadeLinearCombinada > obj.maxVel && velocidadeLinearCombinada > 0) {
-                    this.matter.body.setVelocity(obj.body, {
-                        x: (velX / velocidadeLinearCombinada) * obj.maxVel,
-                        y: (velY / velocidadeLinearCombinada) * obj.maxVel
-                    });
-                    
-                    if (obj.body.positionPrev) {
-                        let dx = obj.body.position.x - obj.body.positionPrev.x;
-                        let dy = obj.body.position.y - obj.body.positionPrev.y;
-                        let distPos = Math.sqrt(dx * dx + dy * dy);
-                        if (distPos > obj.maxVel) {
-                            this.matter.body.setPosition(obj.body, {
-                                x: obj.body.positionPrev.x + (dx / distPos) * obj.maxVel,
-                                y: obj.body.positionPrev.y + (dy / distPos) * obj.maxVel
-                            });
-                        }
-                    }
-                }
-            }
+    // chão e paredes
+    chao = scene.matter.add.rectangle(LARGURA/2, ALTURA - 20, LARGURA, 40, { isStatic: true, label: 'ambiente', collisionFilter: { category: CAT_CHAO, mask: CAT_JOGADOR|CAT_OBJETO|CAT_CORRENTE } });
+    scene.matter.add.rectangle(-10, ALTURA/2, 20, ALTURA, { isStatic: true, label: 'ambiente', collisionFilter: { category: CAT_CHAO, mask: CAT_JOGADOR|CAT_OBJETO|CAT_CORRENTE } });
+    scene.matter.add.rectangle(LARGURA+10, ALTURA/2, 20, ALTURA, { isStatic: true, label: 'ambiente', collisionFilter: { category: CAT_CHAO, mask: CAT_JOGADOR|CAT_OBJETO|CAT_CORRENTE } });
 
-            if (obj.maxRot && obj.maxRot > 0) {
-                let velocidadeGiroAtual = obj.body.angularVelocity;
-                if (Math.abs(velocidadeGiroAtual) > obj.maxRot) {
-                    this.matter.body.setAngularVelocity(obj.body, obj.maxRot * Math.sign(velocidadeGiroAtual));
-                    if (obj.body.anglePrev !== undefined) {
-                        let deltaAngulo = obj.body.angle - obj.body.anglePrev;
-                        if (Math.abs(deltaAngulo) > obj.maxRot) {
-                            this.matter.body.setAngle(obj.body, obj.body.anglePrev + obj.maxRot * Math.sign(deltaAngulo));
-                        }
-                    }
-                }
-            }
-        });
+    // saliência fixa (pra testar agarrar algo parado)
+    saliencia = scene.matter.add.rectangle(150, 420, 130, 24, { isStatic: true, label: 'ambiente', collisionFilter: { category: CAT_CHAO, mask: CAT_JOGADOR|CAT_OBJETO|CAT_CORRENTE } });
+
+    // plataforma giratória (cinemática — nós controlamos o ângulo a cada quadro)
+    plataformaGiratoria = scene.matter.add.rectangle(430, 330, 170, 22, {
+        isStatic: true, label: 'objeto_giratorio', collisionFilter: { category: CAT_OBJETO, mask: CAT_JOGADOR|CAT_CHAO|CAT_CORRENTE }
+    });
+    plataformaGiratoria.velocidadeAngularCinematica = 0.012; // rad/quadro
+
+    // plataforma que anda de um lado a outro (cinemática)
+    plataformaMovel = scene.matter.add.rectangle(700, 250, 140, 22, {
+        isStatic: true, label: 'objeto_movel', collisionFilter: { category: CAT_OBJETO, mask: CAT_JOGADOR|CAT_CHAO|CAT_CORRENTE }
+    });
+    plataformaMovel.centroX = 700; plataformaMovel.amplitude = 130; plataformaMovel.periodoMs = 3400;
+
+    // corrente pendurada, presa no teto
+    corrente = criarCorrente(scene, 830, 40, 9, 34);
+
+    jogador = criarPersonagem(scene, 150, 350);
+
+    teclas = scene.input.keyboard.addKeys({
+        w:'W', a:'A', s:'S', d:'D', f:'F',
+        up:'UP', down:'DOWN', left:'LEFT', right:'RIGHT', k:'K',
+        r:'R', g:'G'
     });
 
-    const ambConf = { isStatic:true, label:'ambiente', friction:0.8, restitution:0.1, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE | CAT_ROPE } };
-    const borda = (s, x, y, w, h) => {
-        let b = s.matter.add.rectangle(x, y, w, h, ambConf); 
-        b.isStaticBorder = true; b.manuseavel = false; b.naoAgarravel = false; b.label = 'ambiente'; bordasFixasDoCenario.push(b);
-        s.add.graphics().fillStyle(0x1a1a1a, 1).fillRect(x - w/2, y - h/2, w, h).setDepth(2);
-    };
-    borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50); borda(this, WORLD_WIDTH/2, 25, WORLD_WIDTH, 50);
-    borda(this, 25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT); borda(this, WORLD_WIDTH-25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT);
-    
-    this.matter.world.on('collisionstart', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
-    this.matter.world.on('collisionactive', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
-    this.matter.world.on('collisionend', (event) => { event.pairs.forEach(pair => { quebrarToqueParaContato(pair.bodyA, pair.bodyB); quebrarToqueParaContato(pair.bodyB, pair.bodyA); }); });
-    
-    this.input.on('pointerdown', (p) => {
-        if (!modoEditorAtivo) return;
-        if (document.getElementById('prop-shape').value === 'polygon') {
-            verticesCriacaoAtiva.push({ x: p.worldX, y: p.worldY });
-            if (!this.listaBolinhasGuiaCena) { this.listaBolinhasGuiaCena = []; }
-            if (!previewGraphicsPoligono) { previewGraphicsPoligono = this.add.graphics().setDepth(9999); }
-            
-            let bolaVisual = this.add.circle(p.worldX, p.worldY, 7, 0xff0000).setStrokeStyle(2, 0xffffff).setDepth(9999);
-            this.listaBolinhasGuiaCena.push(bolaVisual);
-            
-            previewGraphicsPoligono.clear();
-            if (verticesCriacaoAtiva.length > 1) {
-                previewGraphicsPoligono.lineStyle(3, 0xff0000, 0.9);
-                previewGraphicsPoligono.beginPath();
-                previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
-                for (let i = 1; i < verticesCriacaoAtiva.length; i++) {
-                    previewGraphicsPoligono.lineTo(verticesCriacaoAtiva[i].x, verticesCriacaoAtiva[i].y);
-                }
-                previewGraphicsPoligono.strokePath();
-            }
-        } else if (ferramentaAtual === 'create') {
-            executarCriacaoObjeto(this, p.worldX, p.worldY);
-        } else {
-            executarSelecaoObjeto(this, p.worldX, p.worldY, p);
-        }
-    });
-
-    this.input.on('pointermove', function(p) {
-        if (modoEditorAtivo && ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
-            let pos = { x: p.worldX - clickOffsetX, y: p.worldY - clickOffsetY };
-            if (document.getElementById('prop-snap-active').checked && objetoSelecionado.shape !== 'polygon' && objetoSelecionado.shape !== 'rope') pos = calcularAlinhamentoPorProximidade(this, pos.x, pos.y, objetoSelecionado.w, objetoSelecionado.h, objetoSelecionado.shape, objetoSelecionado.body);
-            if (objetoSelecionado.body) { this.matter.body.setPosition(objetoSelecionado.body, { x: pos.x, y: pos.y }); this.matter.body.setVelocity(objetoSelecionado.body, { x:0, y:0 }); }
-            else { 
-                if (objetoSelecionado.shape === 'rope' && objetoSelecionado.ropeElos) {
-                    let dx = pos.x - objetoSelecionado.posicaoTravadaX, dy = pos.y - objetoSelecionado.posicaoTravadaY;
-                    objetoSelecionado.ropeElos.forEach(elo => { this.matter.body.setPosition(elo, { x: elo.position.x + dx, y: elo.position.y + dy }); this.matter.body.setVelocity(elo, { x:0, y:0 }); });
-                    if (objetoSelecionado.ropeConstraints && objetoSelecionado.ropeConstraints[0]) {
-                        objetoSelecionado.ropeConstraints[0].pointA.x = pos.x;
-                        objetoSelecionado.ropeConstraints[0].pointA.y = pos.y;
-                    }
-                }
-                objetoSelecionado.visualX = pos.x; objetoSelecionado.visualY = pos.y;
-            }
-            objetoSelecionado.posicaoTravadaX = pos.x; objetoSelecionado.posicaoTravadaY = pos.y;
-        }
-    }, this);
-
-    this.input.keyboard.on('keydown-E', () => { alternarModoEditor(this); });
-    this.input.keyboard.on('keydown-ENTER', () => { if (modoEditorAtivo && ferramentaAtual === 'create' && document.getElementById('prop-shape').value === 'polygon') finalizarCriacaoPoligono(this); });
-    this.input.gamepad.on('down', (pad) => {
-        if (pad.index === 0 && !player1) player1 = createHeaveHoCharacter(this, 300, WORLD_HEIGHT-150, pad, 0, 0x00ff00);
-        if (pad.index === 1 && !player2) player2 = createHeaveHoCharacter(this, 500, WORLD_HEIGHT-150, pad, 1, 0xffff00);
-    });
-    atualizarInterfaceForma();
+    scene.input.keyboard.on('keydown-G', () => { hudVisible = !hudVisible; hudEl.style.display = hudVisible ? 'block' : 'none'; });
 }
 
-function atualizarInterfaceForma() {
-    const s = document.getElementById('prop-shape').value;
-    document.getElementById('painel-propriedades-comuns').style.display = (s === 'rope') ? 'none' : 'block';
-    document.getElementById('painel-propriedades-corda').style.display = (s === 'rope') ? 'flex' : 'none';
-    document.getElementById('row-h').style.display = (s === 'circle' || s === 'polygon' || s === 'rope') ? 'none' : 'flex';
-    document.getElementById('row-w').style.display = (s === 'polygon' || s === 'rope') ? 'none' : 'flex';
-    document.getElementById('label-w').innerText = s === 'circle' ? "Raio (px):" : "Largura (px):";
+function listaAgarraveis() {
+    return [
+        ...(corrente ? corrente.elos : []),
+        chao, saliencia, plataformaGiratoria, plataformaMovel
+    ];
 }
 
-function extrairCamposPainel() {
-    return {
-        shape: document.getElementById('prop-shape').value, manuseavel: document.getElementById('prop-manuseavel').checked, lockGrab: document.getElementById('prop-lock-grab').checked, isStatic: document.getElementById('prop-is-static').checked,
-        w: parseFloat(document.getElementById('prop-w').value) || 50, h: parseFloat(document.getElementById('prop-h').value) || 50,
-        gravity: document.getElementById('prop-gravity').checked, lockPos: document.getElementById('prop-lock-pos').checked, lockRot: document.getElementById('prop-lock-rot').checked,
-        mass: parseFloat(document.getElementById('prop-mass').value) || 1, air: parseFloat(document.getElementById('prop-air').value) || 0.02, bounce: parseFloat(document.getElementById('prop-bounce').value) || 0,
-        ropeLen: parseFloat(document.getElementById('prop-rope-len').value) || 250, ropeSegments: parseInt(document.getElementById('prop-rope-segments').value) || 8, ropeColor: document.getElementById('prop-rope-color').value,
-        ropeType: document.getElementById('prop-rope-type').value || 'normal',
-        maxVel: parseFloat(document.getElementById('prop-max-vel').value) || 0,
-        maxRot: parseFloat(document.getElementById('prop-max-rot').value) || 0
-    };
-}
+function update(time, delta) {
+    const scene = this;
 
-function executarCriacaoObjeto(scene, x, y) {
-    let ax = x, ay = y; const c = extrairCamposPainel();
-    if (c.shape === 'rope') {
-        let { elos, constraints } = criarSegmentosDeCorda(scene, ax, ay, c);
-        listaObjetosEditaveis.push({ body: null, ropeElos: elos, ropeConstraints: constraints, shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, ropeLen: c.ropeLen, ropeSegments: c.ropeSegments, ropeColor: c.ropeColor, ropeType: c.ropeType, gfx: scene.add.graphics().setDepth(3), posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: false, naoAgarravel: false, isStatic: true });
-        return;
+    // --- plataformas cinemáticas: nós definimos posição/ângulo, não a física ---
+    const novoAngulo = plataformaGiratoria.angle + plataformaGiratoria.velocidadeAngularCinematica;
+    scene.matter.body.setAngle(plataformaGiratoria, novoAngulo);
+    scene.matter.body.setAngularVelocity(plataformaGiratoria, plataformaGiratoria.velocidadeAngularCinematica);
+
+    const fase = (time % plataformaMovel.periodoMs) / plataformaMovel.periodoMs * Math.PI * 2;
+    const novoX = plataformaMovel.centroX + Math.sin(fase) * plataformaMovel.amplitude;
+    // Matter espera velocidade em px por "quadro" de física (~1000/60 ms), não em px/ms.
+    const velX = Math.cos(fase) * plataformaMovel.amplitude * (Math.PI * 2 / plataformaMovel.periodoMs) * (1000 / 60);
+    scene.matter.body.setPosition(plataformaMovel, { x: novoX, y: plataformaMovel.position.y });
+    scene.matter.body.setVelocity(plataformaMovel, { x: velX, y: 0 });
+
+    // --- entrada do teclado ---
+    let dxE = 0, dyE = 0;
+    if (teclas.a.isDown) dxE -= 1; if (teclas.d.isDown) dxE += 1;
+    if (teclas.w.isDown) dyE -= 1; if (teclas.s.isDown) dyE += 1;
+    let magE = Math.sqrt(dxE*dxE + dyE*dyE); if (magE > 0) { dxE /= magE; dyE /= magE; }
+    let dxD = 0, dyD = 0;
+    if (teclas.left.isDown) dxD -= 1; if (teclas.right.isDown) dxD += 1;
+    if (teclas.up.isDown) dyD -= 1; if (teclas.down.isDown) dyD += 1;
+    let magD = Math.sqrt(dxD*dxD + dyD*dyD); if (magD > 0) { dxD /= magD; dyD /= magD; }
+
+    let querAgarrarEsq = teclas.f.isDown, querAgarrarDir = teclas.k.isDown;
+
+    // --- entrada do gamepad (padrão PC/Xbox), lida diretamente a cada quadro ---
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    const pad = pads && pads[0];
+    if (pad && pad.connected) {
+        const DEADZONE = 0.15;
+        const ex = pad.axes[0] || 0, ey = pad.axes[1] || 0;
+        if (Math.sqrt(ex*ex + ey*ey) > DEADZONE) { dxE = ex; dyE = ey; }
+        const dx2 = pad.axes[2] || 0, dy2 = pad.axes[3] || 0;
+        if (Math.sqrt(dx2*dx2 + dy2*dy2) > DEADZONE) { dxD = dx2; dyD = dy2; }
+        // LB (índice 4) agarra com a mão esquerda, RB (índice 5) com a direita —
+        // mapeamento "standard" do Gamepad API, válido pra a maioria dos controles de PC.
+        if (pad.buttons[4] && pad.buttons[4].pressed) querAgarrarEsq = true;
+        if (pad.buttons[5] && pad.buttons[5].pressed) querAgarrarDir = true;
     }
-    let conf = { isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.mass, friction: 0.8, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE | CAT_ROPE } };
-    let body = (c.shape === 'box') ? scene.matter.add.rectangle(ax, ay, c.w, c.h, conf) : scene.matter.add.circle(ax, ay, c.w, conf);
-    body.manuseavel = c.manuseavel; body.naoAgarravel = c.lockGrab; body.label = 'ambiente';
-    if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
-    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel, naoAgarravel: c.lockGrab, isStatic: c.isStatic });
-}
 
-function limparBolinhasGuiaDoPoligono(scene) {
-    if (typeof previewGraphicsPoligono !== 'undefined' && previewGraphicsPoligono) { previewGraphicsPoligono.clear(); }
-    if (scene && scene.listaBolinhasGuiaCena) {
-        scene.listaBolinhasGuiaCena.forEach(bola => { if (bola && bola.destroy) { bola.destroy(); } });
-        scene.listaBolinhasGuiaCena = [];
+    processarGarra(scene, jogador, 'esq', querAgarrarEsq, listaAgarraveis);
+    processarGarra(scene, jogador, 'dir', querAgarrarDir, listaAgarraveis);
+
+    travarMaos(scene, jogador);
+    aplicarForcaEscalada(scene, jogador, 'esq', dxE, dyE);
+    aplicarForcaEscalada(scene, jogador, 'dir', dxD, dyD);
+
+    // mãos livres orbitam suavemente perto do corpo, pra não ficarem largadas no ar
+    if (!jogador.garraEsq) {
+        const ax = jogador.corpo.position.x - 55, ay = jogador.corpo.position.y + (dyE || -0.3) * 30;
+        scene.matter.body.setVelocity(jogador.maoEsq, { x: (ax - jogador.maoEsq.position.x) * 0.15, y: (ay - jogador.maoEsq.position.y) * 0.15 });
+    }
+    if (!jogador.garraDir) {
+        const ax = jogador.corpo.position.x + 55, ay = jogador.corpo.position.y + (dyD || -0.3) * 30;
+        scene.matter.body.setVelocity(jogador.maoDir, { x: (ax - jogador.maoDir.position.x) * 0.15, y: (ay - jogador.maoDir.position.y) * 0.15 });
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(teclas.r) || jogador.corpo.position.y > ALTURA + 200) {
+        ['garraEsq','garraDir'].forEach(k => { if (jogador[k]) scene.matter.world.remove(jogador[k]); });
+        jogador.garraEsq = jogador.garraDir = jogador.alvoEsq = jogador.alvoDir = null;
+        scene.matter.body.setPosition(jogador.corpo, { x: 150, y: 350 });
+        scene.matter.body.setVelocity(jogador.corpo, { x: 0, y: 0 });
+        scene.matter.body.setPosition(jogador.maoEsq, { x: 90, y: 350 });
+        scene.matter.body.setPosition(jogador.maoDir, { x: 210, y: 350 });
     }
 }
 
-function finalizarCriacaoPoligono(scene) {
-    if (verticesCriacaoAtiva.length < 3) { alert("Polígonos precisam de pelo menos 3 vértices!"); return; }
-    const c = extrairCamposPainel();
-    let somatorioX = 0, somatorioY = 0; verticesCriacaoAtiva.forEach(v => { somatorioX += v.x; somatorioY += v.y; });
-    let centroX = somatorioX / verticesCriacaoAtiva.length; let centroY = somatorioY / verticesCriacaoAtiva.length;
-    let conf = { isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !c.gravity, mass: c.manuseavel ? (c.mass / verticesCriacaoAtiva.length) : c.mass, friction: 0.8, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE | CAT_ROPE } };
-    let partesFisicasTriangulares = [];
-    for (let i = 0; i < verticesCriacaoAtiva.length; i++) {
-        let p1 = verticesCriacaoAtiva[i]; let p2 = verticesCriacaoAtiva[(i + 1) % verticesCriacaoAtiva.length];
-        let trianguloVertices = [{ x: centroX, y: centroY }, { x: p1.x, y: p1.y }, { x: p2.x, y: p2.y }];
-        let corpoFatiaPuro = Phaser.Physics.Matter.Matter.Bodies.fromVertices((centroX + p1.x + p2.x)/3, (centroY + p1.y + p2.y)/3, trianguloVertices, conf);
-        if (corpoFatiaPuro) partesFisicasTriangulares.push(corpoFatiaPuro);
-    }
-    let body = scene.matter.body.create({ parts: partesFisicasTriangulares, isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !c.gravity });
-    body.manuseavel = c.manuseavel; body.naoAgarravel = c.lockGrab;
-    scene.matter.world.add(body); scene.matter.body.setPosition(body, { x: centroX, y: centroY });
-    if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
-    let verticesLocaisRelativos = verticesCriacaoAtiva.map(v => { return { x: v.x - centroX, y: v.y - centroY }; });
-    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: verticesLocaisRelativos, manuseavel: c.manuseavel, naoAgarravel: c.lockGrab, isStatic: c.isStatic });
-    
-    verticesCriacaoAtiva = []; 
-    limparBolinhasGuiaDoPoligono(scene);
-}
-
-function executarSelecaoObjeto(scene, x, y, pointer) {
-    let prox = null, mDist = Infinity;
-    listaObjetosEditaveis.forEach(obj => {
-        let colidiu = false;
-        if (obj.body) colidiu = Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices, { x: x, y: y });
-        else if (obj.shape === 'rope' && obj.ropeElos) { obj.ropeElos.forEach(elo => { if (Phaser.Physics.Matter.Matter.Vertices.contains(elo.vertices, { x: x, y: y })) colidiu = true; }); }
-        if (colidiu) { let posX = obj.body ? obj.body.position.x : obj.visualX; let posY = obj.body ? obj.body.position.y : obj.visualY; let dist = Math.sqrt((posX - x)**2 + (posY - y)**2); if (dist < mDist) { mDist = dist; prox = obj; } }
-    });
-    if (prox) { selecionarObjetoDoEditor(prox); let posX = prox.body ? prox.body.position.x : prox.visualX; let posY = prox.body ? prox.body.position.y : prox.visualY; clickOffsetX = x - posX; clickOffsetY = y - posY; }
-    else if (!pointer.leftButtonDown()) { desmarcarObjetoDoEditor(); }
-}
-
-function selecionarObjetoDoEditor(obj) {
-    objetoSelecionado = obj; document.getElementById('btn-delete').style.display = 'block';
-    let s = document.getElementById('status-modo'); s.innerText = "Editando selecionado"; s.style.color = "#ffea00";
-    document.getElementById('prop-shape').value = obj.shape; atualizarInterfaceForma();
-    if (obj.shape === 'rope') { document.getElementById('prop-rope-len').value = obj.ropeLen; document.getElementById('prop-rope-segments').value = obj.ropeSegments; document.getElementById('prop-rope-color').value = obj.ropeColor; document.getElementById('prop-rope-type').value = obj.ropeType || 'normal'; }
-    else {
-        document.getElementById('prop-w').value = obj.w; document.getElementById('prop-h').value = obj.h; document.getElementById('prop-gravity').checked = obj.gravity; 
-        document.getElementById('prop-lock-pos').checked = obj.lockPos; document.getElementById('prop-lock-rot').checked = obj.lockRot; document.getElementById('prop-manuseavel').checked = obj.manuseavel;
-        document.getElementById('prop-lock-grab').checked = obj.naoAgarravel || false;
-        document.getElementById('prop-is-static').checked = obj.body ? obj.body.isStatic : obj.isStatic; document.getElementById('prop-mass').value = obj.body ? obj.body.mass.toFixed(1) : obj.mass;
-        document.getElementById('prop-air').value = obj.air; document.getElementById('prop-bounce').value = obj.bounce;
-        document.getElementById('prop-max-vel').value = obj.maxVel || 0;
-        document.getElementById('prop-max-rot').value = obj.maxRot || 0;
-    }
-}
-
-function atualizarObjetoExistente() {
-    if (ferramentaAtual !== 'select' || !objetoSelecionado) return;
-    let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
-    let px = obj.body ? obj.body.position.x : obj.visualX; let py = obj.body ? obj.body.position.y : obj.visualY;
-    let anguloSalvo = obj.body ? obj.body.angle : 0;
-    if (obj.shape === 'rope') {
-        if (obj.ropeConstraints) obj.ropeConstraints.forEach(co => scene.matter.world.remove(co));
-        if (obj.ropeElos) obj.ropeElos.forEach(el => scene.matter.world.remove(el));
-        let { elos, constraints } = criarSegmentosDeCorda(scene, px, py, c);
-        obj.ropeElos = elos; obj.ropeConstraints = constraints; obj.ropeColor = c.ropeColor; obj.ropeSegments = c.ropeSegments; obj.ropeLen = c.ropeLen; obj.ropeType = c.ropeType; return;
-    }
-    if (obj.body) scene.matter.world.remove(obj.body); obj.body = null;
-    obj.shape = c.shape; obj.w = c.w; obj.h = c.h; obj.gravity = c.gravity; obj.lockPos = c.lockPos; obj.lockRot = c.lockRot; obj.mass = c.mass; obj.air = c.air; obj.bounce = c.bounce; obj.maxVel = c.maxVel; obj.maxRot = c.maxRot; obj.visualX = px; obj.visualY = py; obj.manuseavel = c.manuseavel; obj.naoAgarravel = c.lockGrab; obj.isStatic = c.isStatic;
-    let conf = { isStatic: c.isStatic, label: 'ambiente', ignoreGravity: !obj.gravity, mass: obj.mass, friction: 0.8, frictionAir: c.air, restitution: c.bounce, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE | CAT_ROPE } };
-    if (obj.shape === 'box') obj.body = scene.matter.add.rectangle(px, py, obj.w, obj.h, conf);
-    else if (obj.shape === 'circle') obj.body = scene.matter.add.circle(px, py, obj.w, conf);
-    if (obj.body) { obj.body.manuseavel = c.manuseavel; obj.body.naoAgarravel = c.lockGrab; obj.body.label = 'ambiente'; if (!obj.body.isStatic) { scene.matter.body.setInertia(obj.body, obj.lockRot ? Infinity : obj.body.inertia); scene.matter.body.setAngle(obj.body, anguloSalvo); } }
-}
-
-function deletarObjetoSelecionado() {
-    if (!objetoSelecionado) return; let scene = game.scene.getScene('default');
-    if (objetoSelecionado.shape === 'rope') {
-        if (objetoSelecionado.ropeConstraints) objetoSelecionado.ropeConstraints.forEach(co => scene.matter.world.remove(co));
-        if (objetoSelecionado.ropeElos) objetoSelecionado.ropeElos.forEach(el => scene.matter.world.remove(el));
-    } else if (objetoSelecionado.body) { scene.matter.world.remove(objetoSelecionado.body); }
-    objetoSelecionado.gfx.clear(); objetoSelecionado.gfx.destroy(); listaObjetosEditaveis = listaObjetosEditaveis.filter(o => o !== objetoSelecionado); desmarcarObjetoDoEditor();
-}
-
-function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorpo) {
-    let finalX = x, finalY = y; const DISTANCIA_IMA = 20, corpos = scene.matter.world.localWorld.bodies;
-    for (let i = 0; i < corpos.length; i++) {
-        let b = corpos[i]; if (!b || b === ignorarCorpo || b.label !== 'ambiente') continue;
-        const oE = b.bounds.min.x, oD = b.bounds.max.x, oT = b.bounds.min.y;
-        if (x + w/2 >= oE - DISTANCIA_IMA && x - w/2 <= oD + DISTANCIA_IMA) { if (Math.abs((y + h/2) - oT) < DISTANCIA_IMA) { finalY = oT - h/2; break; } }
-    }
-    return { x: finalX, y: finalY };
-}
-
-function desenharObjetoEditor(obj) {
-    if (!obj) return; let g = obj.gfx; g.clear();
-    if (obj.shape === 'rope' && obj.ropeElos) {
-        let corPuraHex = parseInt(obj.ropeColor.replace('#', '0x')); g.lineStyle(obj === objetoSelecionado ? 6 : 4, obj === objetoSelecionado ? 0xffea00 : corPuraHex, 1.0);
-        g.beginPath(); g.moveTo(obj.posicaoTravadaX, obj.posicaoTravadaY); obj.ropeElos.forEach(elo => g.lineTo(elo.position.x, elo.position.y));
-        g.strokePath(); g.fillStyle(0x111111, 0.7); obj.ropeElos.forEach(elo => g.fillCircle(elo.position.x, elo.position.y, 4)); return;
-    }
-    let posX = obj.body ? obj.body.position.x : obj.visualX; let posY = obj.body ? obj.body.position.y : obj.visualY;
-    g.x = posX; g.y = posY; g.rotation = obj.body ? obj.body.angle : 0;
-    g.fillStyle(obj.manuseavel ? 0x8b5a2b : (obj === objetoSelecionado ? 0xffea00 : 0x2c3e50), 1.0); g.lineStyle(2, obj.naoAgarravel ? 0xff0000 : 0xffffff, 0.8);
-    if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
-    else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); }
-    else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual) {
-        g.beginPath(); g.moveTo(obj.dadosDesenhoVisual[0].x, obj.dadosDesenhoVisual[0].y);
-        for (let i = 1; i < obj.dadosDesenhoVisual.length; i++) g.lineTo(obj.dadosDesenhoVisual[i].x, obj.dadosDesenhoVisual[i].y);
-        g.closePath(); g.fillPath(); g.strokePath();
-    }
-}
-
-function createArmSegment(scene, bA, bB, num, len, id, grp, list, listaJuntas) {
-    let last = bA;
-    for (let i = 0; i < num; i++) {
-        const lastLink = (i === num - 1);
-        let link = lastLink ? bB : scene.matter.add.rectangle(bA.position.x, bA.position.y, 12, len, { density: 0.005, frictionAir: 0.01, angularDamping: 0.3, label: `p${id}_braco`, collisionFilter: { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER | CAT_ROPE, group: grp } });
-        if (!lastLink) list.push(link);
-        // damping alto para que, após um impacto forte, o braço pare de "ressoar"
-        // rapidamente em vez de balançar sozinho por muitos segundos.
-        let c = scene.matter.add.constraint(last, link, 0, 0.9, { pointA: last === bA ? { x:0, y:0 } : { x:0, y: len/2 }, pointB: lastLink ? { x:0, y:0 } : { x:0, y: -len/2 }, stiffness: 0.9, damping: 0.4 });
-        if (listaJuntas) listaJuntas.push(c);
-        last = link;
-    }
-}
-
-function createHeaveHoCharacter(scene, x, y, pad, id, col) {
-    const grp = scene.matter.world.nextGroup(true), flt = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER | CAT_ROPE, group: grp };
-    const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
-    const lH = scene.matter.add.circle(x - 100, y, 14, { density: 0.0005, friction: 0.8, frictionAir: 0.01, label: `p${id}_leftHand`, collisionFilter: flt });
-    const rH = scene.matter.add.circle(x + 100, y, 14, { density: 0.0005, friction: 0.8, frictionAir: 0.01, label: `p${id}_rightHand`, collisionFilter: flt });
-    
-    lH.corpoTocadoAgora = null; rH.corpoTocadoAgora = null; 
-    let lL = [], rL = [], juntasBraço = [];
-    
-    createArmSegment(scene, b, lH, 3, 32, id, grp, lL, juntasBraço);
-    createArmSegment(scene, b, rH, 3, 32, id, grp, rL, juntasBraço);
-    
-    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, juntasEstruturaisDosBramos: juntasBraço, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
-}
-
-function processarToqueParaContato(h, b, pair) {
-    if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
-        if (b.label === 'ambiente' || b.label === 'corpo_elo' || b.label.startsWith('p0_') || b.label.startsWith('p1_')) {
-            if (b.label !== h.label.substring(0, 3) + 'body' && !b.label.includes('braco')) {
-                h.corpoTocadoAgora = b;
-                if (pair.activeContacts && pair.activeContacts.length > 0) h.pontoDeContatoGlobal = { x: pair.activeContacts[0].vertex.x, y: pair.activeContacts[0].vertex.y };
-                else h.pontoDeContatoGlobal = { x: h.position.x, y: h.position.y };
-            }
-        }
-    }
-}
-
-function quebrarToqueParaContato(h, b) { if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) { if (h.corpoTocadoAgora === b) { h.corpoTocadoAgora = null; h.pontoDeContatoGlobal = null; } } }
-function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
-
-// Quanto mais pesada a corda que o jogador está segurando, menor a velocidade
-// máxima permitida por quadro — é o que faz uma corda pesada "sentir" pesada,
-// balançando mais devagar em vez de deixar o jogador disparar.
-function calcularLimiteVelocidade(p) {
-    let pesoSegurado = 0;
-    if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.label === 'corpo_elo') pesoSegurado = Math.max(pesoSegurado, p.leftJointTarget.pesoCorda || 0);
-    if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.label === 'corpo_elo') pesoSegurado = Math.max(pesoSegurado, p.rightJointTarget.pesoCorda || 0);
-    return 10 / (1 + pesoSegurado * 0.6);
-}
-
-// Trava a mão exatamente no ponto do mundo onde ela agarrou algo, recalculado
-// a cada quadro a partir da posição/rotação atual do alvo. Isso garante que a
-// mão nunca "escorregue" do ponto agarrado por imprecisão do solver de física
-// — qualquer folga necessária para a física parecer natural deve aparecer no
-// braço esticando, não na mão se afastando da superfície.
-function travarMaosNoPontoAgarrado(scene, p) {
-    ['leftJoint', 'rightJoint'].forEach(jKey => {
-        if (!p[jKey]) return;
-        let hand = jKey === 'leftJoint' ? p.leftHand : p.rightHand;
-        let target = p[jKey + 'Target'];
-        if (!hand || !target) return;
-        let wx, wy;
-        if (target.isStatic) {
-            let piv = p[jKey + 'PontoPivorMundo'];
-            if (!piv) return;
-            wx = piv.x; wy = piv.y;
-        } else {
-            let off = p[jKey + 'LocalOffset'];
-            if (!off) return;
-            let r = target.angle || 0;
-            wx = target.position.x + (off.x * Math.cos(r) - off.y * Math.sin(r));
-            wy = target.position.y + (off.x * Math.sin(r) + off.y * Math.cos(r));
-        }
-        scene.matter.body.setPosition(hand, { x: wx, y: wy });
-        // Velocidade correta do ponto agarrado = velocidade do centro do alvo
-        // + contribuição da rotação (velocidade angular × distância ao centro).
-        // Sem isso, agarrar algo girando (ex: uma plataforma rotativa) fazia a
-        // mão "teleportar" em círculo sem a velocidade compatível, e a física
-        // interpretava isso como um puxão violento, arremessando o jogador.
-        let vAlvo = target.velocity || { x: 0, y: 0 };
-        let velAngular = target.angularVelocity || 0;
-        let rx = wx - target.position.x, ry = wy - target.position.y;
-        let vx = vAlvo.x - velAngular * ry;
-        let vy = vAlvo.y + velAngular * rx;
-        scene.matter.body.setVelocity(hand, { x: vx, y: vy });
-    });
-}
-
-function aplicarLimiteFrame(scene, body, maxDist) {
-    if (!body || !body.position || body.isStatic || isNaN(body.position.x)) return;
-    if (body.ultimaPos) { 
-        let dx = body.position.x - body.ultimaPos.x, dy = body.position.y - body.ultimaPos.y; 
-        if (dx*dx + dy*dy > maxDist*maxDist) { 
-            let d = Math.sqrt(dx*dx + dy*dy); 
-            if (d > 0) scene.matter.body.setPosition(body, { x: body.ultimaPos.x + (dx/d)*maxDist, y: body.ultimaPos.y + (dy/d)*maxDist }); 
-        } 
-    }
-    body.ultimaPos = { x: body.position.x, y: body.position.y };
-
-    [player1, player2].forEach(p => {
-        if (!p || p.body !== body) return;
-        const RAIO_CORPO = 22; const DIST_ELOS = 32;
-
-        if (p.leftElos && p.leftElos.length > 0 && !p.leftJoint) {
-            let elo0 = p.leftElos[0]; if (elo0 && !isNaN(elo0.position.x)) {
-                let dX = elo0.position.x - body.position.x, dY = elo0.position.y - body.position.y, dist = Math.sqrt(dX*dX + dY*dY);
-                if (dist > RAIO_CORPO && dist > 0) scene.matter.body.setPosition(elo0, { x: body.position.x + (dX/dist)*RAIO_CORPO, y: body.position.y + (dY/dist)*RAIO_CORPO });
-                let paiX = elo0.position.x, paiY = elo0.position.y;
-                for (let i = 1; i < p.leftElos.length; i++) {
-                    let elo = p.leftElos[i]; if (!elo || isNaN(elo.position.x)) continue;
-                    let dx = elo.position.x - paiX, dy = elo.position.y - paiY, d = Math.sqrt(dx*dx + dy*dy);
-                    if (d > DIST_ELOS && d > 0) scene.matter.body.setPosition(elo, { x: paiX + (dx/d)*DIST_ELOS, y: paiY + (dy/d)*DIST_ELOS });
-                    paiX = elo.position.x; paiY = elo.position.y;
-                }
-                let hand = p.leftHand; if (hand && !isNaN(hand.position.x)) {
-                    let dxH = hand.position.x - paiX, dyH = hand.position.y - paiY, dH = Math.sqrt(dxH*dxH + dyH*dyH);
-                    if (dH > DIST_ELOS && dH > 0) scene.matter.body.setPosition(hand, { x: paiX + (dxH/dH)*DIST_ELOS, y: paiY + (dyH/dH)*DIST_ELOS });
-                }
-            }
-        }
-
-        if (p.rightElos && p.rightElos.length > 0 && !p.rightJoint) {
-            let elo0 = p.rightElos[0]; if (elo0 && !isNaN(elo0.position.x)) {
-                let dX = elo0.position.x - body.position.x, dY = elo0.position.y - body.position.y, dist = Math.sqrt(dX*dX + dY*dY);
-                if (dist > RAIO_CORPO && dist > 0) scene.matter.body.setPosition(elo0, { x: body.position.x + (dX/dist)*RAIO_CORPO, y: body.position.y + (dY/dist)*RAIO_CORPO });
-                let paiX = elo0.position.x, paiY = elo0.position.y;
-                for (let i = 1; i < p.rightElos.length; i++) {
-                    let elo = p.rightElos[i]; if (!elo || isNaN(elo.position.x)) continue;
-                    let dx = elo.position.x - paiX, dy = elo.position.y - paiY, d = Math.sqrt(dx*dx + dy*dy);
-                    if (d > DIST_ELOS && d > 0) scene.matter.body.setPosition(elo, { x: paiX + (dx/d)*DIST_ELOS, y: paiY + (dy/d)*DIST_ELOS });
-                    paiX = elo.position.x; paiY = elo.position.y;
-                }
-                let hand = p.rightHand; if (hand && !isNaN(hand.position.x)) {
-                    let dxH = hand.position.x - paiX, dyH = hand.position.y - paiY, dH = Math.sqrt(dxH*dxH + dyH*dyH);
-                    if (dH > DIST_ELOS && dH > 0) scene.matter.body.setPosition(hand, { x: paiX + (dxH/dH)*DIST_ELOS, y: paiY + (dyH/dH)*DIST_ELOS });
-                }
-            }
-        }
-    });
-}
-
-function desenharJogador(p) {
-    const g = p.gfx; g.clear(); g.lineStyle(12, 0x000000, 1);
-    g.beginPath(); g.moveTo(p.body.position.x, p.body.position.y); p.leftElos.forEach(e => g.lineTo(e.position.x, e.position.y)); g.lineTo(p.leftHand.position.x, p.leftHand.position.y); g.lineStyle(12, 0xff0000, 1); g.strokePath();
-    g.beginPath(); g.moveTo(p.body.position.x, p.body.position.y); p.rightElos.forEach(e => g.lineTo(e.position.x, e.position.y)); g.lineTo(p.rightHand.position.x, p.rightHand.position.y); g.lineStyle(12, 0x0000ff, 1); g.strokePath();
-    g.fillStyle(p.bodyColor, 1).fillCircle(p.body.position.x, p.body.position.y, 22); const pad = p.pad; const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4), rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
-    g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
-}
-
-function processarGarra(s, p, h, jKey, grab) {
-    if (grab && !p[jKey]) {
-        let caixaDeteccao = { min: { x: h.position.x - 16, y: h.position.y - 16 }, max: { x: h.position.x + 16, y: h.position.y + 16 } };
-        let alvoCorpo = null;
-
-        for (let i = 0; i < bordasFixasDoCenario.length; i++) {
-            let b = bordasFixasDoCenario[i]; if (!b || b.naoAgarravel) continue;
-            if (s.matter.query.region([b], caixaDeteccao).length > 0) { alvoCorpo = b; break; }
-        }
-        if (!alvoCorpo) {
-            for (let i = 0; i < listaObjetosEditaveis.length; i++) {
-                let obj = listaObjetosEditaveis[i]; if (!obj || obj.naoAgarravel) continue;
-                if (obj.body && !obj.body.naoAgarravel && s.matter.query.region([obj.body], caixaDeteccao).length > 0) { alvoCorpo = obj.body; break; }
-                else if (obj.shape === 'rope' && obj.ropeElos) {
-                    for (let j = 0; j < obj.ropeElos.length; j++) {
-                        if (!obj.ropeElos[j].naoAgarravel && s.matter.query.region([obj.ropeElos[j]], caixaDeteccao).length > 0) { alvoCorpo = obj.ropeElos[j]; break; }
-                    }
-                    if (alvoCorpo) break;
-                }
-            }
-        }
-        if (alvoCorpo) {
-            let alvoValido = alvoCorpo.parent ? alvoCorpo.parent : alvoCorpo;
-            let flashGfx = s.add.graphics().setDepth(20);
-            flashGfx.lineStyle(4, 0xffea00, 1); flashGfx.lineBetween(h.position.x, h.position.y, h.position.x, h.position.y + 4);
-            s.time.delayedCall(150, () => { flashGfx.clear(); flashGfx.destroy(); });
-            s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
-            
-            let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
-            // Corpos do Matter.js usam a propriedade ".angle" para rotação —
-            // ".rotation" não existe e sempre resultava em 0, fazendo o offset
-            // local ser calculado sem considerar a rotação atual do objeto no
-            // momento do agarrão. Isso fazia a mão "teleportar" para um ponto
-            // errado ao reprojetar esse offset junto com a rotação do objeto.
-            let r = alvoValido.angle || 0; if (isNaN(r)) r = 0;
-            let localOffset = { x: dx * Math.cos(-r) - dy * Math.sin(-r), y: dx * Math.sin(-r) + dy * Math.cos(-r) };
-
-            // A garra precisa ser sempre rígida: a mão não pode se afastar do
-            // ponto onde agarrou, seja o alvo uma corda ou qualquer outro objeto.
-            let rigidezAgarrar = 1.0;
-            let amortecimentoAgarrar = 0.15;
-
-            if (alvoValido.isStatic) {
-                p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
-                p[jKey] = s.matter.add.worldConstraint(h, 0, rigidezAgarrar, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 }, stiffness: rigidezAgarrar, damping: amortecimentoAgarrar });
-            } else {
-                p[jKey + 'PontoPivorMundo'] = null;
-                p[jKey] = s.matter.add.constraint(h, alvoValido, 0, rigidezAgarrar, { pointA: { x: 0, y: 0 }, pointB: localOffset, stiffness: rigidezAgarrar, damping: amortecimentoAgarrar });
-            }
-            p[jKey + 'Target'] = alvoValido; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = localOffset;
-            s.matter.body.setVelocity(p.body, { x: p.body.velocity.x * 0.1, y: p.body.velocity.y * 0.1 });
-        }
-    } else if (!grab && p[jKey]) {
-        if (p[jKey]) s.matter.world.remove(p[jKey]);
-        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null; p[jKey + 'PontoPivorMundo'] = null;
-    }
-}
-
-function handlePlayerInput(s, p) {
-    const pad = p.pad; if (!pad) return; 
-    const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4); const rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
-    if (isButtonPressed(pad, 8)) { executarRespawnIndividual(s, p.id); return; }
-    let campoMod = document.getElementById('prop-fall-weight-mod'); let valorModificador = campoMod ? parseFloat(campoMod.value) : 10.0;
-    let massaCalculadaCorpo = 6.8; let totalmenteLivreNoVazio = (!p.leftJoint && !p.rightJoint);
-    if (p.body.velocity.y > 0.5 && (pad.leftStick?.y < -0.15 || pad.rightStick?.y < -0.15) && totalmenteLivreNoVazio) {
-        let deltaYEsq = Math.max(0, p.body.position.y - p.leftHand.position.y); let deltaYDir = Math.max(0, p.body.position.y - p.rightHand.position.y);
-        massaCalculadaCorpo += (deltaYEsq + deltaYDir) * valorModificador * 0.1;
-    }
-    if (p.body.mass !== massaCalculadaCorpo) s.matter.body.setMass(p.body, massaCalculadaCorpo);
-
-    const FORCA_ESCALADA_CENARIO = 0.045, FORCA_MOVER_CAIXA = 0.025, RAIO_ORBITA_BRACO = 96;
-    let movendoEsquerdo = pad.leftStick && (pad.leftStick.x*pad.leftStick.x + pad.leftStick.y*pad.leftStick.y > 0.02);
-    let movendoDireito = pad.rightStick && (pad.rightStick.x*pad.rightStick.x + pad.rightStick.y*pad.rightStick.y > 0.02);
-    
-    // MÃO ESQUERDA
-    if (p.leftJoint && p.leftJointTarget && !p.leftJointTarget.manuseavel) {
-        let fatorPesoEsq = 1 / (1 + (p.leftJointTarget.pesoCorda || 0) * 0.6);
-        if (pad.leftStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.leftStick.x * FORCA_ESCALADA_CENARIO * fatorPesoEsq, y: pad.leftStick.y * FORCA_ESCALADA_CENARIO * fatorPesoEsq });
-        let elo = p.leftJointTarget;
-        if (pad.leftStick) {
-            let dX = p.body.position.x - elo.position.x, dY = p.body.position.y - elo.position.y, dist = Math.sqrt(dX*dX + dY*dY);
-            if (dist > 20) { let intensity = Math.sqrt(pad.leftStick.x**2 + pad.leftStick.y**2); let forcaX = (dX / dist) * 0.0048 * intensity * fatorPesoEsq; let forcaY = (dY / dist) * 0.0035 * intensity * fatorPesoEsq; s.matter.body.applyForce(elo, elo.position, { x: forcaX, y: forcaY }); }
-        }
-    } else if (p.leftJoint && p.leftJointTarget && p.leftJointTarget.manuseavel) {
-        if (pad.leftStick) {
-            let fx = pad.leftStick.x * FORCA_MOVER_CAIXA;
-            let fy = pad.leftStick.y * FORCA_MOVER_CAIXA;
-
-            s.matter.body.applyForce(p.leftHand, p.leftHand.position, { x: fx, y: fy });
-            s.matter.body.applyForce(p.body, p.body.position, { x: -fx, y: -fy });
-        }
-    } else {
-        if (movendoEsquerdo && !p.leftJoint) { let a = Math.atan2(pad.leftStick.y, pad.leftStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.leftHand, { x: (posXAlvo - p.leftHand.position.x)*0.22, y: (posYAlvo - p.leftHand.position.y)*0.22 }); }
-    }
-
-    // MÃO DIREITA
-    if (p.rightJoint && p.rightJointTarget && !p.rightJointTarget.manuseavel) {
-        let fatorPesoDir = 1 / (1 + (p.rightJointTarget.pesoCorda || 0) * 0.6);
-        if (pad.rightStick) s.matter.body.applyForce(p.body, p.body.position, { x: pad.rightStick.x * FORCA_ESCALADA_CENARIO * fatorPesoDir, y: pad.rightStick.y * FORCA_ESCALADA_CENARIO * fatorPesoDir });
-        let elo = p.rightJointTarget;
-        if (pad.rightStick) {
-            let dX = p.body.position.x - elo.position.x, dY = p.body.position.y - elo.position.y, dist = Math.sqrt(dX*dX + dY*dY);
-            if (dist > 20) { let intensity = Math.sqrt(pad.rightStick.x**2 + pad.rightStick.y**2); let forcaX = (dX / dist) * 0.0048 * intensity * fatorPesoDir; let forcaY = (dY / dist) * 0.0035 * intensity * fatorPesoDir; s.matter.body.applyForce(elo, elo.position, { x: forcaX, y: forcaY }); }
-        }
-    } else if (p.rightJoint && p.rightJointTarget && p.rightJointTarget.manuseavel) {
-        if (pad.rightStick) {
-            let fx = pad.rightStick.x * FORCA_MOVER_CAIXA;
-            let fy = pad.rightStick.y * FORCA_MOVER_CAIXA;
-
-            s.matter.body.applyForce(p.rightHand, p.rightHand.position, { x: fx, y: fy });
-            s.matter.body.applyForce(p.body, p.body.position, { x: -fx, y: -fy });
-        }
-    } else {
-        if (movendoDireito && !p.rightJoint) { let a = Math.atan2(pad.rightStick.y, pad.rightStick.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x)*0.22, y: (posYAlvo - p.rightHand.position.y)*0.22 }); }
-    }
-    processarGarra(s, p, p.leftHand, 'leftJoint', lL); processarGarra(s, p, p.rightHand, 'rightJoint', rR);
-}
-
-function executarRespawnIndividual(scene, pNum) {
-    let p = (pNum === 0) ? player1 : player2; if (!p) return;
-    
-    if (p.leftJoint) { scene.matter.world.remove(p.leftJoint); }
-    if (p.rightJoint) { scene.matter.world.remove(p.rightJoint); }
-    
-    if (p.juntasEstruturaisDosBramos) {
-        p.juntasEstruturaisDosBramos.forEach(junta => { scene.matter.world.remove(junta); });
-    }
-    
-    scene.matter.world.remove(p.body); 
-    scene.matter.world.remove(p.leftHand); 
-    scene.matter.world.remove(p.rightHand);
-    if (p.leftElos) p.leftElos.forEach(e => scene.matter.world.remove(e));
-    if (p.rightElos) p.rightElos.forEach(e => scene.matter.world.remove(e));
-    if (p.gfx) { p.gfx.clear(); p.gfx.destroy(); }
-    
-    if (pNum === 0) player1 = createHeaveHoCharacter(scene, 300, WORLD_HEIGHT - 150, p.pad, 0, 0x00ff00);
-    else player2 = createHeaveHoCharacter(scene, 500, WORLD_HEIGHT - 150, p.pad, 1, 0xffff00);
-}
-
-function update() {
-    let sAct = game.scene.getScene('default'); if (!sAct) return;
-    if (modoEditorAtivo && document.getElementById('prop-shape').value === 'polygon') {
-        if (!previewGraphicsPoligono) {
-            previewGraphicsPoligono = this.add.graphics().setDepth(9999);
-        }
-        previewGraphicsPoligono.clear();
-        
-        verticesCriacaoAtiva.forEach(v => {
-            previewGraphicsPoligono.lineStyle(2, 0xffffff, 1);
-            previewGraphicsPoligono.fillStyle(0xff0000, 1);
-            previewGraphicsPoligono.fillCircle(v.x, v.y, 7);
-            previewGraphicsPoligono.strokeCircle(v.x, v.y, 7);
-        });
-        
-        if (verticesCriacaoAtiva.length > 1) {
-            previewGraphicsPoligono.lineStyle(3, 0xff0000, 0.9);
-            previewGraphicsPoligono.beginPath();
-            previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
-            for (let i = 1; i < verticesCriacaoAtiva.length; i++) {
-                previewGraphicsPoligono.lineTo(verticesCriacaoAtiva[i].x, verticesCriacaoAtiva[i].y);
-            }
-            previewGraphicsPoligono.strokePath();
-        }
-    } else if (previewGraphicsPoligono) {
-        previewGraphicsPoligono.clear();
-    }
-    if (modoEditorAtivo) {
-        let camSpeed = 12; if (cursorsKeyboard.left.isDown) this.cameras.main.scrollX -= camSpeed; if (cursorsKeyboard.right.isDown) this.cameras.main.scrollX += camSpeed;
-        if (cursorsKeyboard.up.isDown) this.cameras.main.scrollY -= camSpeed; if (cursorsKeyboard.down.isDown) this.cameras.main.scrollY += camSpeed;
-        previewGraphicsPoligono.clear();
-        listaObjetosEditaveis.forEach(obj => {
-            if (obj && obj.body && obj.lockPos) {
-                if (obj.body.position.x !== obj.posicaoTravadaX || obj.body.position.y !== obj.posicaoTravadaY) {
-                    game.scene.getScene('default').matter.body.setPosition(obj.body, { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY });
-                    game.scene.getScene('default').matter.body.setVelocity(obj.body, { x: 0, y: 0 });
-                }
-            }
-            if (obj) desenharObjetoEditor(obj);
-        }); return;
-    }
-    if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2); 
-    [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, calcularLimiteVelocidade(p)); });
-    
-    [player1, player2].forEach(p => {
-        if (!p) return;
-        travarMaosNoPontoAgarrado(sAct, p);
-    });
-
-    if (player1) { player1.gfx.clear(); desenharJogador(player1); } if (player2) { player2.gfx.clear(); desenharJogador(player2); }
-    listaObjetosEditaveis.forEach(obj => {
-        if (obj && obj.body && obj.lockPos) {
-            if (obj.body.position.x !== obj.posicaoTravadaX || obj.body.position.y !== obj.posicaoTravadaY) {
-                game.scene.getScene('default').matter.body.setPosition(obj.body, { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY });
-                game.scene.getScene('default').matter.body.setVelocity(obj.body, { x: 0, y: 0 });
-            }
-        }
-        if (obj) desenharObjetoEditor(obj);
-    });
-
-    if (player1 && player2) {
-        const mX = (player1.body.position.x + player2.body.position.x) / 2, mY = (player1.body.position.y + player2.body.position.y) / 2;
-        let z = Math.min(SCREEN_WIDTH / (Math.abs(player1.body.position.x - player2.body.position.x) + 250), SCREEN_HEIGHT / (Math.abs(player1.body.position.y - player2.body.position.y) + 250));
-        z = Phaser.Math.Clamp(z, 0.45, 1.0); this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (mX - SCREEN_WIDTH / 2), 0.08); this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (mY - SCREEN_HEIGHT / 2), 0.08); this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, z, 0.05));
-    } else if (player1) {
-        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (player1.body.position.x - SCREEN_WIDTH / 2), 0.08); this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (player1.body.position.y - SCREEN_HEIGHT / 2), 0.08);
-    } else if (player2) {
-        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (player2.body.position.x - SCREEN_WIDTH / 2), 0.08); this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (player2.body.position.y - SCREEN_HEIGHT / 2), 0.08);
-    }
-}
+new Phaser.Game(config);
 </script>
 </body>
 </html>
