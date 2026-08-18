@@ -26,7 +26,9 @@ function alternarModoEditor(scene) {
     modoEditorAtivo = !modoEditorAtivo;
     const panel = document.getElementById('sidebar');
     const aviso = document.getElementById('aviso-modo');
-    verticesCriacaoAtiva = []; previewGraphicsPoligono.clear();
+    verticesCriacaoAtiva = []; 
+    if (previewGraphicsPoligono) previewGraphicsPoligono.clear();
+    
     if (modoEditorAtivo) {
         cameraSalvaX = scene.cameras.main.scrollX; cameraSalvaY = scene.cameras.main.scrollY; cameraSalvaZoom = scene.cameras.main.zoom;
         scene.cameras.main.setZoom(1.0); scene.matter.world.pause();
@@ -54,48 +56,27 @@ function create() {
     gridGraphics = this.add.graphics().setDepth(1);
     previewGraphicsPoligono = this.add.graphics().setDepth(15);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
+
+    // Spawna o Player 1 por padrão para a câmera ter um alvo de início
+    player1 = createHeaveHoCharacter(this, 300, WORLD_HEIGHT - 150, null, 0, 0x00ff00);
     
     this.matter.world.on('afterupdate', () => {
         if (modoEditorAtivo) return;
-        
         listaObjetosEditaveis.forEach(obj => {
             if (!obj || !obj.body || obj.body.isStatic) return;
 
             if (obj.maxVel && obj.maxVel > 0) {
-                let velX = obj.body.velocity.x;
-                let velY = obj.body.velocity.y;
-                let velocidadeLinearCombinada = Math.sqrt(velX * velX + velY * velY);
-                
-                if (velocidadeLinearCombinada > obj.maxVel && velocidadeLinearCombinada > 0) {
-                    this.matter.body.setVelocity(obj.body, {
-                        x: (velX / velocidadeLinearCombinada) * obj.maxVel,
-                        y: (velY / velocidadeLinearCombinada) * obj.maxVel
-                    });
-                    
-                    if (obj.body.positionPrev) {
-                        let dx = obj.body.position.x - obj.body.positionPrev.x;
-                        let dy = obj.body.position.y - obj.body.positionPrev.y;
-                        let distPos = Math.sqrt(dx * dx + dy * dy);
-                        if (distPos > obj.maxVel) {
-                            this.matter.body.setPosition(obj.body, {
-                                x: obj.body.positionPrev.x + (dx / distPos) * obj.maxVel,
-                                y: obj.body.positionPrev.y + (dy / distPos) * obj.maxVel
-                            });
-                        }
-                    }
+                let velX = obj.body.velocity.x, velY = obj.body.velocity.y;
+                let velCombinada = Math.sqrt(velX * velX + velY * velY);
+                if (velCombinada > obj.maxVel && velCombinada > 0) {
+                    this.matter.body.setVelocity(obj.body, { x: (velX / velCombinada) * obj.maxVel, y: (velY / velCombinada) * obj.maxVel });
                 }
             }
 
             if (obj.maxRot && obj.maxRot > 0) {
-                let velocidadeGiroAtual = obj.body.angularVelocity;
-                if (Math.abs(velocidadeGiroAtual) > obj.maxRot) {
-                    this.matter.body.setAngularVelocity(obj.body, obj.maxRot * Math.sign(velocidadeGiroAtual));
-                    if (obj.body.anglePrev !== undefined) {
-                        let deltaAngulo = obj.body.angle - obj.body.anglePrev;
-                        if (Math.abs(deltaAngulo) > obj.maxRot) {
-                            this.matter.body.setAngle(obj.body, obj.body.anglePrev + obj.maxRot * Math.sign(deltaAngulo));
-                        }
-                    }
+                let velGiro = obj.body.angularVelocity;
+                if (Math.abs(velGiro) > obj.maxRot) {
+                    this.matter.body.setAngularVelocity(obj.body, obj.maxRot * Math.sign(velGiro));
                 }
             }
         });
@@ -110,30 +91,19 @@ function create() {
     borda(this, WORLD_WIDTH/2, WORLD_HEIGHT-25, WORLD_WIDTH, 50); borda(this, WORLD_WIDTH/2, 25, WORLD_WIDTH, 50);
     borda(this, 25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT); borda(this, WORLD_WIDTH-25, WORLD_HEIGHT/2, 50, WORLD_HEIGHT);
     
-    this.matter.world.on('collisionstart', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
-    this.matter.world.on('collisionactive', (event) => { event.pairs.forEach(pair => { processarToqueParaContato(pair.bodyA, pair.bodyB, pair); processarToqueParaContato(pair.bodyB, pair.bodyA, pair); }); });
-    this.matter.world.on('collisionend', (event) => { event.pairs.forEach(pair => { quebrarToqueParaContato(pair.bodyA, pair.bodyB); quebrarToqueParaContato(pair.bodyB, pair.bodyA); }); });
+    this.matter.world.on('collisionstart', (e) => { e.pairs.forEach(p => { processarToqueParaContato(p.bodyA, p.bodyB, p); processarToqueParaContato(p.bodyB, p.bodyA, p); }); });
+    this.matter.world.on('collisionactive', (e) => { e.pairs.forEach(p => { processarToqueParaContato(p.bodyA, p.bodyB, p); processarToqueParaContato(p.bodyB, p.bodyA, p); }); });
+    this.matter.world.on('collisionend', (e) => { e.pairs.forEach(p => { quebrarToqueParaContato(p.bodyA, p.bodyB); quebrarToqueParaContato(p.bodyB, p.bodyA); }); });
     
     this.input.on('pointerdown', (p) => {
         if (!modoEditorAtivo) return;
         if (document.getElementById('prop-shape').value === 'polygon') {
             verticesCriacaoAtiva.push({ x: p.worldX, y: p.worldY });
-            if (!this.listaBolinhasGuiaCena) { this.listaBolinhasGuiaCena = []; }
-            if (!previewGraphicsPoligono) { previewGraphicsPoligono = this.add.graphics().setDepth(9999); }
+            if (!this.listaBolinhasGuiaCena) this.listaBolinhasGuiaCena = [];
+            if (!previewGraphicsPoligono) previewGraphicsPoligono = this.add.graphics().setDepth(9999);
             
             let bolaVisual = this.add.circle(p.worldX, p.worldY, 7, 0xff0000).setStrokeStyle(2, 0xffffff).setDepth(9999);
             this.listaBolinhasGuiaCena.push(bolaVisual);
-            
-            previewGraphicsPoligono.clear();
-            if (verticesCriacaoAtiva.length > 1) {
-                previewGraphicsPoligono.lineStyle(3, 0xff0000, 0.9);
-                previewGraphicsPoligono.beginPath();
-                previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
-                for (let i = 1; i < verticesCriacaoAtiva.length; i++) {
-                    previewGraphicsPoligono.lineTo(verticesCriacaoAtiva[i].x, verticesCriacaoAtiva[i].y);
-                }
-                previewGraphicsPoligono.strokePath();
-            }
         } else if (ferramentaAtual === 'create') {
             executarCriacaoObjeto(this, p.worldX, p.worldY);
         } else {
@@ -159,8 +129,9 @@ function create() {
 
     this.input.keyboard.on('keydown-E', () => { alternarModoEditor(this); });
     this.input.keyboard.on('keydown-ENTER', () => { if (modoEditorAtivo && ferramentaAtual === 'create' && document.getElementById('prop-shape').value === 'polygon') finalizarCriacaoPoligono(this); });
+    
     this.input.gamepad.on('down', (pad) => {
-        if (pad.index === 0 && !player1) player1 = createHeaveHoCharacter(this, 300, WORLD_HEIGHT-150, pad, 0, 0x00ff00);
+        if (pad.index === 0 && player1) player1.pad = pad;
         if (pad.index === 1 && !player2) player2 = createHeaveHoCharacter(this, 500, WORLD_HEIGHT-150, pad, 1, 0xffff00);
     });
     atualizarInterfaceForma();
@@ -182,8 +153,7 @@ function extrairCamposPainel() {
         gravity: document.getElementById('prop-gravity').checked, lockPos: document.getElementById('prop-lock-pos').checked, lockRot: document.getElementById('prop-lock-rot').checked,
         mass: parseFloat(document.getElementById('prop-mass').value) || 1, air: parseFloat(document.getElementById('prop-air').value) || 0.02, bounce: parseFloat(document.getElementById('prop-bounce').value) || 0,
         ropeLen: parseFloat(document.getElementById('prop-rope-len').value) || 250, ropeSegments: parseInt(document.getElementById('prop-rope-segments').value) || 8, ropeColor: document.getElementById('prop-rope-color').value,
-        maxVel: parseFloat(document.getElementById('prop-max-vel').value) || 0,
-        maxRot: parseFloat(document.getElementById('prop-max-rot').value) || 0
+        maxVel: parseFloat(document.getElementById('prop-max-vel').value) || 0, maxRot: parseFloat(document.getElementById('prop-max-rot').value) || 0
     };
 }
 
@@ -193,12 +163,7 @@ function executarCriacaoObjeto(scene, x, y) {
         let elos = [], constraints = []; let segmentLen = c.ropeLen / c.ropeSegments; let lastBody = null;
         for (let i = 0; i < c.ropeSegments; i++) {
             let elo = scene.matter.add.rectangle(ax, ay + (i * segmentLen) + segmentLen/2, 12, segmentLen, { 
-                isStatic: false, 
-                isSensor: false, 
-                mass: 0.8, 
-                frictionAir: 0.08, 
-                label: 'corpo_elo', 
-                collisionFilter: { category: 0x0002, mask: 0 } 
+                isStatic: false, isSensor: false, mass: 0.8, frictionAir: 0.08, label: 'corpo_elo', collisionFilter: { category: 0x0002, mask: 0 } 
             });
             elo.manuseavel = false; elo.naoAgarravel = false; elos.push(elo);
             if (i === 0) constraints.push(scene.matter.add.worldConstraint(elo, 0, 0.15, { pointA: { x: ax, y: ay }, pointB: { x: 0, y: -segmentLen/2 }, damping: 0.2 }));
@@ -216,9 +181,9 @@ function executarCriacaoObjeto(scene, x, y) {
 }
 
 function limparBolinhasGuiaDoPoligono(scene) {
-    if (typeof previewGraphicsPoligono !== 'undefined' && previewGraphicsPoligono) { previewGraphicsPoligono.clear(); }
+    if (previewGraphicsPoligono) { previewGraphicsPoligono.clear(); }
     if (scene && scene.listaBolinhasGuiaCena) {
-        scene.listaBolinhasGuiaCena.forEach(bola => { if (bola && bola.destroy) { bola.destroy(); } });
+        scene.listaBolinhasGuiaCena.forEach(bola => { if (bola && bola.destroy) bola.destroy(); });
         scene.listaBolinhasGuiaCena = [];
     }
 }
@@ -270,8 +235,7 @@ function selecionarObjetoDoEditor(obj) {
         document.getElementById('prop-lock-grab').checked = obj.naoAgarravel || false;
         document.getElementById('prop-is-static').checked = obj.body ? obj.body.isStatic : obj.isStatic; document.getElementById('prop-mass').value = obj.body ? obj.body.mass.toFixed(1) : obj.mass;
         document.getElementById('prop-air').value = obj.air; document.getElementById('prop-bounce').value = obj.bounce;
-        document.getElementById('prop-max-vel').value = obj.maxVel || 0;
-        document.getElementById('prop-max-rot').value = obj.maxRot || 0;
+        document.getElementById('prop-max-vel').value = obj.maxVel || 0; document.getElementById('prop-max-rot').value = obj.maxRot || 0;
     }
 }
 
@@ -286,12 +250,7 @@ function atualizarObjetoExistente() {
         let elos = [], constraints = []; let segmentLen = c.ropeLen / c.ropeSegments; let lastBody = null;
         for (let i = 0; i < c.ropeSegments; i++) {
             let elo = scene.matter.add.rectangle(px, py + (i * segmentLen) + segmentLen/2, 12, segmentLen, { 
-                isStatic: false, 
-                isSensor: false, 
-                mass: 0.8, 
-                frictionAir: 0.08, 
-                label: 'corpo_elo', 
-                collisionFilter: { category: 0x0002, mask: 0 } 
+                isStatic: false, isSensor: false, mass: 0.8, frictionAir: 0.08, label: 'corpo_elo', collisionFilter: { category: 0x0002, mask: 0 } 
             });
             elo.manuseavel = false; elo.naoAgarravel = false; elos.push(elo);
             if (i === 0) constraints.push(scene.matter.add.worldConstraint(elo, 0, 0.15, { pointA: { x: px, y: py }, pointB: { x: 0, y: -segmentLen/2 }, damping: 0.2 }));
@@ -348,46 +307,19 @@ function desenharObjetoEditor(obj) {
 
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
-    if (modoEditorAtivo && document.getElementById('prop-shape').value === 'polygon') {
-        if (!previewGraphicsPoligono) {
-            previewGraphicsPoligono = this.add.graphics().setDepth(9999);
-        }
-        previewGraphicsPoligono.clear();
-        
-        verticesCriacaoAtiva.forEach(v => {
-            previewGraphicsPoligono.lineStyle(2, 0xffffff, 1);
-            previewGraphicsPoligono.fillStyle(0xff0000, 1);
-            previewGraphicsPoligono.fillCircle(v.x, v.y, 7);
-            previewGraphicsPoligono.strokeCircle(v.x, v.y, 7);
-        });
-        
-        if (verticesCriacaoAtiva.length > 1) {
-            previewGraphicsPoligono.lineStyle(3, 0xff0000, 0.9);
-            previewGraphicsPoligono.beginPath();
-            previewGraphicsPoligono.moveTo(verticesCriacaoAtiva[0].x, verticesCriacaoAtiva[0].y);
-            for (let i = 1; i < verticesCriacaoAtiva.length; i++) {
-                previewGraphicsPoligono.lineTo(verticesCriacaoAtiva[i].x, verticesCriacaoAtiva[i].y);
-            }
-            previewGraphicsPoligono.strokePath();
-        }
-    } else if (previewGraphicsPoligono) {
-        previewGraphicsPoligono.clear();
-    }
     if (modoEditorAtivo) {
-        let camSpeed = 12; if (cursorsKeyboard.left.isDown) this.cameras.main.scrollX -= camSpeed; if (cursorsKeyboard.right.isDown) this.cameras.main.scrollX += camSpeed;
-        if (cursorsKeyboard.up.isDown) this.cameras.main.scrollY -= camSpeed; if (cursorsKeyboard.down.isDown) this.cameras.main.scrollY += camSpeed;
-        previewGraphicsPoligono.clear();
-        listaObjetosEditaveis.forEach(obj => {
-            if (obj && obj.body && obj.lockPos) {
-                if (obj.body.position.x !== obj.posicaoTravadaX || obj.body.position.y !== obj.posicaoTravadaY) {
-                    game.scene.getScene('default').matter.body.setPosition(obj.body, { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY });
-                    game.scene.getScene('default').matter.body.setVelocity(obj.body, { x: 0, y: 0 });
-                }
-            }
-            if (obj) desenharObjetoEditor(obj);
-        }); return;
+        let camSpeed = 12; 
+        if (cursorsKeyboard.left.isDown) this.cameras.main.scrollX -= camSpeed; 
+        if (cursorsKeyboard.right.isDown) this.cameras.main.scrollX += camSpeed;
+        if (cursorsKeyboard.up.isDown) this.cameras.main.scrollY -= camSpeed; 
+        if (cursorsKeyboard.down.isDown) this.cameras.main.scrollY += camSpeed;
+        
+        listaObjetosEditaveis.forEach(obj => { if (obj) desenharObjetoEditor(obj); }); 
+        return;
     }
-    if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2); 
+
+    if (player1) handlePlayerInput(this, player1); 
+    if (player2) handlePlayerInput(this, player2); 
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10); });
     
     [player1, player2].forEach(p => {
@@ -402,7 +334,9 @@ function update() {
         }
     });
 
-    if (player1) { player1.gfx.clear(); desenharJogador(player1); } if (player2) { player2.gfx.clear(); desenharJogador(player2); }
+    if (player1) { player1.gfx.clear(); desenharJogador(player1); } 
+    if (player2) { player2.gfx.clear(); desenharJogador(player2); }
+    
     listaObjetosEditaveis.forEach(obj => {
         if (obj && obj.body && obj.lockPos) {
             if (obj.body.position.x !== obj.posicaoTravadaX || obj.body.position.y !== obj.posicaoTravadaY) {
@@ -413,13 +347,25 @@ function update() {
         if (obj) desenharObjetoEditor(obj);
     });
 
+    // LÓGICA DE SEGUIMENTO E ZOOM DA CÂMERA (CORRIGIDA)
+    let targetX = 0, targetY = 0, targetZoom = 1;
+
     if (player1 && player2) {
-        const mX = (player1.body.position.x + player2.body.position.x) / 2, mY = (player1.body.position.y + player2.body.position.y) / 2;
-        let z = Math.min(SCREEN_WIDTH / (Math.abs(player1.body.position.x - player2.body.position.x) + 250), SCREEN_HEIGHT / (Math.abs(player1.body.position.y - player2.body.position.y) + 250));
-        z = Phaser.Math.Clamp(z, 0.45, 1.0); this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (mX - SCREEN_WIDTH / 2), 0.08); this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (mY - SCREEN_HEIGHT / 2), 0.08); this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, z, 0.05));
+        targetX = (player1.body.position.x + player2.body.position.x) / 2;
+        targetY = (player1.body.position.y + player2.body.position.y) / 2;
+        let dist = Phaser.Math.Distance.Between(player1.body.position.x, player1.body.position.y, player2.body.position.x, player2.body.position.y);
+        targetZoom = Phaser.Math.Clamp(SCREEN_WIDTH / (dist + 300), 0.45, 1.0);
     } else if (player1) {
-        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (player1.body.position.x - SCREEN_WIDTH / 2), 0.08); this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (player1.body.position.x - SCREEN_WIDTH / 2), 0.08);
+        targetX = player1.body.position.x;
+        targetY = player1.body.position.y;
     } else if (player2) {
-        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (player2.body.position.x - SCREEN_WIDTH / 2), 0.08); this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (player2.body.position.y - SCREEN_HEIGHT / 2), 0.08);
+        targetX = player2.body.position.x;
+        targetY = player2.body.position.y;
+    }
+
+    if (player1 || player2) {
+        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, targetX - SCREEN_WIDTH / 2, 0.08);
+        this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, targetY - SCREEN_HEIGHT / 2, 0.08);
+        this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, targetZoom, 0.05));
     }
 }
