@@ -41,11 +41,10 @@ function processarToqueParaContato(h, b, pair) {
 
 function quebrarToqueParaContato(h, b) { if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) { if (h.corpoTocadoAgora === b) { h.corpoTocadoAgora = null; h.pontoDeContatoGlobal = null; } } }
 function isButtonPressed(pad, buttonIndex) {
-    // Se não houver controle conectado, considera o botão como NÃO pressionado
-    if (!pad || !pad.buttons || !pad.buttons[buttonIndex]) {
-        return false;
-    }
-    return pad.buttons[buttonIndex].pressed;
+    // Retorna false se o controle (pad) não existir
+    if (!pad || !pad.buttons) return false;
+    
+    return pad.buttons[buttonIndex]?.pressed || false;
 }
 
 function aplicarLimiteFrame(scene, body, maxDist) {
