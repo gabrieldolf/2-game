@@ -459,8 +459,12 @@ function reposicionarJogadorCompleto(scene, p, pos) {
 }
 
 function carregarSalaFisicamente(scene, dados) {
+    // Toda troca de definição de sala começa removendo completamente os
+    // elementos físicos/visuais da sala anterior. Jogadores não são removidos
+    // aqui porque, no futuro, eles deverão atravessar portais entre salas.
     removerCorposDaSalaAtual(scene);
     removerBlocosGradeFisicos(scene);
+    if (gradeConstrucaoGraphics) gradeConstrucaoGraphics.clear();
     const dimensoes = dados.dimensoes || { largura: WORLD_WIDTH, altura: WORLD_HEIGHT };
     aplicarDimensoesDaSala(scene, Number(dimensoes.largura) || 3000, Number(dimensoes.altura) || 2000);
     if (dados.configuracao?.modificadorPesoQueda !== undefined) document.getElementById('prop-fall-weight-mod').value = dados.configuracao.modificadorPesoQueda;
@@ -494,6 +498,18 @@ function criarNovaSala() {
     if (id === null) return;
     id = normalizarIdSala(id) || gerarIdSala(nomeFinal);
     if (bancoDeSalas[id]) { alert('Já existe uma sala com esse ID. Escolha outro.'); return; }
+
+    // Criar uma sala começa uma cena limpa. Isso evita que objetos, blocos,
+    // portais ou jogadores da sala anterior permaneçam visualmente/fisicamente.
+    const scene = game.scene.getScene('default');
+    if (scene) {
+        removerCorposDaSalaAtual(scene);
+        removerBlocosGradeFisicos(scene);
+        reconstruirLimitesDaSala(scene);
+        limparJogadoresDaCena(scene);
+    }
+    salaEmJogoAtual = null;
+
     bancoDeSalas[id] = criarEstruturaSalaVazia(id, nomeFinal);
     persistirBancoDeSalas();
     carregarSalaPorId(id);
@@ -707,7 +723,8 @@ function alternarModoEditor(scene) {
 function aplicarDimensoesDaSala(scene, largura, altura) {
     WORLD_WIDTH = Phaser.Math.Clamp(Math.round(largura / TAMANHO_BLOCO_GRADE) * TAMANHO_BLOCO_GRADE, TAMANHO_BLOCO_GRADE * 2, LIMITE_DIMENSAO_SALA);
     WORLD_HEIGHT = Phaser.Math.Clamp(Math.round(altura / TAMANHO_BLOCO_GRADE) * TAMANHO_BLOCO_GRADE, TAMANHO_BLOCO_GRADE * 2, LIMITE_DIMENSAO_SALA);
-    scene.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 50, true, true, true, true);
+    // As paredes/chão da sala agora são definidos exclusivamente pelos blocos
+    // criados no editor. Não criamos limites físicos automáticos aqui.
     scene.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     reconstruirLimitesDaSala(scene);
     if (document.getElementById('campo-largura-sala')) document.getElementById('campo-largura-sala').value = WORLD_WIDTH;
@@ -716,23 +733,12 @@ function aplicarDimensoesDaSala(scene, largura, altura) {
 
 function reconstruirLimitesDaSala(scene) {
     if (!scene) return;
+    // Mantemos esta função apenas para limpar limites antigos de versões
+    // anteriores. A sala atual não possui mais chão/paredes automáticos.
     bordasFixasDoCenario.forEach(b => { if (b) scene.matter.world.remove(b); });
     bordasFixasDoCenario = [];
     graficosBordasFixas.forEach(g => { if (g) g.destroy(); });
     graficosBordasFixas = [];
-    const ambConf = { isStatic:true, label:'ambiente', friction:0.8, restitution:0.1, collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE } };
-    const esp = 50;
-    const borda = (x, y, w, h) => {
-        let b = scene.matter.add.rectangle(x, y, w, h, ambConf);
-        b.isStaticBorder = true; b.manuseavel = false; b.naoAgarravel = false; b.label = 'ambiente';
-        bordasFixasDoCenario.push(b);
-        const g = scene.add.graphics().fillStyle(0x1a1a1a, 1).fillRect(x - w/2, y - h/2, w, h).setDepth(2);
-        graficosBordasFixas.push(g);
-    };
-    borda(WORLD_WIDTH / 2, WORLD_HEIGHT - esp / 2, WORLD_WIDTH, esp);
-    borda(WORLD_WIDTH / 2, esp / 2, WORLD_WIDTH, esp);
-    borda(esp / 2, WORLD_HEIGHT / 2, esp, WORLD_HEIGHT);
-    borda(WORLD_WIDTH - esp / 2, WORLD_HEIGHT / 2, esp, WORLD_HEIGHT);
 }
 
 function normalizarBlocosGrade(blocos) {
@@ -859,7 +865,8 @@ function preload() {}
 
 function create() {
     if (this.input.gamepad) { this.input.gamepad.start(); }
-    this.matter.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 50, true, true, true, true);
+    // Não há paredes/chão físicos pré-configurados. O cenário será construído
+    // pelo editor usando os blocos da grade de 50 px.
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     gridGraphics = this.add.graphics().setDepth(1);
     gradeConstrucaoGraphics = this.add.graphics().setDepth(0.5);
@@ -972,12 +979,7 @@ function create() {
     this.input.keyboard.on('keydown-E', () => { alternarModoEditor(this); });
     this.input.keyboard.on('keydown-ENTER', () => { if (modoEditorAtivo && ferramentaAtual === 'create' && document.getElementById('prop-shape').value === 'polygon') finalizarCriacaoPoligono(this); });
     this.input.gamepad.on('down', (pad) => {
-        if (!salaEmJogoAtual && !modoEditorAtivo) {
-            garantirSessaoDeJogo();
-            salaEmJogoAtual = salaAtual.id;
-        }
-        if (pad.index === 0 && !player1) { const e = bancoDeSalas[salaAtual.id]?.pontosDeEntrada?.jogador1 || { x: 300, y: WORLD_HEIGHT-150 }; player1 = createHeaveHoCharacter(this, e.x, e.y, pad, 0, 0x00ff00); }
-        if (pad.index === 1 && !player2) { const e = bancoDeSalas[salaAtual.id]?.pontosDeEntrada?.jogador2 || { x: 500, y: WORLD_HEIGHT-150 }; player2 = createHeaveHoCharacter(this, e.x, e.y, pad, 1, 0xffff00); }
+        criarJogadorAPartirDoGamepad(this, pad);
     });
     atualizarInterfaceForma();
 }
@@ -1236,6 +1238,78 @@ function createArmSegment(scene, bA, bB, num, len, id, grp, list, listaJuntas) {
     }
 }
 
+function criarJogadorAPartirDoGamepad(scene, pad) {
+    if (!pad || modoEditorAtivo) return false;
+    garantirSessaoDeJogo();
+    salaEmJogoAtual = salaAtual.id;
+
+    if (pad.index === 0 && !player1) {
+        const e = bancoDeSalas[salaAtual.id]?.pontosDeEntrada?.jogador1 || { x: 300, y: Math.max(100, WORLD_HEIGHT - 150) };
+        player1 = createHeaveHoCharacter(scene, e.x, e.y, pad, 0, 0x00ff00);
+        posicionarCameraInicialNoJogador(scene, player1);
+        return true;
+    }
+    if (pad.index === 1 && !player2) {
+        const e = bancoDeSalas[salaAtual.id]?.pontosDeEntrada?.jogador2 || { x: 500, y: Math.max(100, WORLD_HEIGHT - 150) };
+        player2 = createHeaveHoCharacter(scene, e.x, e.y, pad, 1, 0xffff00);
+        posicionarCameraInicialNoJogador(scene, player2);
+        return true;
+    }
+    return false;
+}
+
+function posicionarCameraInicialNoJogador(scene, jogador) {
+    if (!scene || !jogador?.body) return;
+    const alvoX = jogador.body.position.x - SCREEN_WIDTH / 2;
+    const alvoY = jogador.body.position.y - SCREEN_HEIGHT / 2;
+    scene.cameras.main.scrollX = Phaser.Math.Clamp(alvoX, 0, Math.max(0, WORLD_WIDTH - SCREEN_WIDTH));
+    scene.cameras.main.scrollY = Phaser.Math.Clamp(alvoY, 0, Math.max(0, WORLD_HEIGHT - SCREEN_HEIGHT));
+}
+
+function limparJogadoresDaCena(scene) {
+    [player1, player2].forEach(p => {
+        if (!p) return;
+        if (p.leftJoint) scene.matter.world.remove(p.leftJoint);
+        if (p.rightJoint) scene.matter.world.remove(p.rightJoint);
+        if (p.juntasEstruturaisDosBramos) p.juntasEstruturaisDosBramos.forEach(j => scene.matter.world.remove(j));
+        if (p.leftElos) p.leftElos.forEach(e => scene.matter.world.remove(e));
+        if (p.rightElos) p.rightElos.forEach(e => scene.matter.world.remove(e));
+        if (p.body) scene.matter.world.remove(p.body);
+        if (p.leftHand) scene.matter.world.remove(p.leftHand);
+        if (p.rightHand) scene.matter.world.remove(p.rightHand);
+        if (p.gfx) p.gfx.destroy();
+    });
+    player1 = null;
+    player2 = null;
+}
+
+let estadoPressaoGamepads = {};
+
+function verificarInicioPorGamepad(scene) {
+    if (modoEditorAtivo || !navigator.getGamepads) return;
+    const pads = navigator.getGamepads();
+    for (let i = 0; i < pads.length; i++) {
+        const padBruto = pads[i];
+        if (!padBruto) continue;
+        let pressionado = false;
+        for (let b = 0; b < Math.min(padBruto.buttons.length, 16); b++) {
+            if (padBruto.buttons[b]?.pressed || Number(padBruto.buttons[b]?.value || 0) > 0.5) {
+                pressionado = true;
+                break;
+            }
+        }
+        const estavaPressionado = !!estadoPressaoGamepads[padBruto.index];
+        if (pressionado && !estavaPressionado) {
+            // O jogo usa o objeto Gamepad do Phaser (leftStick/rightStick).
+            // O navigator.getGamepads() serve apenas como mecanismo de fallback
+            // para detectar o primeiro botão pressionado.
+            const padPhaser = scene.input.gamepad?.getPad ? scene.input.gamepad.getPad(padBruto.index) : null;
+            if (padPhaser) criarJogadorAPartirDoGamepad(scene, padPhaser);
+        }
+        estadoPressaoGamepads[padBruto.index] = pressionado;
+    }
+}
+
 function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     const grp = scene.matter.world.nextGroup(true), flt = { category: CAT_PLAYER, mask: CAT_AMBIENTE | CAT_PLAYER, group: grp };
     const b = scene.matter.add.circle(x, y, 22, { friction: 0.3, density: 0.05, label: `p${id}_body`, collisionFilter: flt });
@@ -1407,22 +1481,27 @@ function estabilizarBracosSemEntrada(scene, p, esquerdoAtivo, direitoAtivo) {
 }
 
 function handlePlayerInput(s, p) {
-    const pad = p.pad; if (!pad) return; 
+    const pad = p.pad; if (!pad) return;
     const lL = isButtonPressed(pad, 6) || isButtonPressed(pad, 4); const rR = isButtonPressed(pad, 7) || isButtonPressed(pad, 5);
     if (isButtonPressed(pad, 8)) { executarRespawnIndividual(s, p.id); return; }
+
+    // Os analógicos precisam ser lidos antes de qualquer cálculo que os utilize.
+    // A versão anterior acessava estas variáveis antes da declaração (const),
+    // causando um ReferenceError assim que o jogador era criado pelo gamepad.
+    const analogoEsquerdo = obterAnalogoComDeadzone(pad.leftStick, 0.10);
+    const analogoDireito = obterAnalogoComDeadzone(pad.rightStick, 0.10);
+    const movendoEsquerdo = analogoEsquerdo.ativo;
+    const movendoDireito = analogoDireito.ativo;
+
     let campoMod = document.getElementById('prop-fall-weight-mod'); let valorModificador = campoMod ? parseFloat(campoMod.value) : 10.0;
     let massaCalculadaCorpo = 6.8; let totalmenteLivreNoVazio = (!p.leftJoint && !p.rightJoint);
-    if (p.body.velocity.y > 0.5 && (analogoEsquerdo?.y < -0.15 || analogoDireito?.y < -0.15) && totalmenteLivreNoVazio) {
+    if (p.body.velocity.y > 0.5 && (analogoEsquerdo.y < -0.15 || analogoDireito.y < -0.15) && totalmenteLivreNoVazio) {
         let deltaYEsq = Math.max(0, p.body.position.y - p.leftHand.position.y); let deltaYDir = Math.max(0, p.body.position.y - p.rightHand.position.y);
         massaCalculadaCorpo += (deltaYEsq + deltaYDir) * valorModificador * 0.1;
     }
     if (p.body.mass !== massaCalculadaCorpo) s.matter.body.setMass(p.body, massaCalculadaCorpo);
 
     const FORCA_ESCALADA_CENARIO = 0.045, FORCA_MOVER_CAIXA = 0.025, RAIO_ORBITA_BRACO = 96;
-    const analogoEsquerdo = obterAnalogoComDeadzone(pad.leftStick, 0.10);
-    const analogoDireito = obterAnalogoComDeadzone(pad.rightStick, 0.10);
-    const movendoEsquerdo = analogoEsquerdo.ativo;
-    const movendoDireito = analogoDireito.ativo;
     
     // PONTO 2: TRANSMISSÃO DE FORÇA E EMBALO (IMPULSO PENDULAR AO USAR ANALÓGICOS)
     const aplicarImpulsoPendular = (pivoMao, analogico) => {
@@ -1519,6 +1598,7 @@ function executarRespawnIndividual(scene, pNum) {
 
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
+    verificarInicioPorGamepad(this);
     if (modoEditorAtivo && document.getElementById('prop-shape').value === 'polygon') {
         if (!previewGraphicsPoligono) {
             previewGraphicsPoligono = this.add.graphics().setDepth(9999);
@@ -1590,7 +1670,7 @@ function update() {
         let z = Math.min(SCREEN_WIDTH / (Math.abs(player1.body.position.x - player2.body.position.x) + 250), SCREEN_HEIGHT / (Math.abs(player1.body.position.y - player2.body.position.y) + 250));
         z = Phaser.Math.Clamp(z, 0.45, 1.0); this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (mX - SCREEN_WIDTH / 2), 0.08); this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (mY - SCREEN_HEIGHT / 2), 0.08); this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, z, 0.05));
     } else if (player1) {
-        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (player1.body.position.x - SCREEN_WIDTH / 2), 0.08); this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (player1.body.position.y - SCREEN_WIDTH / 2), 0.08);
+        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (player1.body.position.x - SCREEN_WIDTH / 2), 0.08); this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (player1.body.position.y - SCREEN_HEIGHT / 2), 0.08);
     } else if (player2) {
         this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (player2.body.position.x - SCREEN_WIDTH / 2), 0.08); this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (player2.body.position.y - SCREEN_HEIGHT / 2), 0.08);
     }
