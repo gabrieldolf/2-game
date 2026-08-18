@@ -119,13 +119,13 @@ function criarBraco(scene, tronco, mao, grupo, numElos, tamanhoElo) {
             collisionFilter: { category: CAT_JOGADOR, mask: CAT_CHAO | CAT_OBJETO | CAT_CORRENTE, group: grupo }
         });
         elos.push(elo);
-        const c = scene.matter.add.constraint(anterior, elo, GAP, 0.8, {
+        const c = scene.matter.add.constraint(anterior, elo, GAP, 0.88, {
             pointA: anterior === tronco ? { x: 0, y: 0 } : { x: 0, y: tamanhoElo / 2 },
             pointB: { x: 0, y: -tamanhoElo / 2 },
-            damping: 0.3
+            damping: 0.32
         });
         juntas.push(c);
-        if (i >= 2) juntas.push(scene.matter.add.constraint(elos[i - 2], elo, tamanhoElo * 2 + GAP, 0.15, { damping: 0.3 }));
+        if (i >= 2) juntas.push(scene.matter.add.constraint(elos[i - 2], elo, tamanhoElo * 2 + GAP, 0.2, { damping: 0.3 }));
         anterior = elo;
     }
     const cFinal = scene.matter.add.constraint(anterior, mao, GAP, 0.85, { pointA: { x: 0, y: tamanhoElo / 2 }, pointB: { x: 0, y: 0 }, damping: 0.3 });
@@ -140,7 +140,7 @@ function criarPersonagem(scene, x, y) {
     const grupo = scene.matter.world.nextGroup(true);
     const filtro = { category: CAT_JOGADOR, mask: CAT_CHAO | CAT_OBJETO | CAT_CORRENTE | CAT_JOGADOR, group: grupo };
 
-    const corpo = scene.matter.add.circle(x, y, 22, { density: 0.02, friction: 0.5, frictionAir: 0.02, label: 'personagem_corpo', collisionFilter: filtro });
+    const corpo = scene.matter.add.circle(x, y, 22, { density: 0.01, friction: 0.5, frictionAir: 0.02, label: 'personagem_corpo', collisionFilter: filtro });
     const maoEsq = scene.matter.add.circle(x - 60, y, 12, { density: 0.0008, friction: 0.6, frictionAir: 0.015, label: 'personagem_mao', collisionFilter: filtro });
     const maoDir = scene.matter.add.circle(x + 60, y, 12, { density: 0.0008, friction: 0.6, frictionAir: 0.015, label: 'personagem_mao', collisionFilter: filtro });
 
@@ -215,7 +215,7 @@ function travarMaos(scene, p) {
 function aplicarForcaEscalada(scene, p, lado, dirX, dirY) {
     const chaveGarra = lado === 'esq' ? 'garraEsq' : 'garraDir';
     if (!p[chaveGarra]) return;
-    const F = 0.05;
+    const F = 0.4;
     scene.matter.body.applyForce(p.corpo, p.corpo.position, { x: dirX * F, y: dirY * F });
 }
 
