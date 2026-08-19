@@ -502,23 +502,33 @@ function entrarNaSalaDuranteJogo(id, portalEntradaId) {
 
         const portal = encontrarPortalPorIdentificador(dados, portalEntradaId);
         const entradas = dados.pontosDeEntrada || {};
-        // O portal possui um ponto de entrada explícito. Para salas antigas,
-        // sem esse campo, mantemos compatibilidade usando a posição do portal.
+
+        // O ponto de entrada é uma coordenada absoluta dentro da sala.
+        // O jogador 1 é colocado exatamente nessa coordenada, sem o antigo
+        // deslocamento lateral que fazia a chegada parecer incorreta.
         const entradaBase = portal
             ? {
-                x: Number(portal.portalEntradaX ?? portal.x) || 0,
-                y: Number(portal.portalEntradaY ?? portal.y) || 0
+                x: Number.isFinite(Number(portal.portalEntradaX))
+                    ? Number(portal.portalEntradaX)
+                    : Number(portal.visualX ?? portal.posicaoTravadaX ?? 0),
+                y: Number.isFinite(Number(portal.portalEntradaY))
+                    ? Number(portal.portalEntradaY)
+                    : Number(portal.visualY ?? portal.posicaoTravadaY ?? 0)
               }
-            : (entradas.jogador1 || { x: 300, y: Math.max(100, (dados.dimensoes?.altura || WORLD_HEIGHT) - 150) });
+            : (entradas.jogador1 || {
+                x: 300,
+                y: Math.max(100, (dados.dimensoes?.altura || WORLD_HEIGHT) - 150)
+              });
 
-        // Se os dois jogadores estiverem na partida, eles entram próximos do
-        // portal, sem ficarem exatamente sobre o gatilho e sem se sobrepor.
-        const p1Pos = limitarPosicaoDeEntrada(dados, { x: entradaBase.x - 38, y: entradaBase.y });
-        const p2Pos = limitarPosicaoDeEntrada(dados, { x: entradaBase.x + 38, y: entradaBase.y });
-        const e2 = entradas.jogador2;
+        const p1Pos = limitarPosicaoDeEntrada(dados, entradaBase);
+        // Se a transição veio de um portal, os dois jogadores chegam no ponto
+        // de entrada do portal. Caso contrário, cada jogador usa seu respawn.
+        const p2Pos = portal
+            ? { x: p1Pos.x, y: p1Pos.y }
+            : limitarPosicaoDeEntrada(dados, entradas.jogador2 || p1Pos);
 
         if (player1) reposicionarJogadorCompleto(scene, player1, p1Pos);
-        if (player2) reposicionarJogadorCompleto(scene, player2, portal ? p2Pos : (e2 || p2Pos));
+        if (player2) reposicionarJogadorCompleto(scene, player2, p2Pos);
 
         portalCooldownAte = performance.now() + TEMPO_COOLDOWN_PORTAL_MS;
         return true;
