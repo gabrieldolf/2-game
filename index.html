@@ -594,20 +594,40 @@ function aplicarEstadoFisicoJogador(scene, p, posDestino, estado) {
     if (p.apoiosEsquerdo) p.apoiosEsquerdo.clear();
     if (p.apoiosDireito) p.apoiosDireito.clear();
 
-    const aplicar = (body, e) => {
+    // O portal preserva a POSE dos braços/mãos, mas não injeta velocidade
+    // neles. Isso evita que as mãos recebam um "chute" artificial na chegada.
+    // Somente o corpo principal recupera o movimento salvo no portal de origem.
+    const aplicarParteSemImpulso = (body, e) => {
         if (!body || !e) return;
         const x = posDestino.x + e.dx, y = posDestino.y + e.dy;
         scene.matter.body.setPosition(body, { x, y });
-        scene.matter.body.setVelocity(body, { x: e.vx, y: e.vy });
-        scene.matter.body.setAngularVelocity(body, e.av || 0);
+        scene.matter.body.setVelocity(body, { x: 0, y: 0 });
+        scene.matter.body.setAngularVelocity(body, 0);
         scene.matter.body.setAngle(body, e.angle || 0);
         body.ultimaPos = { x, y };
     };
-    aplicar(p.body, estado.body);
-    (p.leftElos || []).forEach((b, i) => aplicar(b, estado.leftElos?.[i]));
-    (p.rightElos || []).forEach((b, i) => aplicar(b, estado.rightElos?.[i]));
-    aplicar(p.leftHand, estado.leftHand);
-    aplicar(p.rightHand, estado.rightHand);
+
+    const aplicarCorpoComImpulsoSalvo = (body, e) => {
+        if (!body || !e) return;
+        const x = posDestino.x + e.dx, y = posDestino.y + e.dy;
+        scene.matter.body.setPosition(body, { x, y });
+        scene.matter.body.setAngularVelocity(body, e.av || 0);
+        scene.matter.body.setAngle(body, e.angle || 0);
+
+        // Este é o único movimento reaplicado pela transição do portal:
+        // mesma direção e mesma velocidade linear registradas na saída.
+        scene.matter.body.setVelocity(body, {
+            x: Number(e.vx) || 0,
+            y: Number(e.vy) || 0
+        });
+        body.ultimaPos = { x, y };
+    };
+
+    aplicarCorpoComImpulsoSalvo(p.body, estado.body);
+    (p.leftElos || []).forEach((b, i) => aplicarParteSemImpulso(b, estado.leftElos?.[i]));
+    (p.rightElos || []).forEach((b, i) => aplicarParteSemImpulso(b, estado.rightElos?.[i]));
+    aplicarParteSemImpulso(p.leftHand, estado.leftHand);
+    aplicarParteSemImpulso(p.rightHand, estado.rightHand);
     p.aguardandoPortal = false;
 }
 
