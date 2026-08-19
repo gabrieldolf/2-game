@@ -143,6 +143,11 @@ const CHAVE_ARMAZENAMENTO_SESSAO = 'metroidvania_ho_sessao_jogo_v1';
 let estadoSessaoJogo = null;
 let salaEmJogoAtual = null;
 let modoDebugAtivo = false;
+let transicaoPortalEmAndamento = false;
+let portalCooldownAte = 0;
+let ultimoPortalSemDestinoAvisado = '';
+const RAIO_ATIVACAO_PORTAL = 46;
+const TEMPO_COOLDOWN_PORTAL_MS = 900;
 
 // Sistema de salas: os dados são separados da física em execução.
 // O navegador mantém as salas no localStorage e também permitimos exportar/importar JSON.
@@ -454,23 +459,115 @@ function aplicarEstadoSessaoNaSalaAtual() {
     });
 }
 
+function encontrarPortalPorIdentificador(dados, identificador) {
+    if (!dados || !Array.isArray(dados.objetos)) return null;
+    const alvo = String(identificador || '').trim();
+    if (!alvo) return null;
+    return dados.objetos.find(o => o && o.shape === 'portal' && (String(o.nomePonto || '') === alvo || String(o.idPersistente || '') === alvo)) || null;
+}
+
+function limitarPosicaoDeEntrada(dados, pos) {
+    const largura = Number(dados?.dimensoes?.largura) || WORLD_WIDTH;
+    const altura = Number(dados?.dimensoes?.altura) || WORLD_HEIGHT;
+    return {
+        x: Phaser.Math.Clamp(Number(pos?.x) || largura / 2, 30, Math.max(30, largura - 30)),
+        y: Phaser.Math.Clamp(Number(pos?.y) || altura / 2, 30, Math.max(30, altura - 30))
+    };
+}
+
 function entrarNaSalaDuranteJogo(id, portalEntradaId) {
     garantirSessaoDeJogo();
-    if (salaEmJogoAtual) capturarEstadoSessaoDaSalaAtual();
+    if (transicaoPortalEmAndamento) return false;
     const dados = bancoDeSalas[id];
     if (!dados) return false;
     const scene = game.scene.getScene('default');
     if (!scene) return false;
-    carregarSalaFisicamente(scene, dados);
-    salaAtual = { id: dados.id, nome: dados.nome || dados.id };
-    salaEmJogoAtual = dados.id;
-    aplicarEstadoSessaoNaSalaAtual();
-    const portal = (dados.objetos || []).find(o => o.shape === 'portal' && o.nomePonto === portalEntradaId);
-    const entradas = dados.pontosDeEntrada || {};
-    const posicaoEntrada = portal ? { x: portal.x, y: portal.y } : (entradas.jogador1 || { x: 300, y: Math.max(100, dados.dimensoes.altura - 150) });
-    if (player1) reposicionarJogadorCompleto(scene, player1, posicaoEntrada);
-    if (player2) reposicionarJogadorCompleto(scene, player2, entradas.jogador2 || posicaoEntrada);
-    return true;
+
+    transicaoPortalEmAndamento = true;
+    try {
+        if (salaEmJogoAtual) capturarEstadoSessaoDaSalaAtual();
+
+        carregarSalaFisicamente(scene, dados);
+        salaAtual = { id: dados.id, nome: dados.nome || dados.id };
+        salaEmJogoAtual = dados.id;
+        aplicarEstadoSessaoNaSalaAtual();
+
+        const portal = encontrarPortalPorIdentificador(dados, portalEntradaId);
+        const entradas = dados.pontosDeEntrada || {};
+        const entradaBase = portal
+            ? { x: Number(portal.x) || 0, y: Number(portal.y) || 0 }
+            : (entradas.jogador1 || { x: 300, y: Math.max(100, (dados.dimensoes?.altura || WORLD_HEIGHT) - 150) });
+
+        // Se os dois jogadores estiverem na partida, eles entram próximos do
+        // portal, sem ficarem exatamente sobre o gatilho e sem se sobrepor.
+        const p1Pos = limitarPosicaoDeEntrada(dados, { x: entradaBase.x - 38, y: entradaBase.y });
+        const p2Pos = limitarPosicaoDeEntrada(dados, { x: entradaBase.x + 38, y: entradaBase.y });
+        const e2 = entradas.jogador2;
+
+        if (player1) reposicionarJogadorCompleto(scene, player1, p1Pos);
+        if (player2) reposicionarJogadorCompleto(scene, player2, portal ? p2Pos : (e2 || p2Pos));
+
+        portalCooldownAte = performance.now() + TEMPO_COOLDOWN_PORTAL_MS;
+        return true;
+    } finally {
+        // O cooldown impede que os jogadores ativem imediatamente o portal
+        // recém-carregado. A flag é liberada no fim da troca física.
+        transicaoPortalEmAndamento = false;
+    }
+}
+
+function ativarPortalDaGameplay(scene, portal, jogador) {
+    if (!portal || !jogador || transicaoPortalEmAndamento) return false;
+    if (performance.now() < portalCooldownAte) return false;
+
+    const destinoSala = normalizarIdSala(portal.portalDestinoSala || '');
+    const destinoPonto = String(portal.portalDestinoPonto || '').trim();
+    if (!destinoSala) return false;
+
+    const dadosDestino = bancoDeSalas[destinoSala];
+    if (!dadosDestino) {
+        const chaveAviso = salaAtual.id + '>' + destinoSala;
+        if (ultimoPortalSemDestinoAvisado !== chaveAviso) {
+            console.warn('Portal sem sala destino válida:', portal);
+            ultimoPortalSemDestinoAvisado = chaveAviso;
+        }
+        return false;
+    }
+
+    if (destinoPonto && !encontrarPortalPorIdentificador(dadosDestino, destinoPonto)) {
+        const chaveAviso = destinoSala + '>' + destinoPonto;
+        if (ultimoPortalSemDestinoAvisado !== chaveAviso) {
+            console.warn('Portal destino não encontrado:', destinoPonto, 'na sala', destinoSala);
+            ultimoPortalSemDestinoAvisado = chaveAviso;
+        }
+        // Se o destino foi especificado, não teleportamos para um ponto
+        // arbitrário. Isso evita entradas acidentais em salas mal configuradas.
+        return false;
+    }
+
+    return entrarNaSalaDuranteJogo(destinoSala, destinoPonto || null);
+}
+
+function verificarPortaisDaSala(scene) {
+    if (modoEditorAtivo || transicaoPortalEmAndamento || !salaEmJogoAtual) return;
+    if (performance.now() < portalCooldownAte) return;
+
+    const portais = listaObjetosEditaveis.filter(o => o && o.shape === 'portal');
+    if (portais.length === 0) return;
+
+    for (const portal of portais) {
+        const px = Number(portal.visualX) || 0;
+        const py = Number(portal.visualY) || 0;
+        const raio2 = RAIO_ATIVACAO_PORTAL * RAIO_ATIVACAO_PORTAL;
+        for (const jogador of [player1, player2]) {
+            if (!jogador?.body) continue;
+            const dx = jogador.body.position.x - px;
+            const dy = jogador.body.position.y - py;
+            if (dx * dx + dy * dy <= raio2) {
+                if (ativarPortalDaGameplay(scene, portal, jogador)) return;
+            }
+        }
+    }
 }
 
 function reposicionarJogadorCompleto(scene, p, pos) {
@@ -479,6 +576,11 @@ function reposicionarJogadorCompleto(scene, p, pos) {
     if (p.rightJoint) { scene.matter.world.remove(p.rightJoint); p.rightJoint = null; }
     p.leftJointTarget = p.rightJointTarget = null;
     p.leftJointPontoPivorMundo = p.rightJointPontoPivorMundo = null;
+    p.leftHand.corpoTocadoAgora = null; p.rightHand.corpoTocadoAgora = null;
+    p.leftHand.pontoDeContatoGlobal = null; p.rightHand.pontoDeContatoGlobal = null;
+    if (p.apoiosCorpo) p.apoiosCorpo.clear();
+    if (p.apoiosEsquerdo) p.apoiosEsquerdo.clear();
+    if (p.apoiosDireito) p.apoiosDireito.clear();
     scene.matter.body.setPosition(p.body, { x: Number(pos.x) || 0, y: Number(pos.y) || 0 });
     scene.matter.body.setVelocity(p.body, { x: 0, y: 0 });
     scene.matter.body.setAngularVelocity(p.body, 0);
@@ -573,6 +675,32 @@ function removerCorposDaSalaAtual(scene) {
 
 function adicionarObjetoSerializado(scene, dados) {
     if (!dados || !dados.shape) return;
+
+    // Portais e pontos de respawn são marcadores lógicos/editoriais.
+    // Eles NÃO criam corpos Matter, portanto nunca podem bloquear, empurrar
+    // ou colidir com os jogadores durante a gameplay.
+    if (['portal', 'respawn1', 'respawn2'].includes(dados.shape)) {
+        const x = Number(dados.x) || 0;
+        const y = Number(dados.y) || 0;
+        listaObjetosEditaveis.push({
+            body: null,
+            gfx: scene.add.graphics().setDepth(6),
+            shape: dados.shape,
+            w: 50, h: 50,
+            gravity: false, lockPos: true, lockRot: true, mass: 1, air: 0, bounce: 0,
+            maxVel: 0, maxRot: 0,
+            posicaoTravadaX: x, posicaoTravadaY: y,
+            visualX: x, visualY: y,
+            manuseavel: false, naoAgarravel: true, isStatic: true,
+            idPersistente: dados.idPersistente || gerarIdObjetoPersistente(),
+            persistirSessao: false,
+            portalDestinoSala: dados.portalDestinoSala || '',
+            portalDestinoPonto: dados.portalDestinoPonto || '',
+            nomePonto: dados.nomePonto || dados.idPersistente || gerarIdObjetoPersistente()
+        });
+        return;
+    }
+
     if (dados.shape === 'rope') {
         criarCordaAPartirDeDados(scene, dados);
         return;
@@ -739,7 +867,11 @@ function alternarModoEditor(scene) {
         const btnGrid = document.getElementById('btn-grid-build');
         if (btnGrid) { btnGrid.className = ''; btnGrid.innerText = 'Construir Sala por Grade (50 px)'; }
         desmarcarObjetoDoEditor(); scene.cameras.main.scrollX = cameraSalvaX; scene.cameras.main.scrollY = cameraSalvaY; scene.cameras.main.setZoom(cameraSalvaZoom);
-        scene.matter.world.resume(); panel.style.display = 'none'; aviso.innerText = "Aperte [E] para abrir o Editor"; aviso.style.color = "#fff";
+        scene.matter.world.resume();
+        garantirSessaoDeJogo();
+        salaEmJogoAtual = salaAtual.id;
+        portalCooldownAte = performance.now() + TEMPO_COOLDOWN_PORTAL_MS;
+        panel.style.display = 'none'; aviso.innerText = "Aperte [E] para abrir o Editor"; aviso.style.color = "#fff";
     }
     alternarVisibilidadeGrade();
     desenharGradeConstrucao();
@@ -1783,7 +1915,8 @@ function update() {
             if (obj) desenharObjetoEditor(obj);
         }); return;
     }
-    if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2); 
+    if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2);
+    verificarPortaisDaSala(this);
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10); });
     
     [player1, player2].forEach(p => {
