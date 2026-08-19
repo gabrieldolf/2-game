@@ -100,10 +100,14 @@
             <div class="prop-row" id="row-portal-destino"><label>Sala destino:</label><input type="text" id="prop-portal-destino-sala" value="" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" id="row-portal-ponto"><label>Portal destino:</label><input type="text" id="prop-portal-destino-ponto" value="" onchange="atualizarObjetoExistente()"></div>
             <div id="painel-ponto-entrada-portal" style="display:none; background:#0b7285; padding:6px; border-radius:4px; margin-top:2px;">
-                <div style="color:#fff; font-weight:bold; margin-bottom:4px;">Ponto de Entrada do Portal</div>
-                <div class="prop-row"><label>X:</label><input type="number" id="prop-portal-entrada-x" step="1" onchange="atualizarObjetoExistente()"></div>
-                <div class="prop-row"><label>Y:</label><input type="number" id="prop-portal-entrada-y" step="1" onchange="atualizarObjetoExistente()"></div>
-                <div style="font-size:10px;color:#d8f3f8;margin-top:4px;">O jogador será colocado aqui ao chegar por este portal. As coordenadas são da sala destino.</div>
+                <div style="color:#fff; font-weight:bold; margin-bottom:6px;">Pontos de Entrada do Portal</div>
+                <div style="color:#7dff9b; font-weight:bold; font-size:11px; margin-bottom:3px;">Jogador 1</div>
+                <div class="prop-row"><label>X:</label><input type="number" id="prop-portal-entrada-p1-x" step="1" onchange="atualizarObjetoExistente()"></div>
+                <div class="prop-row"><label>Y:</label><input type="number" id="prop-portal-entrada-p1-y" step="1" onchange="atualizarObjetoExistente()"></div>
+                <div style="color:#fff176; font-weight:bold; font-size:11px; margin:6px 0 3px;">Jogador 2</div>
+                <div class="prop-row"><label>X:</label><input type="number" id="prop-portal-entrada-p2-x" step="1" onchange="atualizarObjetoExistente()"></div>
+                <div class="prop-row"><label>Y:</label><input type="number" id="prop-portal-entrada-p2-y" step="1" onchange="atualizarObjetoExistente()"></div>
+                <div style="font-size:10px;color:#d8f3f8;margin-top:5px;">Cada jogador será colocado em seu próprio ponto ao chegar por este portal.</div>
             </div>
             <div class="prop-row"><label>ID / Nome do ponto:</label><input type="text" id="prop-nome-ponto" value="" onchange="atualizarObjetoExistente()"></div>
         </div>
@@ -355,8 +359,15 @@ function serializarObjetoDaSala(obj) {
         base.angle = Number(obj.angle) || 0;
         base.portalDestinoSala = obj.portalDestinoSala || '';
         base.portalDestinoPonto = obj.portalDestinoPonto || '';
-        base.portalEntradaX = Number.isFinite(Number(obj.portalEntradaX ?? obj.visualX)) ? Number(obj.portalEntradaX ?? obj.visualX) : 0;
-        base.portalEntradaY = Number.isFinite(Number(obj.portalEntradaY ?? obj.visualY)) ? Number(obj.portalEntradaY ?? obj.visualY) : 0;
+        const legadoEntradaX = Number.isFinite(Number(obj.portalEntradaX ?? obj.visualX)) ? Number(obj.portalEntradaX ?? obj.visualX) : 0;
+        const legadoEntradaY = Number.isFinite(Number(obj.portalEntradaY ?? obj.visualY)) ? Number(obj.portalEntradaY ?? obj.visualY) : 0;
+        base.portalEntradaP1X = Number.isFinite(Number(obj.portalEntradaP1X)) ? Number(obj.portalEntradaP1X) : legadoEntradaX;
+        base.portalEntradaP1Y = Number.isFinite(Number(obj.portalEntradaP1Y)) ? Number(obj.portalEntradaP1Y) : legadoEntradaY;
+        base.portalEntradaP2X = Number.isFinite(Number(obj.portalEntradaP2X)) ? Number(obj.portalEntradaP2X) : legadoEntradaX;
+        base.portalEntradaP2Y = Number.isFinite(Number(obj.portalEntradaP2Y)) ? Number(obj.portalEntradaP2Y) : legadoEntradaY;
+        // Mantidos para compatibilidade com salas antigas/exportações anteriores.
+        base.portalEntradaX = base.portalEntradaP1X;
+        base.portalEntradaY = base.portalEntradaP1Y;
         base.nomePonto = obj.nomePonto || '';
         return base;
     }
@@ -523,15 +534,21 @@ function resolverPortalDeEntradaRuntime(destinoPonto, contextoOrigem = null) {
     return null;
 }
 
-function obterPontoEntradaDoPortal(portal) {
+function obterPontoEntradaDoPortal(portal, jogadorNumero = 1) {
     if (!portal) return null;
-    const px = Number(portal.portalEntradaX);
-    const py = Number(portal.portalEntradaY);
+    const legadoX = Number(portal.portalEntradaX);
+    const legadoY = Number(portal.portalEntradaY);
     const fallbackX = Number(portal.visualX ?? portal.posicaoTravadaX);
     const fallbackY = Number(portal.visualY ?? portal.posicaoTravadaY);
+
+    const campoX = jogadorNumero === 2 ? portal.portalEntradaP2X : portal.portalEntradaP1X;
+    const campoY = jogadorNumero === 2 ? portal.portalEntradaP2Y : portal.portalEntradaP1Y;
+    const px = Number(campoX);
+    const py = Number(campoY);
+
     return {
-        x: Number.isFinite(px) ? px : (Number.isFinite(fallbackX) ? fallbackX : WORLD_WIDTH / 2),
-        y: Number.isFinite(py) ? py : (Number.isFinite(fallbackY) ? fallbackY : WORLD_HEIGHT / 2)
+        x: Number.isFinite(px) ? px : (Number.isFinite(legadoX) ? legadoX : (Number.isFinite(fallbackX) ? fallbackX : WORLD_WIDTH / 2)),
+        y: Number.isFinite(py) ? py : (Number.isFinite(legadoY) ? legadoY : (Number.isFinite(fallbackY) ? fallbackY : WORLD_HEIGHT / 2))
     };
 }
 
@@ -587,23 +604,24 @@ function entrarNaSalaDuranteJogo(id, portalEntradaId, contextoOrigem = null) {
         }
 
         const entradas = dados.pontosDeEntrada || {};
-        const entradaBase = portal
-            ? obterPontoEntradaDoPortal(portal)
+        const entradaP1 = portal
+            ? obterPontoEntradaDoPortal(portal, 1)
             : (entradas.jogador1 || {
                 x: 300,
                 y: Math.max(100, (dados.dimensoes?.altura || WORLD_HEIGHT) - 150)
               });
+        const entradaP2 = portal
+            ? obterPontoEntradaDoPortal(portal, 2)
+            : (entradas.jogador2 || entradaP1);
 
-        const p1Pos = limitarPosicaoDeEntrada(dados, entradaBase);
-        const p2Pos = portal
-            ? { x: p1Pos.x, y: p1Pos.y }
-            : limitarPosicaoDeEntrada(dados, entradas.jogador2 || p1Pos);
+        const p1Pos = limitarPosicaoDeEntrada(dados, entradaP1);
+        const p2Pos = limitarPosicaoDeEntrada(dados, entradaP2);
 
         console.info(
             '[PORTAL] chegada na sala', dados.id,
             portal ? ('pelo portal ' + (portal.nomePonto || portal.idPersistente || '(sem id)')) : '(sem portal)',
-            'ponto configurado=', entradaBase,
-            'ponto aplicado=', p1Pos
+            'entrada P1=', entradaP1, 'aplicada P1=', p1Pos,
+            'entrada P2=', entradaP2, 'aplicada P2=', p2Pos
         );
 
         if (player1) reposicionarJogadorCompleto(scene, player1, p1Pos);
@@ -661,17 +679,25 @@ function verificarPortaisDaSala(scene) {
     const portais = listaObjetosEditaveis.filter(o => o && o.shape === 'portal');
     if (portais.length === 0) return;
 
+    const jogadoresAtivos = [player1, player2].filter(j => j?.body);
+    if (jogadoresAtivos.length === 0) return;
+    const raio2 = RAIO_ATIVACAO_PORTAL * RAIO_ATIVACAO_PORTAL;
+
     for (const portal of portais) {
         const px = Number(portal.visualX) || 0;
         const py = Number(portal.visualY) || 0;
-        const raio2 = RAIO_ATIVACAO_PORTAL * RAIO_ATIVACAO_PORTAL;
-        for (const jogador of [player1, player2]) {
-            if (!jogador?.body) continue;
+
+        // Em cooperação, todos os jogadores que realmente estão participando
+        // da partida precisam estar simultaneamente dentro deste MESMO portal.
+        // Com somente um jogador conectado, o comportamento continua imediato.
+        const todosDentro = jogadoresAtivos.every(jogador => {
             const dx = jogador.body.position.x - px;
             const dy = jogador.body.position.y - py;
-            if (dx * dx + dy * dy <= raio2) {
-                if (ativarPortalDaGameplay(scene, portal, jogador)) return;
-            }
+            return dx * dx + dy * dy <= raio2;
+        });
+
+        if (todosDentro) {
+            if (ativarPortalDaGameplay(scene, portal, jogadoresAtivos[0])) return;
         }
     }
 }
@@ -848,8 +874,12 @@ function adicionarObjetoSerializado(scene, dados) {
             persistirSessao: false,
             portalDestinoSala: dados.portalDestinoSala || '',
             portalDestinoPonto: dados.portalDestinoPonto || '',
-            portalEntradaX: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaX ?? dados.x)) ? Number(dados.portalEntradaX ?? dados.x) : 0) : null,
-            portalEntradaY: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaY ?? dados.y)) ? Number(dados.portalEntradaY ?? dados.y) : 0) : null,
+            portalEntradaP1X: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaP1X ?? dados.portalEntradaX ?? dados.x)) ? Number(dados.portalEntradaP1X ?? dados.portalEntradaX ?? dados.x) : 0) : null,
+            portalEntradaP1Y: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaP1Y ?? dados.portalEntradaY ?? dados.y)) ? Number(dados.portalEntradaP1Y ?? dados.portalEntradaY ?? dados.y) : 0) : null,
+            portalEntradaP2X: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaP2X ?? dados.portalEntradaX ?? dados.x)) ? Number(dados.portalEntradaP2X ?? dados.portalEntradaX ?? dados.x) : 0) : null,
+            portalEntradaP2Y: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaP2Y ?? dados.portalEntradaY ?? dados.y)) ? Number(dados.portalEntradaP2Y ?? dados.portalEntradaY ?? dados.y) : 0) : null,
+            portalEntradaX: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaP1X ?? dados.portalEntradaX ?? dados.x)) ? Number(dados.portalEntradaP1X ?? dados.portalEntradaX ?? dados.x) : 0) : null,
+            portalEntradaY: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaP1Y ?? dados.portalEntradaY ?? dados.y)) ? Number(dados.portalEntradaP1Y ?? dados.portalEntradaY ?? dados.y) : 0) : null,
             nomePonto: dados.nomePonto || dados.idPersistente || gerarIdObjetoPersistente()
         });
         return;
@@ -1335,8 +1365,10 @@ function extrairCamposPainel() {
         maxRot: parseFloat(document.getElementById('prop-max-rot').value) || 0,
         portalDestinoSala: document.getElementById('prop-portal-destino-sala').value.trim(),
         portalDestinoPonto: document.getElementById('prop-portal-destino-ponto').value.trim(),
-        portalEntradaX: parseFloat(document.getElementById('prop-portal-entrada-x').value),
-        portalEntradaY: parseFloat(document.getElementById('prop-portal-entrada-y').value),
+        portalEntradaP1X: parseFloat(document.getElementById('prop-portal-entrada-p1-x').value),
+        portalEntradaP1Y: parseFloat(document.getElementById('prop-portal-entrada-p1-y').value),
+        portalEntradaP2X: parseFloat(document.getElementById('prop-portal-entrada-p2-x').value),
+        portalEntradaP2Y: parseFloat(document.getElementById('prop-portal-entrada-p2-y').value),
         nomePonto: document.getElementById('prop-nome-ponto').value.trim()
     };
 }
@@ -1352,6 +1384,10 @@ function executarCriacaoObjeto(scene, x, y) {
             manuseavel: false, naoAgarravel: true, isStatic: true,
             idPersistente, persistirSessao: false,
             portalDestinoSala: c.portalDestinoSala, portalDestinoPonto: c.portalDestinoPonto,
+            portalEntradaP1X: c.shape === 'portal' ? ax : null,
+            portalEntradaP1Y: c.shape === 'portal' ? ay : null,
+            portalEntradaP2X: c.shape === 'portal' ? ax : null,
+            portalEntradaP2Y: c.shape === 'portal' ? ay : null,
             portalEntradaX: c.shape === 'portal' ? ax : null,
             portalEntradaY: c.shape === 'portal' ? ay : null,
             nomePonto: c.nomePonto || idPersistente
@@ -1445,8 +1481,12 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('prop-id-persistente').value = obj.idPersistente || '';
     document.getElementById('prop-portal-destino-sala').value = obj.portalDestinoSala || '';
     document.getElementById('prop-portal-destino-ponto').value = obj.portalDestinoPonto || '';
-    document.getElementById('prop-portal-entrada-x').value = Number(obj.portalEntradaX ?? obj.visualX ?? 0);
-    document.getElementById('prop-portal-entrada-y').value = Number(obj.portalEntradaY ?? obj.visualY ?? 0);
+    const entradaLegadoX = Number(obj.portalEntradaX ?? obj.visualX ?? 0);
+    const entradaLegadoY = Number(obj.portalEntradaY ?? obj.visualY ?? 0);
+    document.getElementById('prop-portal-entrada-p1-x').value = Number(obj.portalEntradaP1X ?? entradaLegadoX);
+    document.getElementById('prop-portal-entrada-p1-y').value = Number(obj.portalEntradaP1Y ?? entradaLegadoY);
+    document.getElementById('prop-portal-entrada-p2-x').value = Number(obj.portalEntradaP2X ?? entradaLegadoX);
+    document.getElementById('prop-portal-entrada-p2-y').value = Number(obj.portalEntradaP2Y ?? entradaLegadoY);
     document.getElementById('prop-nome-ponto').value = obj.nomePonto || '';
     if (obj.shape === 'rope') { document.getElementById('prop-rope-len').value = obj.ropeLen; document.getElementById('prop-rope-segments').value = obj.ropeSegments; document.getElementById('prop-rope-color').value = obj.ropeColor; }
     else if (['portal', 'respawn1', 'respawn2'].includes(obj.shape)) {
@@ -1483,8 +1523,14 @@ function atualizarObjetoExistente() {
         obj.portalDestinoSala = c.portalDestinoSala;
         obj.portalDestinoPonto = c.portalDestinoPonto;
         if (obj.shape === 'portal') {
-            obj.portalEntradaX = Number.isFinite(c.portalEntradaX) ? c.portalEntradaX : (Number(obj.portalEntradaX ?? obj.visualX) || 0);
-            obj.portalEntradaY = Number.isFinite(c.portalEntradaY) ? c.portalEntradaY : (Number(obj.portalEntradaY ?? obj.visualY) || 0);
+            const fallbackX = Number(obj.portalEntradaP1X ?? obj.portalEntradaX ?? obj.visualX) || 0;
+            const fallbackY = Number(obj.portalEntradaP1Y ?? obj.portalEntradaY ?? obj.visualY) || 0;
+            obj.portalEntradaP1X = Number.isFinite(c.portalEntradaP1X) ? c.portalEntradaP1X : fallbackX;
+            obj.portalEntradaP1Y = Number.isFinite(c.portalEntradaP1Y) ? c.portalEntradaP1Y : fallbackY;
+            obj.portalEntradaP2X = Number.isFinite(c.portalEntradaP2X) ? c.portalEntradaP2X : fallbackX;
+            obj.portalEntradaP2Y = Number.isFinite(c.portalEntradaP2Y) ? c.portalEntradaP2Y : fallbackY;
+            obj.portalEntradaX = obj.portalEntradaP1X;
+            obj.portalEntradaY = obj.portalEntradaP1Y;
         }
         obj.nomePonto = c.nomePonto || obj.idPersistente;
         marcarSalaComoAlterada();
@@ -1582,17 +1628,26 @@ function desenharObjetoEditor(obj) {
             g.lineBetween(posX + 10, posY, posX + 3, posY - 7);
             g.lineBetween(posX + 10, posY, posX + 3, posY + 7);
 
-            // Marcador do ponto de entrada explícito do portal.
-            const entradaX = Number(obj.portalEntradaX ?? posX) || 0;
-            const entradaY = Number(obj.portalEntradaY ?? posY) || 0;
-            g.lineStyle(3, 0x00e5ff, 1);
-            g.strokeCircle(entradaX, entradaY, 9);
-            g.lineBetween(entradaX - 13, entradaY, entradaX + 13, entradaY);
-            g.lineBetween(entradaX, entradaY - 13, entradaX, entradaY + 13);
-            if (Math.abs(entradaX - posX) > 2 || Math.abs(entradaY - posY) > 2) {
-                g.lineStyle(2, 0x00e5ff, 0.75);
-                g.lineBetween(posX, posY, entradaX, entradaY);
-            }
+            // Cada jogador possui seu próprio marcador de entrada.
+            const legadoX = Number(obj.portalEntradaX ?? posX) || 0;
+            const legadoY = Number(obj.portalEntradaY ?? posY) || 0;
+            const p1x = Number(obj.portalEntradaP1X ?? legadoX) || 0;
+            const p1y = Number(obj.portalEntradaP1Y ?? legadoY) || 0;
+            const p2x = Number(obj.portalEntradaP2X ?? legadoX) || 0;
+            const p2y = Number(obj.portalEntradaP2Y ?? legadoY) || 0;
+
+            const desenharEntrada = (x, y, cor, tamanho) => {
+                g.lineStyle(3, cor, 1);
+                g.strokeCircle(x, y, tamanho);
+                g.lineBetween(x - tamanho - 4, y, x + tamanho + 4, y);
+                g.lineBetween(x, y - tamanho - 4, x, y + tamanho + 4);
+                if (Math.abs(x - posX) > 2 || Math.abs(y - posY) > 2) {
+                    g.lineStyle(2, cor, 0.65);
+                    g.lineBetween(posX, posY, x, y);
+                }
+            };
+            desenharEntrada(p1x, p1y, 0x55ff77, 9);
+            desenharEntrada(p2x, p2y, 0xffea55, 7);
         } else {
             g.fillStyle(cor, 0.24);
             g.fillCircle(posX, posY, 22); g.strokeCircle(posX, posY, 22);
