@@ -21,6 +21,7 @@
         .sala-acoes button { font-size:11px; padding:7px 4px; }
         #status-sala { font-size:11px; color:#9bd4ff; line-height:1.35; word-break:break-word; }
         #input-importar-sala { display:none; }
+        #indicador-debug { position:absolute; top:10px; right:10px; background:rgba(255,0,0,0.78); color:#fff; padding:6px 10px; border-radius:4px; font:bold 12px Arial; z-index:20; pointer-events:none; display:none; }
     </style>
     <script src="phaser.min.js"></script>
 </head>
@@ -71,6 +72,8 @@
         <div class="prop-row"><label>Mostrar Grade:</label><input type="checkbox" id="prop-grid-active" onchange="alternarVisibilidadeGrade()"></div>
         <div class="prop-row"><label>Tamanho Grade:</label><input type="number" id="prop-grid-size" value="64" min="8" max="128" onchange="alternarVisibilidadeGrade()"></div>
         <div class="prop-row"><label style="color:#55ff55; font-weight:bold;">Alinhamento Ímã:</label><input type="checkbox" id="prop-snap-active" checked></div>
+        <div class="prop-row"><label style="color:#ff6b6b; font-weight:bold;">Modo Debug:</label><input type="checkbox" id="prop-debug-active" onchange="alternarModoDebug()"></div>
+        <p style="font-size:10px; color:#aaa; margin:0;">F3 também ativa/desativa o Debug.</p>
     </div>
     <div class="section">
         <h3 id="status-modo" style="color:#55ff55;">Criando novos objetos</h3>
@@ -109,6 +112,7 @@
 </div>
 <div id="canvas-container">
     <div id="aviso-modo">Aperte [E] para abrir o Editor</div>
+    <div id="indicador-debug">MODO DEBUG</div>
 </div>
 <script>
 const SCREEN_WIDTH = 1024, SCREEN_HEIGHT = 768;
@@ -138,6 +142,7 @@ const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
 const CHAVE_ARMAZENAMENTO_SESSAO = 'metroidvania_ho_sessao_jogo_v1';
 let estadoSessaoJogo = null;
 let salaEmJogoAtual = null;
+let modoDebugAtivo = false;
 
 // Sistema de salas: os dados são separados da física em execução.
 // O navegador mantém as salas no localStorage e também permitimos exportar/importar JSON.
@@ -146,6 +151,27 @@ const VERSAO_DADOS_SALA = 1;
 let bancoDeSalas = {};
 let salaAtual = { id: 'sala_inicial', nome: 'Sala Inicial' };
 let salaFoiAlterada = false;
+
+function aplicarModoDebug(scene) {
+    if (!scene || !scene.matter || !scene.matter.world) return;
+    const mundo = scene.matter.world;
+    const visivel = !!modoDebugAtivo;
+    if (mundo.debugGraphic) {
+        if (typeof mundo.debugGraphic.setVisible === 'function') mundo.debugGraphic.setVisible(visivel);
+        mundo.debugGraphic.visible = visivel;
+    }
+    if (typeof mundo.drawDebug !== 'undefined') mundo.drawDebug = visivel;
+    const indicador = document.getElementById('indicador-debug');
+    if (indicador) indicador.style.display = visivel ? 'block' : 'none';
+    const checkbox = document.getElementById('prop-debug-active');
+    if (checkbox) checkbox.checked = visivel;
+}
+
+function alternarModoDebug(valor) {
+    if (typeof valor === 'boolean') modoDebugAtivo = valor;
+    else modoDebugAtivo = !!document.getElementById('prop-debug-active')?.checked;
+    aplicarModoDebug(game.scene.getScene('default'));
+}
 
 function gerarIdSala(nome) {
     let base = String(nome || 'sala').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -775,7 +801,7 @@ function reconstruirBlocosGradeFisicos(scene) {
             friction: 0.8, restitution: 0.1,
             collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE }
         });
-        body.isGradeBlock = true; body.manuseavel = false; body.naoAgarravel = false;
+        body.isGradeBlock = true; body.manuseavel = true; body.naoAgarravel = false;
         blocosGradeFisicos.push(body);
         const gfx = scene.add.graphics().setDepth(2.5);
         gfx.fillStyle(0x2c3e50, 1); gfx.fillRect(celula.coluna * TAMANHO_BLOCO_GRADE, celula.linha * TAMANHO_BLOCO_GRADE, TAMANHO_BLOCO_GRADE, TAMANHO_BLOCO_GRADE);
@@ -875,6 +901,7 @@ function create() {
     inicializarSistemaDeSalas();
     reconstruirLimitesDaSala(this);
     carregarSalaPorId(salaAtual.id);
+    aplicarModoDebug(this);
     
     this.matter.world.on('afterupdate', () => {
         if (modoEditorAtivo) return;
@@ -977,6 +1004,7 @@ function create() {
     }, this);
 
     this.input.keyboard.on('keydown-E', () => { alternarModoEditor(this); });
+    this.input.keyboard.on('keydown-F3', () => { alternarModoDebug(!modoDebugAtivo); });
     this.input.keyboard.on('keydown-ENTER', () => { if (modoEditorAtivo && ferramentaAtual === 'create' && document.getElementById('prop-shape').value === 'polygon') finalizarCriacaoPoligono(this); });
     this.input.gamepad.on('down', (pad) => {
         criarJogadorAPartirDoGamepad(this, pad);
@@ -1208,15 +1236,57 @@ function calcularAlinhamentoPorProximidade(scene, x, y, w, h, shape, ignorarCorp
 }
 
 function desenharObjetoEditor(obj) {
-    if (!obj) return; let g = obj.gfx; g.clear();
+    if (!obj) return;
+    const g = obj.gfx;
+    g.clear();
+
     if (obj.shape === 'rope' && obj.ropeElos) {
-        let corPuraHex = parseInt(obj.ropeColor.replace('#', '0x')); g.lineStyle(obj === objetoSelecionado ? 6 : 4, obj === objetoSelecionado ? 0xffea00 : corPuraHex, 1.0);
+        const corPuraHex = parseInt(obj.ropeColor.replace('#', '0x'));
+        g.lineStyle(obj === objetoSelecionado ? 6 : 4, obj === objetoSelecionado ? 0xffea00 : corPuraHex, 1.0);
         g.beginPath(); g.moveTo(obj.posicaoTravadaX, obj.posicaoTravadaY); obj.ropeElos.forEach(elo => g.lineTo(elo.position.x, elo.position.y));
-        g.strokePath(); g.fillStyle(0x111111, 0.7); obj.ropeElos.forEach(elo => g.fillCircle(elo.position.x, elo.position.y, 4)); return;
+        g.strokePath(); g.fillStyle(0x111111, 0.7); obj.ropeElos.forEach(elo => g.fillCircle(elo.position.x, elo.position.y, 4));
+        return;
     }
-    let posX = obj.body ? obj.body.position.x : obj.visualX; let posY = obj.body ? obj.body.position.y : obj.visualY;
+
+    const posX = obj.body ? obj.body.position.x : obj.visualX;
+    const posY = obj.body ? obj.body.position.y : obj.visualY;
+
+    // Elementos especiais não são corpos físicos: desenhamos um ícone claro
+    // diretamente na posição do elemento para que o autor da sala saiba onde
+    // estão portais e pontos de respawn mesmo quando a sala está vazia.
+    if (['portal', 'respawn1', 'respawn2'].includes(obj.shape)) {
+        const selecionado = obj === objetoSelecionado;
+        g.x = 0; g.y = 0; g.rotation = 0;
+        const cor = obj.shape === 'portal' ? 0xff4fd8 : (obj.shape === 'respawn1' ? 0x55ff55 : 0xffff55);
+        const corBorda = selecionado ? 0xffffff : 0x111111;
+        g.lineStyle(selecionado ? 5 : 3, corBorda, 1);
+        if (obj.shape === 'portal') {
+            g.fillStyle(cor, 0.22);
+            g.beginPath();
+            g.moveTo(posX, posY - 24); g.lineTo(posX + 24, posY); g.lineTo(posX, posY + 24); g.lineTo(posX - 24, posY); g.closePath(); g.fillPath(); g.strokePath();
+            g.lineStyle(4, cor, 1);
+            g.lineBetween(posX - 10, posY, posX + 10, posY);
+            g.lineBetween(posX + 10, posY, posX + 3, posY - 7);
+            g.lineBetween(posX + 10, posY, posX + 3, posY + 7);
+        } else {
+            g.fillStyle(cor, 0.24);
+            g.fillCircle(posX, posY, 22); g.strokeCircle(posX, posY, 22);
+            g.lineStyle(5, cor, 1);
+            g.lineBetween(posX - 11, posY, posX + 11, posY);
+            g.lineBetween(posX, posY - 11, posX, posY + 11);
+            g.lineStyle(2, corBorda, 1);
+            if (obj.shape === 'respawn1') {
+                g.lineBetween(posX - 14, posY - 17, posX + 14, posY - 17);
+            } else {
+                g.strokeRect(posX - 14, posY - 19, 28, 8);
+            }
+        }
+        return;
+    }
+
     g.x = posX; g.y = posY; g.rotation = obj.body ? obj.body.angle : 0;
-    g.fillStyle(obj.manuseavel ? 0x8b5a2b : (obj === objetoSelecionado ? 0xffea00 : 0x2c3e50), 1.0); g.lineStyle(2, obj.naoAgarravel ? 0xff0000 : 0xffffff, 0.8);
+    g.fillStyle(obj.manuseavel ? 0x8b5a2b : (obj === objetoSelecionado ? 0xffea00 : 0x2c3e50), 1.0);
+    g.lineStyle(2, obj.naoAgarravel ? 0xff0000 : 0xffffff, 0.8);
     if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); }
     else if (obj.shape === 'polygon' && obj.dadosDesenhoVisual) {
@@ -1321,11 +1391,41 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     
     createArmSegment(scene, b, lH, 3, 32, id, grp, lL, juntasBraço);
     createArmSegment(scene, b, rH, 3, 32, id, grp, rL, juntasBraço);
+    lL.forEach(e => e.ladoBraco = 'esquerdo');
+    rL.forEach(e => e.ladoBraco = 'direito');
     
-    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, juntasEstruturaisDosBramos: juntasBraço, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null };
+    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, juntasEstruturaisDosBramos: juntasBraço, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null, apoiosCorpo: new Set(), apoiosEsquerdo: new Set(), apoiosDireito: new Set() };
+}
+
+function obterJogadorPorCorpo(corpo) {
+    if (!corpo || !corpo.label) return null;
+    if (corpo.label.startsWith('p0_')) return player1;
+    if (corpo.label.startsWith('p1_')) return player2;
+    return null;
+}
+
+function corpoEhApoioValido(body, outro) {
+    if (!body || !outro || !outro.label) return false;
+    if (outro.label === 'ambiente' || outro.label === 'corpo_elo') return true;
+    return false;
+}
+
+function registrarApoioJogador(body, outro, adicionar) {
+    const jogador = obterJogadorPorCorpo(body);
+    if (!jogador || !outro || !corpoEhApoioValido(body, outro)) return;
+    const label = body.label || '';
+    let conjunto = null;
+    if (label.endsWith('_body')) conjunto = jogador.apoiosCorpo;
+    else if (label.endsWith('_leftHand')) conjunto = jogador.apoiosEsquerdo;
+    else if (label.endsWith('_rightHand')) conjunto = jogador.apoiosDireito;
+    else if (label.includes('_braco')) conjunto = body.ladoBraco === 'direito' ? jogador.apoiosDireito : jogador.apoiosEsquerdo;
+    if (!conjunto) return;
+    if (adicionar) conjunto.add(outro);
+    else conjunto.delete(outro);
 }
 
 function processarToqueParaContato(h, b, pair) {
+    registrarApoioJogador(h, b, true);
     if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
         if (b.label === 'ambiente' || b.label === 'corpo_elo' || b.label.startsWith('p0_') || b.label.startsWith('p1_')) {
             if (b.label !== h.label.substring(0, 3) + 'body' && !b.label.includes('braco')) {
@@ -1337,7 +1437,13 @@ function processarToqueParaContato(h, b, pair) {
     }
 }
 
-function quebrarToqueParaContato(h, b) { if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) { if (h.corpoTocadoAgora === b) { h.corpoTocadoAgora = null; h.pontoDeContatoGlobal = null; } } }
+function quebrarToqueParaContato(h, b) {
+    registrarApoioJogador(h, b, false);
+    if (h.label && (h.label.includes('_leftHand') || h.label.includes('_rightHand'))) {
+        if (h.corpoTocadoAgora === b) { h.corpoTocadoAgora = null; h.pontoDeContatoGlobal = null; }
+    }
+}
+
 function isButtonPressed(p, i) { return p.buttons[i] ? (p.buttons[i].pressed || p.buttons[i].value > 0.1) : false; }
 
 function aplicarLimiteFrame(scene, body, maxDist) {
@@ -1411,6 +1517,15 @@ function processarGarra(s, p, h, jKey, grab) {
             if (s.matter.query.region([b], caixaDeteccao).length > 0) { alvoCorpo = b; break; }
         }
         if (!alvoCorpo) {
+            for (let i = 0; i < blocosGradeFisicos.length; i++) {
+                const bloco = blocosGradeFisicos[i];
+                if (bloco && !bloco.naoAgarravel && s.matter.query.region([bloco], caixaDeteccao).length > 0) {
+                    alvoCorpo = bloco;
+                    break;
+                }
+            }
+        }
+        if (!alvoCorpo) {
             for (let i = 0; i < listaObjetosEditaveis.length; i++) {
                 let obj = listaObjetosEditaveis[i]; if (!obj || obj.naoAgarravel) continue;
                 if (obj.body && !obj.body.naoAgarravel && s.matter.query.region([obj.body], caixaDeteccao).length > 0) { alvoCorpo = obj.body; break; }
@@ -1462,7 +1577,22 @@ function obterAnalogoComDeadzone(stick, deadzone = 0.10) {
     return { x: (x / mag) * fator, y: (y / mag) * fator, magnitude: fator, ativo: true };
 }
 
+function jogadorEstaApoiadoParaEstabilizacao(p) {
+    if (!p || !p.body) return false;
+    const corpoApoiado = p.apoiosCorpo && p.apoiosCorpo.size > 0;
+    const bracoEsquerdoApoiado = p.apoiosEsquerdo && p.apoiosEsquerdo.size > 0;
+    const bracoDireitoApoiado = p.apoiosDireito && p.apoiosDireito.size > 0;
+    const velocidadeCorpo = Math.sqrt((p.body.velocity.x || 0) ** 2 + (p.body.velocity.y || 0) ** 2);
+    return corpoApoiado && bracoEsquerdoApoiado && bracoDireitoApoiado && velocidadeCorpo < 1.2;
+}
+
 function estabilizarBracosSemEntrada(scene, p, esquerdoAtivo, direitoAtivo) {
+    // Esta correção só pode entrar em ação quando os dois analógicos estão
+    // realmente neutros E o personagem e os dois lados dos braços já estão
+    // apoiados em alguma superfície. Enquanto estiver caindo ou ainda
+    // recuperando uma colisão, a física dos braços fica completamente livre.
+    if (esquerdoAtivo || direitoAtivo || !jogadorEstaApoiadoParaEstabilizacao(p)) return;
+
     const amortecer = (body, fator) => {
         if (!body || body.isStatic) return;
         scene.matter.body.setVelocity(body, { x: body.velocity.x * fator, y: body.velocity.y * fator });
@@ -1470,14 +1600,11 @@ function estabilizarBracosSemEntrada(scene, p, esquerdoAtivo, direitoAtivo) {
         if (Math.abs(body.velocity.x) < 0.015 && Math.abs(body.velocity.y) < 0.015) scene.matter.body.setVelocity(body, { x: 0, y: 0 });
         if (Math.abs(body.angularVelocity) < 0.001) scene.matter.body.setAngularVelocity(body, 0);
     };
-    if (!esquerdoAtivo && !p.leftJoint) {
-        p.leftElos?.forEach(e => amortecer(e, 0.62));
-        amortecer(p.leftHand, 0.58);
-    }
-    if (!direitoAtivo && !p.rightJoint) {
-        p.rightElos?.forEach(e => amortecer(e, 0.62));
-        amortecer(p.rightHand, 0.58);
-    }
+
+    p.leftElos?.forEach(e => amortecer(e, 0.62));
+    amortecer(p.leftHand, 0.58);
+    p.rightElos?.forEach(e => amortecer(e, 0.62));
+    amortecer(p.rightHand, 0.58);
 }
 
 function handlePlayerInput(s, p) {
@@ -1598,6 +1725,7 @@ function executarRespawnIndividual(scene, pNum) {
 
 function update() {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
+    aplicarModoDebug(this);
     verificarInicioPorGamepad(this);
     if (modoEditorAtivo && document.getElementById('prop-shape').value === 'polygon') {
         if (!previewGraphicsPoligono) {
