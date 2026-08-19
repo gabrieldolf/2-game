@@ -530,6 +530,13 @@ function entrarNaSalaDuranteJogo(id, portalEntradaId) {
         if (player1) reposicionarJogadorCompleto(scene, player1, p1Pos);
         if (player2) reposicionarJogadorCompleto(scene, player2, p2Pos);
 
+        // A câmera também precisa ser reposicionada imediatamente. Caso ela
+        // mantenha o scroll da sala anterior, o jogador pode estar fisicamente
+        // no ponto correto, mas aparecer na tela como se tivesse surgido longe
+        // do ponto de entrada.
+        const alvoCamera = player1 || player2;
+        if (alvoCamera?.body) posicionarCameraInicialNoJogador(scene, alvoCamera);
+
         portalCooldownAte = performance.now() + TEMPO_COOLDOWN_PORTAL_MS;
         return true;
     } finally {
@@ -595,18 +602,64 @@ function verificarPortaisDaSala(scene) {
 
 function reposicionarJogadorCompleto(scene, p, pos) {
     if (!p || !p.body) return;
+
+    // Uma troca de sala não pode mover somente o corpo. Os braços são formados
+    // por vários corpos ligados por constraints estruturais; se eles forem
+    // deixados na posição da sala anterior, as constraints puxam o corpo de
+    // volta para aquele local assim que a física roda.
     if (p.leftJoint) { scene.matter.world.remove(p.leftJoint); p.leftJoint = null; }
     if (p.rightJoint) { scene.matter.world.remove(p.rightJoint); p.rightJoint = null; }
     p.leftJointTarget = p.rightJointTarget = null;
     p.leftJointPontoPivorMundo = p.rightJointPontoPivorMundo = null;
-    p.leftHand.corpoTocadoAgora = null; p.rightHand.corpoTocadoAgora = null;
-    p.leftHand.pontoDeContatoGlobal = null; p.rightHand.pontoDeContatoGlobal = null;
+    if (p.leftHand) { p.leftHand.corpoTocadoAgora = null; p.leftHand.pontoDeContatoGlobal = null; }
+    if (p.rightHand) { p.rightHand.corpoTocadoAgora = null; p.rightHand.pontoDeContatoGlobal = null; }
     if (p.apoiosCorpo) p.apoiosCorpo.clear();
     if (p.apoiosEsquerdo) p.apoiosEsquerdo.clear();
     if (p.apoiosDireito) p.apoiosDireito.clear();
-    scene.matter.body.setPosition(p.body, { x: Number(pos.x) || 0, y: Number(pos.y) || 0 });
-    scene.matter.body.setVelocity(p.body, { x: 0, y: 0 });
-    scene.matter.body.setAngularVelocity(p.body, 0);
+
+    const alvoX = Number(pos?.x);
+    const alvoY = Number(pos?.y);
+    const x = Number.isFinite(alvoX) ? alvoX : WORLD_WIDTH / 2;
+    const y = Number.isFinite(alvoY) ? alvoY : WORLD_HEIGHT / 2;
+
+    // Reconstruímos uma pose inicial simples e simétrica em torno do novo
+    // ponto. Assim nenhum elo do braço permanece na sala anterior.
+    const raioCorpo = 22;
+    const distanciaMao = 100;
+    const numElos = 3;
+    const distanciaEntreElos = (distanciaMao - raioCorpo) / numElos;
+
+    function posicionarCorpoZerado(body, px, py, angle = 0) {
+        if (!body) return;
+        scene.matter.body.setPosition(body, { x: px, y: py });
+        scene.matter.body.setVelocity(body, { x: 0, y: 0 });
+        scene.matter.body.setAngularVelocity(body, 0);
+        scene.matter.body.setAngle(body, angle);
+        body.ultimaPos = { x: px, y: py };
+    }
+
+    posicionarCorpoZerado(p.body, x, y, 0);
+
+    const posicionarBraco = (elos, mao, sinal) => {
+        const destinoMaoX = x + sinal * distanciaMao;
+        const destinoMaoY = y;
+        if (elos && elos.length) {
+            elos.forEach((elo, i) => {
+                const d = raioCorpo + distanciaEntreElos * (i + 0.5);
+                const px = x + sinal * d;
+                posicionarCorpoZerado(elo, px, y, 0);
+            });
+        }
+        posicionarCorpoZerado(mao, destinoMaoX, destinoMaoY, 0);
+    };
+
+    posicionarBraco(p.leftElos, p.leftHand, -1);
+    posicionarBraco(p.rightElos, p.rightHand, 1);
+
+    // Depois de reposicionar a estrutura inteira, limpamos qualquer alvo de
+    // movimento residual dos braços. O próximo input do gamepad começará uma
+    // nova ação normalmente.
+    p.leftJointTarget = p.rightJointTarget = null;
 }
 
 function carregarSalaFisicamente(scene, dados) {
