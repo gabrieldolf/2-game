@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Jogo de física multiplayer</title>
+    <title>jogo de física multiplayer</title>
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
@@ -355,8 +355,8 @@ function serializarObjetoDaSala(obj) {
         base.angle = Number(obj.angle) || 0;
         base.portalDestinoSala = obj.portalDestinoSala || '';
         base.portalDestinoPonto = obj.portalDestinoPonto || '';
-        base.portalEntradaX = Number(obj.portalEntradaX ?? obj.visualX) || 0;
-        base.portalEntradaY = Number(obj.portalEntradaY ?? obj.visualY) || 0;
+        base.portalEntradaX = Number.isFinite(Number(obj.portalEntradaX ?? obj.visualX)) ? Number(obj.portalEntradaX ?? obj.visualX) : 0;
+        base.portalEntradaY = Number.isFinite(Number(obj.portalEntradaY ?? obj.visualY)) ? Number(obj.portalEntradaY ?? obj.visualY) : 0;
         base.nomePonto = obj.nomePonto || '';
         return base;
     }
@@ -467,23 +467,88 @@ function aplicarEstadoSessaoNaSalaAtual() {
     });
 }
 
+function normalizarIdentificadorPortal(valor) {
+    return String(valor ?? '').trim().toLowerCase();
+}
+
 function encontrarPortalPorIdentificador(dados, identificador) {
     if (!dados || !Array.isArray(dados.objetos)) return null;
-    const alvo = String(identificador || '').trim();
+    const alvo = normalizarIdentificadorPortal(identificador);
     if (!alvo) return null;
-    return dados.objetos.find(o => o && o.shape === 'portal' && (String(o.nomePonto || '') === alvo || String(o.idPersistente || '') === alvo)) || null;
+    return dados.objetos.find(o => {
+        if (!o || o.shape !== 'portal') return false;
+        return normalizarIdentificadorPortal(o.nomePonto) === alvo ||
+               normalizarIdentificadorPortal(o.idPersistente) === alvo;
+    }) || null;
+}
+
+function encontrarPortalRuntimePorIdentificador(identificador) {
+    const alvo = normalizarIdentificadorPortal(identificador);
+    if (!alvo) return null;
+    return listaObjetosEditaveis.find(o => {
+        if (!o || o.shape !== 'portal') return false;
+        return normalizarIdentificadorPortal(o.nomePonto) === alvo ||
+               normalizarIdentificadorPortal(o.idPersistente) === alvo;
+    }) || null;
+}
+
+function resolverPortalDeEntradaRuntime(destinoPonto, contextoOrigem = null) {
+    const portais = listaObjetosEditaveis.filter(o => o && o.shape === 'portal');
+    if (!portais.length) return null;
+
+    // 1) Sempre priorizamos o Portal destino explicitamente informado.
+    if (String(destinoPonto ?? '').trim()) {
+        const explicito = encontrarPortalRuntimePorIdentificador(destinoPonto);
+        if (explicito) return explicito;
+        return null;
+    }
+
+    // 2) Compatibilidade: se o campo "Portal destino" ficou vazio, tentamos
+    // localizar automaticamente o portal da nova sala que aponta de volta para
+    // a sala/portal de origem. Isso evita cair silenciosamente no respawn.
+    if (contextoOrigem?.salaOrigem) {
+        const salaOrigem = normalizarIdSala(contextoOrigem.salaOrigem);
+        const portalOrigem = normalizarIdentificadorPortal(contextoOrigem.portalOrigemId);
+        const candidatosRetorno = portais.filter(p => {
+            if (normalizarIdSala(p.portalDestinoSala || '') !== salaOrigem) return false;
+            const pontoRetorno = normalizarIdentificadorPortal(p.portalDestinoPonto);
+            return !portalOrigem || !pontoRetorno || pontoRetorno === portalOrigem;
+        });
+        if (candidatosRetorno.length === 1) return candidatosRetorno[0];
+    }
+
+    // 3) Se a sala possuir um único portal, ele é inequivocamente a entrada.
+    if (portais.length === 1) return portais[0];
+
+    return null;
+}
+
+function obterPontoEntradaDoPortal(portal) {
+    if (!portal) return null;
+    const px = Number(portal.portalEntradaX);
+    const py = Number(portal.portalEntradaY);
+    const fallbackX = Number(portal.visualX ?? portal.posicaoTravadaX);
+    const fallbackY = Number(portal.visualY ?? portal.posicaoTravadaY);
+    return {
+        x: Number.isFinite(px) ? px : (Number.isFinite(fallbackX) ? fallbackX : WORLD_WIDTH / 2),
+        y: Number.isFinite(py) ? py : (Number.isFinite(fallbackY) ? fallbackY : WORLD_HEIGHT / 2)
+    };
 }
 
 function limitarPosicaoDeEntrada(dados, pos) {
     const largura = Number(dados?.dimensoes?.largura) || WORLD_WIDTH;
     const altura = Number(dados?.dimensoes?.altura) || WORLD_HEIGHT;
+    const xInformado = Number(pos?.x);
+    const yInformado = Number(pos?.y);
+    const x = Number.isFinite(xInformado) ? xInformado : largura / 2;
+    const y = Number.isFinite(yInformado) ? yInformado : altura / 2;
     return {
-        x: Phaser.Math.Clamp(Number(pos?.x) || largura / 2, 30, Math.max(30, largura - 30)),
-        y: Phaser.Math.Clamp(Number(pos?.y) || altura / 2, 30, Math.max(30, altura - 30))
+        x: Phaser.Math.Clamp(x, 22, Math.max(22, largura - 22)),
+        y: Phaser.Math.Clamp(y, 22, Math.max(22, altura - 22))
     };
 }
 
-function entrarNaSalaDuranteJogo(id, portalEntradaId) {
+function entrarNaSalaDuranteJogo(id, portalEntradaId, contextoOrigem = null) {
     garantirSessaoDeJogo();
     if (transicaoPortalEmAndamento) return false;
     const dados = bancoDeSalas[id];
@@ -500,48 +565,56 @@ function entrarNaSalaDuranteJogo(id, portalEntradaId) {
         salaEmJogoAtual = dados.id;
         aplicarEstadoSessaoNaSalaAtual();
 
-        const portal = encontrarPortalPorIdentificador(dados, portalEntradaId);
-        const entradas = dados.pontosDeEntrada || {};
+        const veioDePortal = !!(portalEntradaId || contextoOrigem);
+        let portal = null;
+        if (veioDePortal) {
+            portal = resolverPortalDeEntradaRuntime(portalEntradaId, contextoOrigem);
+            if (!portal) {
+                console.error(
+                    'Transição cancelada: não foi possível determinar o portal de entrada na sala',
+                    dados.id,
+                    'Portal destino informado:', portalEntradaId,
+                    'Contexto:', contextoOrigem
+                );
+                // Como a sala física já foi carregada, mantemos os jogadores em
+                // uma posição segura somente para evitar perda do personagem,
+                // mas NÃO fingimos que o respawn é o ponto do portal.
+                const seguro = limitarPosicaoDeEntrada(dados, dados.pontosDeEntrada?.jogador1 || { x: 300, y: 300 });
+                if (player1) reposicionarJogadorCompleto(scene, player1, seguro);
+                if (player2) reposicionarJogadorCompleto(scene, player2, seguro);
+                return false;
+            }
+        }
 
-        // O ponto de entrada é uma coordenada absoluta dentro da sala.
-        // O jogador 1 é colocado exatamente nessa coordenada, sem o antigo
-        // deslocamento lateral que fazia a chegada parecer incorreta.
+        const entradas = dados.pontosDeEntrada || {};
         const entradaBase = portal
-            ? {
-                x: Number.isFinite(Number(portal.portalEntradaX))
-                    ? Number(portal.portalEntradaX)
-                    : Number(portal.visualX ?? portal.posicaoTravadaX ?? 0),
-                y: Number.isFinite(Number(portal.portalEntradaY))
-                    ? Number(portal.portalEntradaY)
-                    : Number(portal.visualY ?? portal.posicaoTravadaY ?? 0)
-              }
+            ? obterPontoEntradaDoPortal(portal)
             : (entradas.jogador1 || {
                 x: 300,
                 y: Math.max(100, (dados.dimensoes?.altura || WORLD_HEIGHT) - 150)
               });
 
         const p1Pos = limitarPosicaoDeEntrada(dados, entradaBase);
-        // Se a transição veio de um portal, os dois jogadores chegam no ponto
-        // de entrada do portal. Caso contrário, cada jogador usa seu respawn.
         const p2Pos = portal
             ? { x: p1Pos.x, y: p1Pos.y }
             : limitarPosicaoDeEntrada(dados, entradas.jogador2 || p1Pos);
 
+        console.info(
+            '[PORTAL] chegada na sala', dados.id,
+            portal ? ('pelo portal ' + (portal.nomePonto || portal.idPersistente || '(sem id)')) : '(sem portal)',
+            'ponto configurado=', entradaBase,
+            'ponto aplicado=', p1Pos
+        );
+
         if (player1) reposicionarJogadorCompleto(scene, player1, p1Pos);
         if (player2) reposicionarJogadorCompleto(scene, player2, p2Pos);
 
-        // A câmera também precisa ser reposicionada imediatamente. Caso ela
-        // mantenha o scroll da sala anterior, o jogador pode estar fisicamente
-        // no ponto correto, mas aparecer na tela como se tivesse surgido longe
-        // do ponto de entrada.
         const alvoCamera = player1 || player2;
         if (alvoCamera?.body) posicionarCameraInicialNoJogador(scene, alvoCamera);
 
         portalCooldownAte = performance.now() + TEMPO_COOLDOWN_PORTAL_MS;
         return true;
     } finally {
-        // O cooldown impede que os jogadores ativem imediatamente o portal
-        // recém-carregado. A flag é liberada no fim da troca física.
         transicaoPortalEmAndamento = false;
     }
 }
@@ -575,7 +648,10 @@ function ativarPortalDaGameplay(scene, portal, jogador) {
         return false;
     }
 
-    return entrarNaSalaDuranteJogo(destinoSala, destinoPonto || null);
+    return entrarNaSalaDuranteJogo(destinoSala, destinoPonto || null, {
+        salaOrigem: salaEmJogoAtual,
+        portalOrigemId: portal.nomePonto || portal.idPersistente || ''
+    });
 }
 
 function verificarPortaisDaSala(scene) {
@@ -772,8 +848,8 @@ function adicionarObjetoSerializado(scene, dados) {
             persistirSessao: false,
             portalDestinoSala: dados.portalDestinoSala || '',
             portalDestinoPonto: dados.portalDestinoPonto || '',
-            portalEntradaX: dados.shape === 'portal' ? Number(dados.portalEntradaX ?? dados.x) || 0 : null,
-            portalEntradaY: dados.shape === 'portal' ? Number(dados.portalEntradaY ?? dados.y) || 0 : null,
+            portalEntradaX: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaX ?? dados.x)) ? Number(dados.portalEntradaX ?? dados.x) : 0) : null,
+            portalEntradaY: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaY ?? dados.y)) ? Number(dados.portalEntradaY ?? dados.y) : 0) : null,
             nomePonto: dados.nomePonto || dados.idPersistente || gerarIdObjetoPersistente()
         });
         return;
