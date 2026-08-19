@@ -525,6 +525,29 @@ function resolverPortalDeEntradaRuntime(destinoPonto, contextoOrigem = null) {
     return null;
 }
 
+function obterIdRuntimePortal(portal) {
+    if (!portal) return '';
+    return String(portal.idPersistente || portal.nomePonto || `${portal.visualX}:${portal.visualY}`);
+}
+
+function atualizarBloqueioDeRetornoDoPortal(jogador, portais) {
+    if (!jogador?.body || !jogador.portalBloqueadoAteSairId) return;
+    const portalBloqueado = (portais || []).find(portal => obterIdRuntimePortal(portal) === jogador.portalBloqueadoAteSairId);
+
+    // Se por algum motivo o portal não existir mais na sala carregada, não
+    // deixamos um bloqueio órfão preso ao jogador.
+    if (!portalBloqueado) {
+        jogador.portalBloqueadoAteSairId = null;
+        return;
+    }
+
+    // O portal pelo qual o jogador acabou de entrar só volta a ser utilizável
+    // depois que o centro do corpo sair completamente da área lógica dele.
+    if (!jogadorDentroDaAreaPortal(jogador, portalBloqueado)) {
+        jogador.portalBloqueadoAteSairId = null;
+    }
+}
+
 function obterRetanguloPortal(portal) {
     if (!portal) return null;
     const cx = Number(portal.visualX ?? portal.posicaoTravadaX) || 0;
@@ -683,6 +706,12 @@ function executarTransicaoPortalComEstados(scene, portalOrigem, registros) {
             if (!p || !reg) return;
             const destino = mapearPontoEntrePortais(reg.rel, portalDestino);
             aplicarEstadoFisicoJogador(scene, p, destino, reg.estado || capturarEstadoFisicoJogador(p));
+
+            // O jogador nasce dentro da área equivalente do portal de chegada.
+            // Esse mesmo portal fica bloqueado SOMENTE para este jogador até
+            // ele realmente sair da sua área. Isso impede o retorno instantâneo
+            // para a sala anterior sem depender apenas de um cooldown temporal.
+            p.portalBloqueadoAteSairId = obterIdRuntimePortal(portalDestino);
         };
         aplicarRegistro(player1, registros?.[0]);
         aplicarRegistro(player2, registros?.[1]);
@@ -699,7 +728,7 @@ function executarTransicaoPortalComEstados(scene, portalOrigem, registros) {
 
 function registrarToquePortal(portal, p) {
     if (!portal || !p?.body) return;
-    const portalId = portal.idPersistente || portal.nomePonto || `${portal.visualX}:${portal.visualY}`;
+    const portalId = obterIdRuntimePortal(portal);
     if (!estadoTravessiaPortal) {
         estadoTravessiaPortal = {
             salaOrigem: salaEmJogoAtual,
@@ -725,11 +754,15 @@ function registrarToquePortal(portal, p) {
 
 function verificarPortaisDaSala(scene) {
     if (modoEditorAtivo || transicaoPortalEmAndamento || !salaEmJogoAtual) return;
-    if (performance.now() < portalCooldownAte) return;
 
     const portais = listaObjetosEditaveis.filter(o => o && o.shape === 'portal');
     const jogadoresAtivos = [player1, player2].filter(j => j?.body);
     if (!portais.length || !jogadoresAtivos.length) return;
+
+    // O desbloqueio do portal de chegada é espacial, não temporal. Fazemos esta
+    // verificação mesmo enquanto o cooldown geral ainda está ativo.
+    jogadoresAtivos.forEach(p => atualizarBloqueioDeRetornoDoPortal(p, portais));
+    if (performance.now() < portalCooldownAte) return;
 
     // Um jogador: a troca ocorre imediatamente ao tocar a área, mantendo pose,
     // velocidade e o ponto relativo dentro do retângulo.
@@ -737,6 +770,7 @@ function verificarPortaisDaSala(scene) {
         const p = jogadoresAtivos[0];
         for (const portal of portais) {
             if (!jogadorDentroDaAreaPortal(p, portal)) continue;
+            if (p.portalBloqueadoAteSairId && obterIdRuntimePortal(portal) === p.portalBloqueadoAteSairId) continue;
             const reg = { rel: obterCoordenadaRelativaNoPortal(p, portal), estado: capturarEstadoFisicoJogador(p) };
             const regs = {}; regs[p.id] = reg;
             executarTransicaoPortalComEstados(scene, portal, regs);
@@ -762,10 +796,11 @@ function verificarPortaisDaSala(scene) {
     for (const portal of portais) {
         for (const p of jogadoresAtivos) {
             if (!jogadorDentroDaAreaPortal(p, portal)) continue;
+            if (p.portalBloqueadoAteSairId && obterIdRuntimePortal(portal) === p.portalBloqueadoAteSairId) continue;
 
             if (estadoTravessiaPortal) {
                 const atualId = estadoTravessiaPortal.portalId;
-                const novoId = portal.idPersistente || portal.nomePonto || `${portal.visualX}:${portal.visualY}`;
+                const novoId = obterIdRuntimePortal(portal);
                 if (atualId !== novoId && !estadoTravessiaPortal.jogadores[p.id]) {
                     const primeiroReg = estadoTravessiaPortal.jogadores[estadoTravessiaPortal.primeiroJogadorId];
                     // A punição só vale depois que o primeiro realmente concluiu
@@ -1844,7 +1879,7 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     lL.forEach(e => e.ladoBraco = 'esquerdo');
     rL.forEach(e => e.ladoBraco = 'direito');
     
-    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, juntasEstruturaisDosBramos: juntasBraço, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null, apoiosCorpo: new Set(), apoiosEsquerdo: new Set(), apoiosDireito: new Set() };
+    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, juntasEstruturaisDosBramos: juntasBraço, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null, apoiosCorpo: new Set(), apoiosEsquerdo: new Set(), apoiosDireito: new Set(), portalBloqueadoAteSairId: null };
 }
 
 function obterJogadorPorCorpo(corpo) {
