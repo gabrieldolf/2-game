@@ -100,10 +100,16 @@
             <div class="prop-row" id="row-portal-destino"><label>Sala destino:</label><input type="text" id="prop-portal-destino-sala" value="" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" id="row-portal-ponto"><label>Portal destino:</label><input type="text" id="prop-portal-destino-ponto" value="" onchange="atualizarObjetoExistente()"></div>
             <div id="painel-area-portal" style="display:none; background:#0b7285; padding:6px; border-radius:4px; margin-top:2px;">
-                <div style="color:#fff; font-weight:bold; margin-bottom:6px;">Área Retangular do Portal</div>
+                <div style="color:#fff; font-weight:bold; margin-bottom:6px;">Área de Ativação (saída)</div>
                 <div class="prop-row"><label>Largura (px):</label><input type="number" id="prop-portal-area-w" value="100" min="20" step="10" onchange="atualizarObjetoExistente()"></div>
                 <div class="prop-row"><label>Altura (px):</label><input type="number" id="prop-portal-area-h" value="120" min="20" step="10" onchange="atualizarObjetoExistente()"></div>
-                <div style="font-size:10px;color:#d8f3f8;margin-top:5px;">O ponto relativo onde o jogador toca esta área é reproduzido na área equivalente do portal de destino.</div>
+                <div style="height:1px;background:rgba(255,255,255,.25);margin:7px 0;"></div>
+                <div style="color:#b8f5ff; font-weight:bold; margin-bottom:6px;">Área de Entrada (chegada)</div>
+                <div class="prop-row"><label>Centro X:</label><input type="number" id="prop-portal-entrada-x" value="0" step="10" onchange="atualizarObjetoExistente()"></div>
+                <div class="prop-row"><label>Centro Y:</label><input type="number" id="prop-portal-entrada-y" value="0" step="10" onchange="atualizarObjetoExistente()"></div>
+                <div class="prop-row"><label>Largura (px):</label><input type="number" id="prop-portal-entrada-w" value="100" min="20" step="10" onchange="atualizarObjetoExistente()"></div>
+                <div class="prop-row"><label>Altura (px):</label><input type="number" id="prop-portal-entrada-h" value="120" min="20" step="10" onchange="atualizarObjetoExistente()"></div>
+                <div style="font-size:10px;color:#d8f3f8;margin-top:5px;">Ao tocar a área de ativação, o jogador mantém sua posição proporcional e surge no ponto equivalente dentro da área de entrada do portal de destino.</div>
             </div>
             <div class="prop-row"><label>ID / Nome do ponto:</label><input type="text" id="prop-nome-ponto" value="" onchange="atualizarObjetoExistente()"></div>
         </div>
@@ -358,6 +364,10 @@ function serializarObjetoDaSala(obj) {
         base.portalDestinoPonto = obj.portalDestinoPonto || '';
         base.portalAreaW = obj.shape === 'portal' ? Math.max(20, Number(obj.portalAreaW) || 100) : null;
         base.portalAreaH = obj.shape === 'portal' ? Math.max(20, Number(obj.portalAreaH) || 120) : null;
+        base.portalEntradaX = obj.shape === 'portal' ? Number(obj.portalEntradaX ?? obj.visualX ?? 0) : null;
+        base.portalEntradaY = obj.shape === 'portal' ? Number(obj.portalEntradaY ?? obj.visualY ?? 0) : null;
+        base.portalEntradaW = obj.shape === 'portal' ? Math.max(20, Number(obj.portalEntradaW) || Number(obj.portalAreaW) || 100) : null;
+        base.portalEntradaH = obj.shape === 'portal' ? Math.max(20, Number(obj.portalEntradaH) || Number(obj.portalAreaH) || 120) : null;
         base.nomePonto = obj.nomePonto || '';
         return base;
     }
@@ -574,11 +584,23 @@ function obterCoordenadaRelativaNoPortal(jogador, portal) {
     };
 }
 
+function obterRetanguloEntradaPortal(portal) {
+    if (!portal) return null;
+    const ativacao = obterRetanguloPortal(portal);
+    const cx = Number(portal.portalEntradaX ?? ativacao?.cx ?? 0);
+    const cy = Number(portal.portalEntradaY ?? ativacao?.cy ?? 0);
+    const w = Math.max(20, Number(portal.portalEntradaW) || Number(portal.portalAreaW) || 100);
+    const h = Math.max(20, Number(portal.portalEntradaH) || Number(portal.portalAreaH) || 120);
+    return { cx, cy, w, h, minX: cx - w/2, maxX: cx + w/2, minY: cy - h/2, maxY: cy + h/2 };
+}
+
 function mapearPontoEntrePortais(rel, portalDestino) {
-    const r = obterRetanguloPortal(portalDestino);
+    const r = obterRetanguloEntradaPortal(portalDestino);
+    const u = rel?.u === undefined ? 0.5 : Phaser.Math.Clamp(Number(rel.u), 0, 1);
+    const v = rel?.v === undefined ? 0.5 : Phaser.Math.Clamp(Number(rel.v), 0, 1);
     return {
-        x: r.minX + Phaser.Math.Clamp(Number(rel?.u) || 0.5, 0, 1) * r.w,
-        y: r.minY + Phaser.Math.Clamp(Number(rel?.v) || 0.5, 0, 1) * r.h
+        x: r.minX + u * r.w,
+        y: r.minY + v * r.h
     };
 }
 
@@ -707,8 +729,9 @@ function executarTransicaoPortalComEstados(scene, portalOrigem, registros) {
             const destino = mapearPontoEntrePortais(reg.rel, portalDestino);
             aplicarEstadoFisicoJogador(scene, p, destino, reg.estado || capturarEstadoFisicoJogador(p));
 
-            // O jogador nasce dentro da área equivalente do portal de chegada.
-            // Esse mesmo portal fica bloqueado SOMENTE para este jogador até
+            // O jogador nasce no ponto equivalente dentro da ÁREA DE ENTRADA
+            // do portal de destino. A área de ativação e a área de entrada são
+            // independentes. Esse mesmo portal fica bloqueado SOMENTE para este jogador até
             // ele realmente sair da sua área. Isso impede o retorno instantâneo
             // para a sala anterior sem depender apenas de um cooldown temporal.
             p.portalBloqueadoAteSairId = obterIdRuntimePortal(portalDestino);
@@ -1013,6 +1036,10 @@ function adicionarObjetoSerializado(scene, dados) {
             portalDestinoPonto: dados.portalDestinoPonto || '',
             portalAreaW: dados.shape === 'portal' ? Math.max(20, Number(dados.portalAreaW) || 100) : null,
             portalAreaH: dados.shape === 'portal' ? Math.max(20, Number(dados.portalAreaH) || 120) : null,
+            portalEntradaX: dados.shape === 'portal' ? Number(dados.portalEntradaX ?? x) : null,
+            portalEntradaY: dados.shape === 'portal' ? Number(dados.portalEntradaY ?? y) : null,
+            portalEntradaW: dados.shape === 'portal' ? Math.max(20, Number(dados.portalEntradaW) || Number(dados.portalAreaW) || 100) : null,
+            portalEntradaH: dados.shape === 'portal' ? Math.max(20, Number(dados.portalEntradaH) || Number(dados.portalAreaH) || 120) : null,
             nomePonto: dados.nomePonto || dados.idPersistente || gerarIdObjetoPersistente()
         });
         return;
@@ -1446,6 +1473,17 @@ function create() {
             if (document.getElementById('prop-snap-active').checked && objetoSelecionado.shape !== 'polygon' && objetoSelecionado.shape !== 'rope') pos = calcularAlinhamentoPorProximidade(this, pos.x, pos.y, objetoSelecionado.w, objetoSelecionado.h, objetoSelecionado.shape, objetoSelecionado.body);
             if (objetoSelecionado.body) { this.matter.body.setPosition(objetoSelecionado.body, { x: pos.x, y: pos.y }); this.matter.body.setVelocity(objetoSelecionado.body, { x:0, y:0 }); }
             else { 
+                // Ao arrastar um portal, movemos também sua área de entrada pelo
+                // mesmo deslocamento, preservando a distância configurada entre
+                // a área de ativação e a área de chegada.
+                if (objetoSelecionado.shape === 'portal') {
+                    const dxPortal = pos.x - (Number(objetoSelecionado.visualX) || 0);
+                    const dyPortal = pos.y - (Number(objetoSelecionado.visualY) || 0);
+                    objetoSelecionado.portalEntradaX = Number(objetoSelecionado.portalEntradaX ?? objetoSelecionado.visualX ?? 0) + dxPortal;
+                    objetoSelecionado.portalEntradaY = Number(objetoSelecionado.portalEntradaY ?? objetoSelecionado.visualY ?? 0) + dyPortal;
+                    document.getElementById('prop-portal-entrada-x').value = objetoSelecionado.portalEntradaX;
+                    document.getElementById('prop-portal-entrada-y').value = objetoSelecionado.portalEntradaY;
+                }
                 objetoSelecionado.visualX = pos.x; objetoSelecionado.visualY = pos.y; 
                 if (objetoSelecionado.shape === 'rope' && objetoSelecionado.ropeElos) {
                     let dx = pos.x - objetoSelecionado.posicaoTravadaX, dy = pos.y - objetoSelecionado.posicaoTravadaY;
@@ -1500,6 +1538,10 @@ function extrairCamposPainel() {
         portalDestinoPonto: document.getElementById('prop-portal-destino-ponto').value.trim(),
         portalAreaW: Math.max(20, parseFloat(document.getElementById('prop-portal-area-w').value) || 100),
         portalAreaH: Math.max(20, parseFloat(document.getElementById('prop-portal-area-h').value) || 120),
+        portalEntradaX: parseFloat(document.getElementById('prop-portal-entrada-x').value),
+        portalEntradaY: parseFloat(document.getElementById('prop-portal-entrada-y').value),
+        portalEntradaW: Math.max(20, parseFloat(document.getElementById('prop-portal-entrada-w').value) || 100),
+        portalEntradaH: Math.max(20, parseFloat(document.getElementById('prop-portal-entrada-h').value) || 120),
         nomePonto: document.getElementById('prop-nome-ponto').value.trim()
     };
 }
@@ -1517,6 +1559,10 @@ function executarCriacaoObjeto(scene, x, y) {
             portalDestinoSala: c.portalDestinoSala, portalDestinoPonto: c.portalDestinoPonto,
             portalAreaW: c.shape === 'portal' ? c.portalAreaW : null,
             portalAreaH: c.shape === 'portal' ? c.portalAreaH : null,
+            portalEntradaX: c.shape === 'portal' ? (Number.isFinite(c.portalEntradaX) ? c.portalEntradaX : ax) : null,
+            portalEntradaY: c.shape === 'portal' ? (Number.isFinite(c.portalEntradaY) ? c.portalEntradaY : ay) : null,
+            portalEntradaW: c.shape === 'portal' ? c.portalEntradaW : null,
+            portalEntradaH: c.shape === 'portal' ? c.portalEntradaH : null,
             nomePonto: c.nomePonto || idPersistente
         };
         listaObjetosEditaveis.push(obj);
@@ -1595,6 +1641,12 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
             const hw = obj.shape === 'portal' ? (Math.max(20, Number(obj.portalAreaW) || 100) / 2) : 28;
             const hh = obj.shape === 'portal' ? (Math.max(20, Number(obj.portalAreaH) || 120) / 2) : 28;
             colidiu = Math.abs(x - px) <= hw && Math.abs(y - py) <= hh;
+            if (!colidiu && obj.shape === 'portal') {
+                const ex = Number(obj.portalEntradaX ?? px), ey = Number(obj.portalEntradaY ?? py);
+                const ehw = Math.max(20, Number(obj.portalEntradaW) || Number(obj.portalAreaW) || 100) / 2;
+                const ehh = Math.max(20, Number(obj.portalEntradaH) || Number(obj.portalAreaH) || 120) / 2;
+                colidiu = Math.abs(x - ex) <= ehw && Math.abs(y - ey) <= ehh;
+            }
         } else if (obj.shape === 'rope' && obj.ropeElos) { obj.ropeElos.forEach(elo => { if (Phaser.Physics.Matter.Matter.Vertices.contains(elo.vertices, { x: x, y: y })) colidiu = true; }); }
         if (colidiu) { let posX = obj.body ? obj.body.position.x : obj.visualX; let posY = obj.body ? obj.body.position.y : obj.visualY; let dist = Math.sqrt((posX - x)**2 + (posY - y)**2); if (dist < mDist) { mDist = dist; prox = obj; } }
     });
@@ -1612,6 +1664,10 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('prop-portal-destino-ponto').value = obj.portalDestinoPonto || '';
     document.getElementById('prop-portal-area-w').value = Math.max(20, Number(obj.portalAreaW) || 100);
     document.getElementById('prop-portal-area-h').value = Math.max(20, Number(obj.portalAreaH) || 120);
+    document.getElementById('prop-portal-entrada-x').value = Number(obj.portalEntradaX ?? obj.visualX ?? 0);
+    document.getElementById('prop-portal-entrada-y').value = Number(obj.portalEntradaY ?? obj.visualY ?? 0);
+    document.getElementById('prop-portal-entrada-w').value = Math.max(20, Number(obj.portalEntradaW) || Number(obj.portalAreaW) || 100);
+    document.getElementById('prop-portal-entrada-h').value = Math.max(20, Number(obj.portalEntradaH) || Number(obj.portalAreaH) || 120);
     document.getElementById('prop-nome-ponto').value = obj.nomePonto || '';
     if (obj.shape === 'rope') { document.getElementById('prop-rope-len').value = obj.ropeLen; document.getElementById('prop-rope-segments').value = obj.ropeSegments; document.getElementById('prop-rope-color').value = obj.ropeColor; }
     else if (['portal', 'respawn1', 'respawn2'].includes(obj.shape)) {
@@ -1650,6 +1706,10 @@ function atualizarObjetoExistente() {
         if (obj.shape === 'portal') {
             obj.portalAreaW = c.portalAreaW;
             obj.portalAreaH = c.portalAreaH;
+            obj.portalEntradaX = Number.isFinite(c.portalEntradaX) ? c.portalEntradaX : px;
+            obj.portalEntradaY = Number.isFinite(c.portalEntradaY) ? c.portalEntradaY : py;
+            obj.portalEntradaW = c.portalEntradaW;
+            obj.portalEntradaH = c.portalEntradaH;
             obj.w = c.portalAreaW;
             obj.h = c.portalAreaH;
         }
@@ -1752,6 +1812,20 @@ function desenharObjetoEditor(obj) {
             g.lineBetween(posX - 13, posY, posX + 13, posY);
             g.lineBetween(posX + 13, posY, posX + 5, posY - 8);
             g.lineBetween(posX + 13, posY, posX + 5, posY + 8);
+
+            // Área de entrada: separada da área de ativação.
+            const entradaX = Number(obj.portalEntradaX ?? posX);
+            const entradaY = Number(obj.portalEntradaY ?? posY);
+            const entradaW = Math.max(20, Number(obj.portalEntradaW) || areaW);
+            const entradaH = Math.max(20, Number(obj.portalEntradaH) || areaH);
+            g.fillStyle(0x33d6ff, 0.12);
+            g.fillRect(entradaX - entradaW/2, entradaY - entradaH/2, entradaW, entradaH);
+            g.lineStyle(selecionado ? 4 : 2, 0x33d6ff, 1);
+            g.strokeRect(entradaX - entradaW/2, entradaY - entradaH/2, entradaW, entradaH);
+            g.lineStyle(2, 0x33d6ff, 0.75);
+            g.lineBetween(posX, posY, entradaX, entradaY);
+            g.lineBetween(entradaX - 8, entradaY, entradaX + 8, entradaY);
+            g.lineBetween(entradaX, entradaY - 8, entradaX, entradaY + 8);
         } else {
             g.fillStyle(cor, 0.24);
             g.fillCircle(posX, posY, 22); g.strokeCircle(posX, posY, 22);
