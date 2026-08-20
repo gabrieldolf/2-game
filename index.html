@@ -6,7 +6,9 @@
     <style>
         body { margin:0; background:#111; display:flex; font-family:Arial, sans-serif; overflow:hidden; height:100vh; }
         #sidebar { width:260px; background:#222; color:#fff; padding:15px; display:none; flex-direction:column; gap:10px; border-right:2px solid #444; z-index:10; font-size:13px; box-sizing:border-box; overflow-y:auto; }
-        #canvas-container { flex-grow:1; display:flex; justify-content:center; align-items:center; position:relative; }
+        #canvas-container { flex-grow:1; min-width:0; min-height:0; display:flex; justify-content:center; align-items:center; position:relative; overflow:hidden; }
+        #canvas-container canvas { display:block; max-width:100%; max-height:100%; }
+        #moldura-info { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); background:rgba(0,0,0,0.72); color:#7ed6ff; border:1px solid rgba(126,214,255,0.65); padding:5px 9px; border-radius:4px; font:bold 11px Arial; z-index:19; pointer-events:none; display:none; white-space:nowrap; }
         button { background:#444; color:white; border:none; padding:8px; cursor:pointer; border-radius:4px; font-weight:bold; width:100%; }
         button:hover { background:#555; } button.active { background:#00ff00; color:black; }
         .section { border-top:1px solid #444; padding-top:10px; display:flex; flex-direction:column; gap:6px; }
@@ -70,6 +72,7 @@
     <div class="section">
         <h3>Auxílios</h3>
         <div class="prop-row"><label>Mostrar Grade:</label><input type="checkbox" id="prop-grid-active" onchange="alternarVisibilidadeGrade()"></div>
+        <div class="prop-row"><label style="color:#7ed6ff; font-weight:bold;">Moldura 16:9:</label><input type="checkbox" id="prop-frame-169-active" checked onchange="atualizarMolduraReferencia16x9()"></div>
         <div class="prop-row"><label>Tamanho Grade:</label><input type="number" id="prop-grid-size" value="64" min="8" max="128" onchange="alternarVisibilidadeGrade()"></div>
         <div class="prop-row"><label style="color:#55ff55; font-weight:bold;">Alinhamento Ímã:</label><input type="checkbox" id="prop-snap-active" checked></div>
         <div class="prop-row"><label style="color:#ff6b6b; font-weight:bold;">Modo Debug:</label><input type="checkbox" id="prop-debug-active" onchange="alternarModoDebug()"></div>
@@ -125,14 +128,26 @@
 <div id="canvas-container">
     <div id="aviso-modo">Aperte [E] para abrir o Editor</div>
     <div id="indicador-debug">MODO DEBUG</div>
+    <div id="moldura-info">VISÃO DE REFERÊNCIA 16:9 · 1920 × 1080</div>
 </div>
 <script>
-const SCREEN_WIDTH = 1024, SCREEN_HEIGHT = 768;
+// O jogo usa uma resolução lógica fixa 16:9. Phaser escala o canvas para caber
+// na janela sem alterar as coordenadas do mundo/física.
+const VIEWPORT_BASE_WIDTH = 1920, VIEWPORT_BASE_HEIGHT = 1080;
+const SCREEN_WIDTH = VIEWPORT_BASE_WIDTH, SCREEN_HEIGHT = VIEWPORT_BASE_HEIGHT;
 let WORLD_WIDTH = 3000, WORLD_HEIGHT = 2000;
 const TAMANHO_BLOCO_GRADE = 50;
 const LIMITE_DIMENSAO_SALA = 10000;
 const config = {
-    type: Phaser.AUTO, width: SCREEN_WIDTH, height: SCREEN_HEIGHT, parent: 'canvas-container', backgroundColor: '#4488aa',
+    type: Phaser.AUTO,
+    parent: 'canvas-container',
+    backgroundColor: '#4488aa',
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: VIEWPORT_BASE_WIDTH,
+        height: VIEWPORT_BASE_HEIGHT
+    },
     physics: { 
         default: 'matter', 
         matter: { 
@@ -144,7 +159,7 @@ const config = {
 };
 const game = new Phaser.Game(config);
 let player1, player2, ferramentaAtual = 'create', objetoSelecionado = null, listaObjetosEditaveis = [];
-let gridGraphics, bordasFixasDoCenario = [], graficosBordasFixas = [], cursorsKeyboard;
+let gridGraphics, molduraReferenciaGraphics, bordasFixasDoCenario = [], graficosBordasFixas = [], cursorsKeyboard;
 let blocosGradeFisicos = [], blocosGradeSala = [], graficosBlocosGradeFisicos = [];
 let gradeConstrucaoGraphics = null, modoConstrucaoGrade = false;
 let modoEditorAtivo = false, cameraSalvaX = 0, cameraSalvaY = 0, cameraSalvaZoom = 1;
@@ -1197,6 +1212,34 @@ function setFerramenta(f) {
     document.getElementById('btn-select').className = f==='select'?'active':'';
 }
 
+function atualizarMolduraReferencia16x9() {
+    if (!molduraReferenciaGraphics) return;
+    molduraReferenciaGraphics.clear();
+    const campo = document.getElementById('prop-frame-169-active');
+    const info = document.getElementById('moldura-info');
+    const ativa = !!(modoEditorAtivo && campo && campo.checked);
+    if (info) info.style.display = ativa ? 'block' : 'none';
+    if (!ativa) return;
+
+    const scene = game.scene.getScene('default');
+    if (!scene || !scene.cameras?.main) return;
+    const cam = scene.cameras.main;
+    const zoom = Math.max(0.0001, cam.zoom || 1);
+    const centroX = cam.scrollX + (SCREEN_WIDTH / (2 * zoom));
+    const centroY = cam.scrollY + (SCREEN_HEIGHT / (2 * zoom));
+
+    // Moldura principal: exatamente o campo visual de gameplay 1920x1080 em zoom 1.
+    const w = VIEWPORT_BASE_WIDTH;
+    const h = VIEWPORT_BASE_HEIGHT;
+    molduraReferenciaGraphics.lineStyle(5 / zoom, 0x7ed6ff, 0.95);
+    molduraReferenciaGraphics.strokeRect(centroX - w/2, centroY - h/2, w, h);
+
+    // Safe area de 90% para HUD e elementos que não devem ficar colados às bordas.
+    const safeW = w * 0.90, safeH = h * 0.90;
+    molduraReferenciaGraphics.lineStyle(2 / zoom, 0xffffff, 0.35);
+    molduraReferenciaGraphics.strokeRect(centroX - safeW/2, centroY - safeH/2, safeW, safeH);
+}
+
 function alternarModoEditor(scene) {
     modoEditorAtivo = !modoEditorAtivo;
     const panel = document.getElementById('sidebar');
@@ -1219,6 +1262,7 @@ function alternarModoEditor(scene) {
     }
     alternarVisibilidadeGrade();
     desenharGradeConstrucao();
+    atualizarMolduraReferencia16x9();
 }
 
 
@@ -1376,6 +1420,7 @@ function create() {
     // pelo editor usando os blocos da grade de 50 px.
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     gridGraphics = this.add.graphics().setDepth(1);
+    molduraReferenciaGraphics = this.add.graphics().setDepth(9000);
     gradeConstrucaoGraphics = this.add.graphics().setDepth(0.5);
     previewGraphicsPoligono = this.add.graphics().setDepth(15);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
@@ -2326,8 +2371,11 @@ function update() {
                 }
             }
             if (obj) desenharObjetoEditor(obj);
-        }); return;
+        });
+        atualizarMolduraReferencia16x9();
+        return;
     }
+    atualizarMolduraReferencia16x9();
     if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2);
     verificarPortaisDaSala(this);
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10); });
@@ -2359,16 +2407,20 @@ function update() {
     if (jogadoresCamera.length >= 2) {
         const a = jogadoresCamera[0], b = jogadoresCamera[1];
         const mX = (a.body.position.x + b.body.position.x) / 2, mY = (a.body.position.y + b.body.position.y) / 2;
-        let z = Math.min(SCREEN_WIDTH / (Math.abs(a.body.position.x - b.body.position.x) + 250), SCREEN_HEIGHT / (Math.abs(a.body.position.y - b.body.position.y) + 250));
+        let z = Math.min(SCREEN_WIDTH / (Math.abs(a.body.position.x - b.body.position.x) + 420), SCREEN_HEIGHT / (Math.abs(a.body.position.y - b.body.position.y) + 300));
         z = Phaser.Math.Clamp(z, 0.45, 1.0);
-        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (mX - SCREEN_WIDTH / 2), 0.08);
-        this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (mY - SCREEN_HEIGHT / 2), 0.08);
-        this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, z, 0.05));
+        const novoZoom = Phaser.Math.Linear(this.cameras.main.zoom, z, 0.05);
+        this.cameras.main.setZoom(novoZoom);
+        const alvoScrollX = mX - SCREEN_WIDTH / (2 * novoZoom);
+        const alvoScrollY = mY - SCREEN_HEIGHT / (2 * novoZoom);
+        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, alvoScrollX, 0.08);
+        this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, alvoScrollY, 0.08);
     } else if (jogadoresCamera.length === 1) {
         const pCam = jogadoresCamera[0];
-        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, (pCam.body.position.x - SCREEN_WIDTH / 2), 0.08);
-        this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, (pCam.body.position.y - SCREEN_HEIGHT / 2), 0.08);
-        this.cameras.main.setZoom(Phaser.Math.Linear(this.cameras.main.zoom, 1, 0.05));
+        const novoZoom = Phaser.Math.Linear(this.cameras.main.zoom, 1, 0.05);
+        this.cameras.main.setZoom(novoZoom);
+        this.cameras.main.scrollX = Phaser.Math.Linear(this.cameras.main.scrollX, pCam.body.position.x - SCREEN_WIDTH / (2 * novoZoom), 0.08);
+        this.cameras.main.scrollY = Phaser.Math.Linear(this.cameras.main.scrollY, pCam.body.position.y - SCREEN_HEIGHT / (2 * novoZoom), 0.08);
     }
 }
 </script>
