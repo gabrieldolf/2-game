@@ -1098,7 +1098,7 @@ function criarPoligonoAPartirDeDados(scene, dados) {
         const parte = Phaser.Physics.Matter.Matter.Bodies.fromVertices((centroX + p1.x + p2.x) / 3, (centroY + p1.y + p2.y) / 3, triangulo, conf);
         if (parte) partes.push(parte);
     }
-    const body = scene.matter.body.create({ parts, isStatic: !!dados.isStatic, label: 'ambiente', ignoreGravity: dados.gravity === false });
+    const body = scene.matter.body.create({ parts: partes, isStatic: !!dados.isStatic, label: 'ambiente', ignoreGravity: dados.gravity === false });
     body.manuseavel = !!dados.manuseavel; body.naoAgarravel = !!dados.naoAgarravel;
     scene.matter.world.add(body); scene.matter.body.setPosition(body, { x: centroX, y: centroY });
     if (!body.isStatic) { scene.matter.body.setInertia(body, dados.lockRot ? Infinity : body.inertia); scene.matter.body.setAngle(body, Number(dados.angle) || 0); }
