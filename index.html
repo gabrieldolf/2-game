@@ -1736,7 +1736,10 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
     let prox = null, mDist = Infinity;
     listaObjetosEditaveis.forEach(obj => {
         let colidiu = false;
-        if (obj.body) colidiu = Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices, { x: x, y: y });
+        if (obj.body) {
+            if (obj.shape === 'polygon') colidiu = maoPodeAgarrarPoligonoCustomizado(obj, x, y, 0);
+            else colidiu = Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices, { x: x, y: y });
+        }
         else if (['portal', 'respawn1', 'respawn2'].includes(obj.shape)) {
             const px = Number(obj.visualX) || 0, py = Number(obj.visualY) || 0;
             const hw = obj.shape === 'portal' ? (Math.max(20, Number(obj.portalAreaW) || 100) / 2) : 28;
@@ -2167,6 +2170,54 @@ function desenharJogador(p) {
     g.fillStyle(lL ? 0xff8888 : 0xff0000, 1).fillCircle(p.leftHand.position.x, p.leftHand.position.y, 14); g.fillStyle(rR ? 0x8888ff : 0x0000ff, 1).fillCircle(p.rightHand.position.x, p.rightHand.position.y, 14);
 }
 
+// Teste geométrico exato para polígonos customizados.
+// Matter.Query.region testa principalmente os limites (AABB) do corpo; em um
+// polígono irregular/concavo isso inclui áreas vazias. Estas funções verificam
+// a forma visual real do polígono e a distância da mão até suas arestas.
+function distanciaPontoSegmento(px, py, ax, ay, bx, by) {
+    const abx = bx - ax, aby = by - ay;
+    const apx = px - ax, apy = py - ay;
+    const ab2 = abx * abx + aby * aby;
+    if (ab2 <= 0.000001) return Math.hypot(px - ax, py - ay);
+    const t = Phaser.Math.Clamp((apx * abx + apy * aby) / ab2, 0, 1);
+    const qx = ax + abx * t, qy = ay + aby * t;
+    return Math.hypot(px - qx, py - qy);
+}
+
+function obterVerticesMundoPoligonoCustomizado(obj) {
+    if (!obj || obj.shape !== 'polygon' || !obj.body || !Array.isArray(obj.dadosDesenhoVisual) || obj.dadosDesenhoVisual.length < 3) return [];
+    const cx = obj.body.position.x, cy = obj.body.position.y;
+    const a = Number(obj.body.angle) || 0;
+    const cos = Math.cos(a), sin = Math.sin(a);
+    return obj.dadosDesenhoVisual.map(v => ({
+        x: cx + (Number(v.x) || 0) * cos - (Number(v.y) || 0) * sin,
+        y: cy + (Number(v.x) || 0) * sin + (Number(v.y) || 0) * cos
+    }));
+}
+
+function pontoDentroPoligono(vertices, x, y) {
+    let dentro = false;
+    for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+        const xi = vertices[i].x, yi = vertices[i].y;
+        const xj = vertices[j].x, yj = vertices[j].y;
+        const cruza = ((yi > y) !== (yj > y)) &&
+            (x < (xj - xi) * (y - yi) / ((yj - yi) || 0.0000001) + xi);
+        if (cruza) dentro = !dentro;
+    }
+    return dentro;
+}
+
+function maoPodeAgarrarPoligonoCustomizado(obj, handX, handY, alcance = 16) {
+    const vertices = obterVerticesMundoPoligonoCustomizado(obj);
+    if (vertices.length < 3) return false;
+    if (pontoDentroPoligono(vertices, handX, handY)) return true;
+    for (let i = 0; i < vertices.length; i++) {
+        const a = vertices[i], b = vertices[(i + 1) % vertices.length];
+        if (distanciaPontoSegmento(handX, handY, a.x, a.y, b.x, b.y) <= alcance) return true;
+    }
+    return false;
+}
+
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         let caixaDeteccao = { min: { x: h.position.x - 16, y: h.position.y - 16 }, max: { x: h.position.x + 16, y: h.position.y + 16 } };
@@ -2188,7 +2239,15 @@ function processarGarra(s, p, h, jKey, grab) {
         if (!alvoCorpo) {
             for (let i = 0; i < listaObjetosEditaveis.length; i++) {
                 let obj = listaObjetosEditaveis[i]; if (!obj || obj.naoAgarravel) continue;
-                if (obj.body && !obj.body.naoAgarravel && s.matter.query.region([obj.body], caixaDeteccao).length > 0) { alvoCorpo = obj.body; break; }
+                if (obj.body && !obj.body.naoAgarravel) {
+                    // Polígonos customizados precisam de um teste contra a forma real.
+                    // Usar Query.region no body composto faria toda a caixa delimitadora
+                    // (inclusive áreas vazias ao redor/entre concavidades) parecer agarrável.
+                    const atingiu = obj.shape === 'polygon'
+                        ? maoPodeAgarrarPoligonoCustomizado(obj, h.position.x, h.position.y, 16)
+                        : s.matter.query.region([obj.body], caixaDeteccao).length > 0;
+                    if (atingiu) { alvoCorpo = obj.body; break; }
+                }
                 else if (obj.shape === 'rope' && obj.ropeElos) {
                     for (let j = 0; j < obj.ropeElos.length; j++) {
                         if (!obj.ropeElos[j].naoAgarravel && s.matter.query.region([obj.ropeElos[j]], caixaDeteccao).length > 0) { alvoCorpo = obj.ropeElos[j]; break; }
