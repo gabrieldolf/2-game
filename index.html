@@ -126,7 +126,7 @@
     </div>
 </div>
 <div id="canvas-container">
-    <div id="aviso-modo">Aperte [E] para abrir o Editor</div>
+    <div id="aviso-modo">Aperte [F4] para abrir o Editor</div>
     <div id="indicador-debug">MODO DEBUG</div>
     <div id="moldura-info">VISÃO DE REFERÊNCIA 16:9 · 1920 × 1080</div>
 </div>
@@ -162,6 +162,7 @@ let player1, player2, ferramentaAtual = 'create', objetoSelecionado = null, list
 let gridGraphics, molduraReferenciaGraphics, bordasFixasDoCenario = [], graficosBordasFixas = [], cursorsKeyboard;
 let blocosGradeFisicos = [], blocosGradeSala = [], graficosBlocosGradeFisicos = [];
 let gradeConstrucaoGraphics = null, modoConstrucaoGrade = false;
+let arrastandoGrade = false, modoPincelGrade = null, ultimaCelulaGradeArrastada = null;
 let modoEditorAtivo = false, cameraSalvaX = 0, cameraSalvaY = 0, cameraSalvaZoom = 1;
 let clickOffsetX = 0, clickOffsetY = 0;
 let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
@@ -1201,6 +1202,9 @@ function inicializarSistemaDeSalas() {
 
 function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; }
 function setFerramenta(f) {
+    const scene = game.scene.getScene('default');
+    if (verticesCriacaoAtiva.length > 0) cancelarCriacaoPoligonoPendente(scene);
+    arrastandoGrade = false; modoPincelGrade = null; ultimaCelulaGradeArrastada = null;
     if (modoConstrucaoGrade && f !== 'create') {
         modoConstrucaoGrade = false;
         const btnGrid = document.getElementById('btn-grid-build');
@@ -1244,11 +1248,12 @@ function alternarModoEditor(scene) {
     modoEditorAtivo = !modoEditorAtivo;
     const panel = document.getElementById('sidebar');
     const aviso = document.getElementById('aviso-modo');
-    verticesCriacaoAtiva = []; previewGraphicsPoligono.clear();
+    cancelarCriacaoPoligonoPendente(scene);
+    arrastandoGrade = false; modoPincelGrade = null; ultimaCelulaGradeArrastada = null;
     if (modoEditorAtivo) {
         cameraSalvaX = scene.cameras.main.scrollX; cameraSalvaY = scene.cameras.main.scrollY; cameraSalvaZoom = scene.cameras.main.zoom;
         scene.cameras.main.setZoom(1.0); scene.matter.world.pause();
-        panel.style.display = 'flex'; aviso.innerText = "Modo Editor Ativo - Aperte [E] para Jogar"; aviso.style.color = "#00ff00";
+        panel.style.display = 'flex'; aviso.innerText = "Modo Editor Ativo - Aperte [F4] para Jogar"; aviso.style.color = "#00ff00";
     } else {
         modoConstrucaoGrade = false;
         const btnGrid = document.getElementById('btn-grid-build');
@@ -1258,7 +1263,7 @@ function alternarModoEditor(scene) {
         garantirSessaoDeJogo();
         salaEmJogoAtual = salaAtual.id;
         portalCooldownAte = performance.now() + TEMPO_COOLDOWN_PORTAL_MS;
-        panel.style.display = 'none'; aviso.innerText = "Aperte [E] para abrir o Editor"; aviso.style.color = "#fff";
+        panel.style.display = 'none'; aviso.innerText = "Aperte [F4] para abrir o Editor"; aviso.style.color = "#fff";
     }
     alternarVisibilidadeGrade();
     desenharGradeConstrucao();
@@ -1368,27 +1373,63 @@ function alternarModoConstrucaoGrade() {
         btn.innerText = modoConstrucaoGrade ? 'Sair da Construção por Grade' : 'Construir Sala por Grade (50 px)';
     }
     if (modoConstrucaoGrade) {
+        cancelarCriacaoPoligonoPendente(game.scene.getScene('default'));
+        arrastandoGrade = false; modoPincelGrade = null; ultimaCelulaGradeArrastada = null;
         ferramentaAtual = 'create';
         document.getElementById('btn-create').className = 'active'; document.getElementById('btn-select').className = '';
         desmarcarObjetoDoEditor();
-        atualizarStatusSala('Modo de construção por grade ativo • clique nos quadrados para alternar bloco/vazio', '#ff9f43');
+        atualizarStatusSala('Modo de construção por grade ativo • clique e arraste para criar/apagar blocos', '#ff9f43');
     } else {
+        finalizarPincelGrade();
         atualizarStatusSala('Modo de construção por grade encerrado', '#9bd4ff');
     }
     desenharGradeConstrucao();
 }
 
-function alternarBlocoDaGrade(scene, worldX, worldY) {
-    if (!modoConstrucaoGrade) return;
+function obterCelulaGrade(worldX, worldY) {
     const coluna = Math.floor(worldX / TAMANHO_BLOCO_GRADE);
     const linha = Math.floor(worldY / TAMANHO_BLOCO_GRADE);
-    if (coluna < 0 || linha < 0 || coluna >= Math.ceil(WORLD_WIDTH / TAMANHO_BLOCO_GRADE) || linha >= Math.ceil(WORLD_HEIGHT / TAMANHO_BLOCO_GRADE)) return;
-    const indice = blocosGradeSala.findIndex(c => c.coluna === coluna && c.linha === linha);
-    if (indice >= 0) blocosGradeSala.splice(indice, 1);
-    else blocosGradeSala.push({ coluna, linha });
+    if (coluna < 0 || linha < 0 || coluna >= Math.ceil(WORLD_WIDTH / TAMANHO_BLOCO_GRADE) || linha >= Math.ceil(WORLD_HEIGHT / TAMANHO_BLOCO_GRADE)) return null;
+    return { coluna, linha, chave: coluna + ':' + linha };
+}
+
+function aplicarPincelNaGrade(scene, worldX, worldY, modo) {
+    if (!modoConstrucaoGrade) return;
+    const celula = obterCelulaGrade(worldX, worldY);
+    if (!celula) return;
+    if (ultimaCelulaGradeArrastada === celula.chave) return;
+    ultimaCelulaGradeArrastada = celula.chave;
+
+    const indice = blocosGradeSala.findIndex(c => c.coluna === celula.coluna && c.linha === celula.linha);
+    const ocupado = indice >= 0;
+    let alterou = false;
+    if (modo === 'criar' && !ocupado) {
+        blocosGradeSala.push({ coluna: celula.coluna, linha: celula.linha });
+        alterou = true;
+    } else if (modo === 'apagar' && ocupado) {
+        blocosGradeSala.splice(indice, 1);
+        alterou = true;
+    }
+    if (!alterou) return;
     reconstruirBlocosGradeFisicos(scene);
     marcarSalaComoAlterada();
     desenharGradeConstrucao();
+}
+
+function iniciarPincelGrade(scene, worldX, worldY) {
+    const celula = obterCelulaGrade(worldX, worldY);
+    if (!celula) return;
+    const ocupado = blocosGradeSala.some(c => c.coluna === celula.coluna && c.linha === celula.linha);
+    modoPincelGrade = ocupado ? 'apagar' : 'criar';
+    arrastandoGrade = true;
+    ultimaCelulaGradeArrastada = null;
+    aplicarPincelNaGrade(scene, worldX, worldY, modoPincelGrade);
+}
+
+function finalizarPincelGrade() {
+    arrastandoGrade = false;
+    modoPincelGrade = null;
+    ultimaCelulaGradeArrastada = null;
 }
 
 function alterarDimensoesSalaEditor() {
@@ -1484,7 +1525,7 @@ function create() {
     this.input.on('pointerdown', (p) => {
         if (!modoEditorAtivo) return;
         if (modoConstrucaoGrade) {
-            alternarBlocoDaGrade(this, p.worldX, p.worldY);
+            iniciarPincelGrade(this, p.worldX, p.worldY);
             return;
         }
         if (document.getElementById('prop-shape').value === 'polygon') {
@@ -1513,6 +1554,10 @@ function create() {
     });
 
     this.input.on('pointermove', function(p) {
+        if (modoEditorAtivo && modoConstrucaoGrade && arrastandoGrade && p.isDown) {
+            aplicarPincelNaGrade(this, p.worldX, p.worldY, modoPincelGrade);
+            return;
+        }
         if (modoEditorAtivo && ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
             let pos = { x: p.worldX - clickOffsetX, y: p.worldY - clickOffsetY };
             if (document.getElementById('prop-snap-active').checked && objetoSelecionado.shape !== 'polygon' && objetoSelecionado.shape !== 'rope') pos = calcularAlinhamentoPorProximidade(this, pos.x, pos.y, objetoSelecionado.w, objetoSelecionado.h, objetoSelecionado.shape, objetoSelecionado.body);
@@ -1540,7 +1585,10 @@ function create() {
         }
     }, this);
 
-    this.input.keyboard.on('keydown-E', () => { alternarModoEditor(this); });
+    this.input.on('pointerup', () => { finalizarPincelGrade(); });
+    this.input.on('gameout', () => { finalizarPincelGrade(); });
+
+    this.input.keyboard.on('keydown-F4', () => { alternarModoEditor(this); });
     this.input.keyboard.on('keydown-F3', () => { alternarModoDebug(!modoDebugAtivo); });
     this.input.keyboard.on('keydown-ENTER', () => { if (modoEditorAtivo && ferramentaAtual === 'create' && document.getElementById('prop-shape').value === 'polygon') finalizarCriacaoPoligono(this); });
     this.input.gamepad.on('down', (pad) => {
@@ -1551,6 +1599,9 @@ function create() {
 
 function atualizarInterfaceForma() {
     const s = document.getElementById('prop-shape').value;
+    if (s !== 'polygon' && verticesCriacaoAtiva.length > 0) {
+        cancelarCriacaoPoligonoPendente(game.scene.getScene('default'));
+    }
     const especial = ['portal', 'respawn1', 'respawn2'].includes(s);
     const fisico = !especial && s !== 'rope';
     document.getElementById('painel-propriedades-comuns').style.display = fisico ? 'block' : 'none';
@@ -1649,6 +1700,11 @@ function limparBolinhasGuiaDoPoligono(scene) {
         scene.listaBolinhasGuiaCena.forEach(bola => { if (bola && bola.destroy) { bola.destroy(); } });
         scene.listaBolinhasGuiaCena = [];
     }
+}
+
+function cancelarCriacaoPoligonoPendente(scene) {
+    verticesCriacaoAtiva = [];
+    limparBolinhasGuiaDoPoligono(scene);
 }
 
 function finalizarCriacaoPoligono(scene) {
