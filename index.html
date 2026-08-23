@@ -108,8 +108,8 @@
                 <div class="prop-row"><label>Altura (px):</label><input type="number" id="prop-portal-area-h" value="120" min="20" step="10" onchange="atualizarObjetoExistente()"></div>
                 <div style="height:1px;background:rgba(255,255,255,.25);margin:7px 0;"></div>
                 <div style="color:#b8f5ff; font-weight:bold; margin-bottom:6px;">Área de Entrada (chegada)</div>
-                <div class="prop-row"><label>Centro X:</label><input type="number" id="prop-portal-entrada-x" value="0" step="10" onchange="atualizarObjetoExistente()"></div>
-                <div class="prop-row"><label>Centro Y:</label><input type="number" id="prop-portal-entrada-y" value="0" step="10" onchange="atualizarObjetoExistente()"></div>
+                <div class="prop-row"><label>Centro X (local):</label><input type="number" id="prop-portal-entrada-x" value="0" step="10" onchange="atualizarObjetoExistente()"></div>
+                <div class="prop-row"><label>Centro Y (local):</label><input type="number" id="prop-portal-entrada-y" value="0" step="10" onchange="atualizarObjetoExistente()"></div>
                 <div class="prop-row"><label>Largura (px):</label><input type="number" id="prop-portal-entrada-w" value="100" min="20" step="10" onchange="atualizarObjetoExistente()"></div>
                 <div class="prop-row"><label>Altura (px):</label><input type="number" id="prop-portal-entrada-h" value="120" min="20" step="10" onchange="atualizarObjetoExistente()"></div>
                 <div style="font-size:10px;color:#d8f3f8;margin-top:5px;">Ao tocar a área de ativação, o jogador mantém sua posição proporcional e surge no ponto equivalente dentro da área de entrada do portal de destino.</div>
@@ -175,6 +175,7 @@ let gradeConstrucaoGraphics = null, modoConstrucaoGrade = false;
 let arrastandoGrade = false, modoPincelGrade = null, ultimaCelulaGradeArrastada = null;
 let modoEditorAtivo = false, cameraSalvaX = 0, cameraSalvaY = 0, cameraSalvaZoom = 1;
 let clickOffsetX = 0, clickOffsetY = 0;
+let arrastandoObjetoSelecionado = false;
 let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
 const CHAVE_ARMAZENAMENTO_SESSAO = 'metroidvania_ho_sessao_jogo_v1';
@@ -187,6 +188,8 @@ let ultimoPortalSemDestinoAvisado = '';
 let estadoTravessiaPortal = null;
 const TEMPO_COOLDOWN_PORTAL_MS = 700;
 const MARGEM_SAIDA_PORTAL = 28;
+let alcanceGarraTemporarioAte = 0;
+function obterAlcanceGarraAtual() { return performance.now() < alcanceGarraTemporarioAte ? 19 : 16; }
 
 // Sistema de salas: os dados são separados da física em execução.
 // O navegador mantém as salas no localStorage e também permitimos exportar/importar JSON.
@@ -392,6 +395,8 @@ function serializarObjetoDaSala(obj) {
         base.portalAreaH = obj.shape === 'portal' ? Math.max(20, Number(obj.portalAreaH) || 120) : null;
         base.portalEntradaX = obj.shape === 'portal' ? Number(obj.portalEntradaX ?? obj.visualX ?? 0) : null;
         base.portalEntradaY = obj.shape === 'portal' ? Number(obj.portalEntradaY ?? obj.visualY ?? 0) : null;
+        base.portalEntradaLocalX = obj.shape === 'portal' ? Number((obj.portalEntradaX ?? obj.visualX ?? 0) - (obj.visualX ?? 0)) : null;
+        base.portalEntradaLocalY = obj.shape === 'portal' ? Number((obj.portalEntradaY ?? obj.visualY ?? 0) - (obj.visualY ?? 0)) : null;
         base.portalEntradaW = obj.shape === 'portal' ? Math.max(20, Number(obj.portalEntradaW) || Number(obj.portalAreaW) || 100) : null;
         base.portalEntradaH = obj.shape === 'portal' ? Math.max(20, Number(obj.portalEntradaH) || Number(obj.portalAreaH) || 120) : null;
         base.nomePonto = obj.nomePonto || '';
@@ -966,6 +971,9 @@ function reposicionarJogadorCompleto(scene, p, pos) {
 }
 
 function carregarSalaFisicamente(scene, dados) {
+    // Durante o primeiro segundo após carregar uma sala, a área de alcance das mãos
+    // recebe uma pequena tolerância extra (19 px em vez de 16 px).
+    alcanceGarraTemporarioAte = performance.now() + 1000;
     // Toda troca de definição de sala começa removendo completamente os
     // elementos físicos/visuais da sala anterior. Jogadores não são removidos
     // aqui porque, no futuro, eles deverão atravessar portais entre salas.
@@ -1078,8 +1086,8 @@ function adicionarObjetoSerializado(scene, dados) {
             portalDestinoPonto: dados.portalDestinoPonto || '',
             portalAreaW: dados.shape === 'portal' ? Math.max(20, Number(dados.portalAreaW) || 100) : null,
             portalAreaH: dados.shape === 'portal' ? Math.max(20, Number(dados.portalAreaH) || 120) : null,
-            portalEntradaX: dados.shape === 'portal' ? Number(dados.portalEntradaX ?? x) : null,
-            portalEntradaY: dados.shape === 'portal' ? Number(dados.portalEntradaY ?? y) : null,
+            portalEntradaX: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaLocalX)) ? x + Number(dados.portalEntradaLocalX) : Number(dados.portalEntradaX ?? x)) : null,
+            portalEntradaY: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaLocalY)) ? y + Number(dados.portalEntradaLocalY) : Number(dados.portalEntradaY ?? y)) : null,
             portalEntradaW: dados.shape === 'portal' ? Math.max(20, Number(dados.portalEntradaW) || Number(dados.portalAreaW) || 100) : null,
             portalEntradaH: dados.shape === 'portal' ? Math.max(20, Number(dados.portalEntradaH) || Number(dados.portalAreaH) || 120) : null,
             nomePonto: dados.nomePonto || dados.idPersistente || gerarIdObjetoPersistente()
@@ -1112,7 +1120,7 @@ function adicionarObjetoSerializado(scene, dados) {
         scene.matter.body.setInertia(body, dados.lockRot ? Infinity : body.inertia);
         scene.matter.body.setAngle(body, Number(dados.angle) || 0);
     }
-    listaObjetosEditaveis.push({ body, gfx: scene.add.graphics().setDepth(3), shape: dados.shape, w: Number(dados.w) || 50, h: Number(dados.h) || 50, gravity: dados.gravity !== false, lockPos: !!dados.lockPos, lockRot: !!dados.lockRot, mass: Number(dados.mass) || 1, air: Number(dados.air) || 0, bounce: Number(dados.bounce) || 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, posicaoTravadaX: Number(dados.x) || 0, posicaoTravadaY: Number(dados.y) || 0, physicsActive: true, visualX: Number(dados.x) || 0, visualY: Number(dados.y) || 0, dadosDesenhoVisual: null, manuseavel: !!dados.manuseavel, naoAgarravel: !!dados.naoAgarravel, isStatic: !!dados.isStatic });
+    listaObjetosEditaveis.push({ body, gfx: scene.add.graphics().setDepth(3), shape: dados.shape, w: Number(dados.w) || 50, h: Number(dados.h) || 50, gravity: dados.gravity !== false, lockPos: !!dados.lockPos, lockRot: !!dados.lockRot, mass: Number(dados.mass) || 1, air: Number(dados.air) || 0, bounce: Number(dados.bounce) || 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, posicaoTravadaX: Number(dados.x) || 0, posicaoTravadaY: Number(dados.y) || 0, physicsActive: true, visualX: Number(dados.x) || 0, visualY: Number(dados.y) || 0, dadosDesenhoVisual: null, manuseavel: !!dados.manuseavel, naoAgarravel: !!dados.naoAgarravel, isStatic: !!dados.isStatic, idPersistente: dados.idPersistente || null, persistirSessao: !!dados.persistirSessao });
 }
 
 function normalizarAnguloRad(a) {
@@ -1186,7 +1194,7 @@ function criarPoligonoAPartirDeDados(scene, dados) {
     body.manuseavel = !!dados.manuseavel; body.naoAgarravel = !!dados.naoAgarravel;
     scene.matter.world.add(body); scene.matter.body.setPosition(body, { x: centroX, y: centroY });
     if (!body.isStatic) { scene.matter.body.setInertia(body, dados.lockRot ? Infinity : body.inertia); scene.matter.body.setAngle(body, Number(dados.angle) || 0); }
-    listaObjetosEditaveis.push({ body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: dados.gravity !== false, lockPos: !!dados.lockPos, lockRot: !!dados.lockRot, mass: Number(dados.mass) || 1, air: Number(dados.air) || 0, bounce: Number(dados.bounce) || 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: vertices.map(v => ({ x: Number(v.x) || 0, y: Number(v.y) || 0 })), manuseavel: !!dados.manuseavel, naoAgarravel: !!dados.naoAgarravel, isStatic: !!dados.isStatic });
+    listaObjetosEditaveis.push({ body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: dados.gravity !== false, lockPos: !!dados.lockPos, lockRot: !!dados.lockRot, mass: Number(dados.mass) || 1, air: Number(dados.air) || 0, bounce: Number(dados.bounce) || 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: vertices.map(v => ({ x: Number(v.x) || 0, y: Number(v.y) || 0 })), manuseavel: !!dados.manuseavel, naoAgarravel: !!dados.naoAgarravel, isStatic: !!dados.isStatic, idPersistente: dados.idPersistente || null, persistirSessao: !!dados.persistirSessao });
 }
 
 function criarCordaAPartirDeDados(scene, dados) {
@@ -1201,7 +1209,7 @@ function criarCordaAPartirDeDados(scene, dados) {
         else constraints.push(scene.matter.add.constraint(lastBody, elo, 0, 0.15, { pointA: { x: 0, y: segmentLen / 2 }, pointB: { x: 0, y: -segmentLen / 2 }, damping: 0.2 }));
         lastBody = elo;
     }
-    listaObjetosEditaveis.push({ body: null, ropeElos: elos, ropeConstraints: constraints, shape: 'rope', w: 0, h: 0, gravity: true, lockPos: true, lockRot: false, mass: 0.8, air: 0.08, bounce: 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, ropeLen, ropeSegments, ropeColor, gfx: scene.add.graphics().setDepth(3), posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: false, naoAgarravel: false, isStatic: true });
+    listaObjetosEditaveis.push({ body: null, ropeElos: elos, ropeConstraints: constraints, shape: 'rope', w: Number(dados.w) || 0, h: Number(dados.h) || 0, gravity: dados.gravity !== false, lockPos: dados.lockPos !== false, lockRot: !!dados.lockRot, mass: Number(dados.mass) || 0.8, air: Number(dados.air) || 0.08, bounce: Number(dados.bounce) || 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, ropeLen, ropeSegments, ropeColor, gfx: scene.add.graphics().setDepth(3), posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: !!dados.manuseavel, naoAgarravel: !!dados.naoAgarravel, isStatic: dados.isStatic !== false, idPersistente: dados.idPersistente || null, persistirSessao: !!dados.persistirSessao });
 }
 
 function carregarSalaPorId(id) {
@@ -1284,7 +1292,7 @@ function inicializarSistemaDeSalas() {
     atualizarCamposSala();
 }
 
-function desmarcarObjetoDoEditor() { objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; }
+function desmarcarObjetoDoEditor() { arrastandoObjetoSelecionado = false; objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; }
 function setFerramenta(f) {
     const scene = game.scene.getScene('default');
     if (verticesCriacaoAtiva.length > 0) cancelarCriacaoPoligonoPendente(scene);
@@ -1627,7 +1635,11 @@ function create() {
             iniciarPincelGrade(this, p.worldX, p.worldY);
             return;
         }
-        if (document.getElementById('prop-shape').value === 'polygon') {
+        if (ferramentaAtual === 'select') {
+            arrastandoObjetoSelecionado = executarSelecaoObjeto(this, p.worldX, p.worldY, p);
+            return;
+        }
+        if (ferramentaAtual === 'create' && document.getElementById('prop-shape').value === 'polygon') {
             verticesCriacaoAtiva.push({ x: p.worldX, y: p.worldY });
             if (!this.listaBolinhasGuiaCena) { this.listaBolinhasGuiaCena = []; }
             if (!previewGraphicsPoligono) { previewGraphicsPoligono = this.add.graphics().setDepth(9999); }
@@ -1647,8 +1659,6 @@ function create() {
             }
         } else if (ferramentaAtual === 'create') {
             executarCriacaoObjeto(this, p.worldX, p.worldY);
-        } else {
-            executarSelecaoObjeto(this, p.worldX, p.worldY, p);
         }
     });
 
@@ -1657,7 +1667,7 @@ function create() {
             aplicarPincelNaGrade(this, p.worldX, p.worldY, modoPincelGrade);
             return;
         }
-        if (modoEditorAtivo && ferramentaAtual === 'select' && objetoSelecionado && p.isDown) {
+        if (modoEditorAtivo && ferramentaAtual === 'select' && arrastandoObjetoSelecionado && objetoSelecionado && p.isDown) {
             let pos = { x: p.worldX - clickOffsetX, y: p.worldY - clickOffsetY };
             if (document.getElementById('prop-snap-active').checked && objetoSelecionado.shape !== 'polygon' && objetoSelecionado.shape !== 'rope') pos = calcularAlinhamentoPorProximidade(this, pos.x, pos.y, objetoSelecionado.w, objetoSelecionado.h, objetoSelecionado.shape, objetoSelecionado.body);
             if (objetoSelecionado.body) {
@@ -1680,8 +1690,8 @@ function create() {
                     const dyPortal = pos.y - (Number(objetoSelecionado.visualY) || 0);
                     objetoSelecionado.portalEntradaX = Number(objetoSelecionado.portalEntradaX ?? objetoSelecionado.visualX ?? 0) + dxPortal;
                     objetoSelecionado.portalEntradaY = Number(objetoSelecionado.portalEntradaY ?? objetoSelecionado.visualY ?? 0) + dyPortal;
-                    document.getElementById('prop-portal-entrada-x').value = objetoSelecionado.portalEntradaX;
-                    document.getElementById('prop-portal-entrada-y').value = objetoSelecionado.portalEntradaY;
+                    document.getElementById('prop-portal-entrada-x').value = objetoSelecionado.portalEntradaX - pos.x;
+                    document.getElementById('prop-portal-entrada-y').value = objetoSelecionado.portalEntradaY - pos.y;
                 }
                 objetoSelecionado.visualX = pos.x; objetoSelecionado.visualY = pos.y; 
                 if (objetoSelecionado.shape === 'rope' && objetoSelecionado.ropeElos) {
@@ -1694,8 +1704,8 @@ function create() {
         }
     }, this);
 
-    this.input.on('pointerup', () => { finalizarPincelGrade(); });
-    this.input.on('gameout', () => { finalizarPincelGrade(); });
+    this.input.on('pointerup', () => { finalizarPincelGrade(); arrastandoObjetoSelecionado = false; });
+    this.input.on('gameout', () => { finalizarPincelGrade(); arrastandoObjetoSelecionado = false; });
 
     this.input.keyboard.on('keydown-F4', () => { alternarModoEditor(this); });
     this.input.keyboard.on('keydown-F3', () => { alternarModoDebug(!modoDebugAtivo); });
@@ -1775,8 +1785,8 @@ function executarCriacaoObjeto(scene, x, y) {
             portalDestinoSala: c.portalDestinoSala, portalDestinoPonto: c.portalDestinoPonto,
             portalAreaW: c.shape === 'portal' ? c.portalAreaW : null,
             portalAreaH: c.shape === 'portal' ? c.portalAreaH : null,
-            portalEntradaX: c.shape === 'portal' ? (Number.isFinite(c.portalEntradaX) ? c.portalEntradaX : ax) : null,
-            portalEntradaY: c.shape === 'portal' ? (Number.isFinite(c.portalEntradaY) ? c.portalEntradaY : ay) : null,
+            portalEntradaX: c.shape === 'portal' ? ax + (Number.isFinite(c.portalEntradaX) ? c.portalEntradaX : 0) : null,
+            portalEntradaY: c.shape === 'portal' ? ay + (Number.isFinite(c.portalEntradaY) ? c.portalEntradaY : 0) : null,
             portalEntradaW: c.shape === 'portal' ? c.portalEntradaW : null,
             portalEntradaH: c.shape === 'portal' ? c.portalEntradaH : null,
             nomePonto: c.nomePonto || idPersistente
@@ -1873,6 +1883,7 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
         let colidiu = false;
         if (obj.body) {
             if (obj.shape === 'polygon') colidiu = maoPodeAgarrarPoligonoCustomizado(obj, x, y, 0);
+            else if (obj.shape === 'seesaw') colidiu = maoPodeAgarrarGangorra(obj, x, y, 0);
             else colidiu = Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices, { x: x, y: y });
         }
         else if (['portal', 'respawn1', 'respawn2'].includes(obj.shape)) {
@@ -1886,11 +1897,30 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
                 const ehh = Math.max(20, Number(obj.portalEntradaH) || Number(obj.portalAreaH) || 120) / 2;
                 colidiu = Math.abs(x - ex) <= ehw && Math.abs(y - ey) <= ehh;
             }
-        } else if (obj.shape === 'rope' && obj.ropeElos) { obj.ropeElos.forEach(elo => { if (Phaser.Physics.Matter.Matter.Vertices.contains(elo.vertices, { x: x, y: y })) colidiu = true; }); }
-        if (colidiu) { let posX = obj.body ? obj.body.position.x : obj.visualX; let posY = obj.body ? obj.body.position.y : obj.visualY; let dist = Math.sqrt((posX - x)**2 + (posY - y)**2); if (dist < mDist) { mDist = dist; prox = obj; } }
+        } else if (obj.shape === 'rope' && obj.ropeElos) {
+            obj.ropeElos.forEach(elo => { if (Phaser.Physics.Matter.Matter.Vertices.contains(elo.vertices, { x: x, y: y })) colidiu = true; });
+        }
+        if (colidiu) {
+            const posX = obj.body ? obj.body.position.x : obj.visualX;
+            const posY = obj.body ? obj.body.position.y : obj.visualY;
+            const dist = Math.hypot(posX - x, posY - y);
+            if (dist < mDist) { mDist = dist; prox = obj; }
+        }
     });
-    if (prox) { selecionarObjetoDoEditor(prox); let posX = prox.body ? prox.body.position.x : prox.visualX; let posY = prox.body ? prox.body.position.y : prox.visualY; clickOffsetX = x - posX; clickOffsetY = y - posY; }
-    else if (!pointer.leftButtonDown()) { desmarcarObjetoDoEditor(); }
+
+    if (!prox) {
+        desmarcarObjetoDoEditor();
+        arrastandoObjetoSelecionado = false;
+        return false;
+    }
+
+    if (objetoSelecionado !== prox) desmarcarObjetoDoEditor();
+    selecionarObjetoDoEditor(prox);
+    const posX = prox.body ? prox.body.position.x : prox.visualX;
+    const posY = prox.body ? prox.body.position.y : prox.visualY;
+    clickOffsetX = x - posX;
+    clickOffsetY = y - posY;
+    return true;
 }
 
 function selecionarObjetoDoEditor(obj) {
@@ -1903,8 +1933,8 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('prop-portal-destino-ponto').value = obj.portalDestinoPonto || '';
     document.getElementById('prop-portal-area-w').value = Math.max(20, Number(obj.portalAreaW) || 100);
     document.getElementById('prop-portal-area-h').value = Math.max(20, Number(obj.portalAreaH) || 120);
-    document.getElementById('prop-portal-entrada-x').value = Number(obj.portalEntradaX ?? obj.visualX ?? 0);
-    document.getElementById('prop-portal-entrada-y').value = Number(obj.portalEntradaY ?? obj.visualY ?? 0);
+    document.getElementById('prop-portal-entrada-x').value = Number((obj.portalEntradaX ?? obj.visualX ?? 0) - (obj.visualX ?? 0));
+    document.getElementById('prop-portal-entrada-y').value = Number((obj.portalEntradaY ?? obj.visualY ?? 0) - (obj.visualY ?? 0));
     document.getElementById('prop-portal-entrada-w').value = Math.max(20, Number(obj.portalEntradaW) || Number(obj.portalAreaW) || 100);
     document.getElementById('prop-portal-entrada-h').value = Math.max(20, Number(obj.portalEntradaH) || Number(obj.portalAreaH) || 120);
     document.getElementById('prop-nome-ponto').value = obj.nomePonto || '';
@@ -1964,8 +1994,8 @@ function atualizarObjetoExistente() {
         if (obj.shape === 'portal') {
             obj.portalAreaW = c.portalAreaW;
             obj.portalAreaH = c.portalAreaH;
-            obj.portalEntradaX = Number.isFinite(c.portalEntradaX) ? c.portalEntradaX : px;
-            obj.portalEntradaY = Number.isFinite(c.portalEntradaY) ? c.portalEntradaY : py;
+            obj.portalEntradaX = px + (Number.isFinite(c.portalEntradaX) ? c.portalEntradaX : 0);
+            obj.portalEntradaY = py + (Number.isFinite(c.portalEntradaY) ? c.portalEntradaY : 0);
             obj.portalEntradaW = c.portalEntradaW;
             obj.portalEntradaH = c.portalEntradaH;
             obj.w = c.portalAreaW;
@@ -2444,7 +2474,8 @@ function maoPodeAgarrarGangorra(obj, handX, handY, alcance = 16) {
 
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
-        let caixaDeteccao = { min: { x: h.position.x - 16, y: h.position.y - 16 }, max: { x: h.position.x + 16, y: h.position.y + 16 } };
+        const alcanceGarra = obterAlcanceGarraAtual();
+        let caixaDeteccao = { min: { x: h.position.x - alcanceGarra, y: h.position.y - alcanceGarra }, max: { x: h.position.x + alcanceGarra, y: h.position.y + alcanceGarra } };
         let alvoCorpo = null;
 
         for (let i = 0; i < bordasFixasDoCenario.length; i++) {
@@ -2469,9 +2500,9 @@ function processarGarra(s, p, h, jKey, grab) {
                     // (inclusive áreas vazias ao redor/entre concavidades) parecer agarrável.
                     let atingiu = false;
                     if (obj.shape === 'polygon') {
-                        atingiu = maoPodeAgarrarPoligonoCustomizado(obj, h.position.x, h.position.y, 16);
+                        atingiu = maoPodeAgarrarPoligonoCustomizado(obj, h.position.x, h.position.y, alcanceGarra);
                     } else if (obj.shape === 'seesaw') {
-                        atingiu = maoPodeAgarrarGangorra(obj, h.position.x, h.position.y, 16);
+                        atingiu = maoPodeAgarrarGangorra(obj, h.position.x, h.position.y, alcanceGarra);
                     } else {
                         atingiu = s.matter.query.region([obj.body], caixaDeteccao).length > 0;
                     }
