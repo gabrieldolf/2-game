@@ -2438,6 +2438,19 @@ function maoPodeAgarrarGangorra(obj, handX, handY, alcance = 16) {
     return Math.hypot(foraX, foraY) <= alcance;
 }
 
+// Teste geométrico exato para esferas.
+// A representação visual usa obj.w como raio; portanto a região agarrável do
+// objeto também é circular com exatamente esse mesmo raio. O parâmetro alcance
+// representa somente o alcance atual da mão (16 px, ou 19 px no primeiro
+// segundo após carregar a sala), sem transformar a esfera em uma caixa AABB.
+function maoPodeAgarrarEsfera(obj, handX, handY, alcance = 16) {
+    if (!obj || obj.shape !== 'circle' || !obj.body) return false;
+    const cx = Number(obj.body.position?.x) || 0;
+    const cy = Number(obj.body.position?.y) || 0;
+    const raioVisual = Math.max(0, Number(obj.w) || 0);
+    return Math.hypot(handX - cx, handY - cy) <= raioVisual + Math.max(0, Number(alcance) || 0);
+}
+
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         const alcanceGarra = obterAlcanceGarraAtual();
@@ -2469,6 +2482,8 @@ function processarGarra(s, p, h, jKey, grab) {
                         atingiu = maoPodeAgarrarPoligonoCustomizado(obj, h.position.x, h.position.y, alcanceGarra);
                     } else if (obj.shape === 'seesaw') {
                         atingiu = maoPodeAgarrarGangorra(obj, h.position.x, h.position.y, alcanceGarra);
+                    } else if (obj.shape === 'circle') {
+                        atingiu = maoPodeAgarrarEsfera(obj, h.position.x, h.position.y, alcanceGarra);
                     } else {
                         atingiu = s.matter.query.region([obj.body], caixaDeteccao).length > 0;
                     }
