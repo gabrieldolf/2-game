@@ -183,10 +183,8 @@ let estadoSessaoJogo = null;
 let salaEmJogoAtual = null;
 let modoDebugAtivo = false;
 let transicaoPortalEmAndamento = false;
-let portalCooldownAte = 0;
 let ultimoPortalSemDestinoAvisado = '';
 let estadoTravessiaPortal = null;
-const TEMPO_COOLDOWN_PORTAL_MS = 700;
 const MARGEM_SAIDA_PORTAL = 28;
 let alcanceGarraTemporarioAte = 0;
 function obterAlcanceGarraAtual() { return performance.now() < alcanceGarraTemporarioAte ? 19 : 16; }
@@ -586,24 +584,6 @@ function obterIdRuntimePortal(portal) {
     return String(portal.idPersistente || portal.nomePonto || `${portal.visualX}:${portal.visualY}`);
 }
 
-function atualizarBloqueioDeRetornoDoPortal(jogador, portais) {
-    if (!jogador?.body || !jogador.portalBloqueadoAteSairId) return;
-    const portalBloqueado = (portais || []).find(portal => obterIdRuntimePortal(portal) === jogador.portalBloqueadoAteSairId);
-
-    // Se por algum motivo o portal não existir mais na sala carregada, não
-    // deixamos um bloqueio órfão preso ao jogador.
-    if (!portalBloqueado) {
-        jogador.portalBloqueadoAteSairId = null;
-        return;
-    }
-
-    // O portal pelo qual o jogador acabou de entrar só volta a ser utilizável
-    // depois que o centro do corpo sair completamente da área lógica dele.
-    if (!jogadorDentroDaAreaPortal(jogador, portalBloqueado)) {
-        jogador.portalBloqueadoAteSairId = null;
-    }
-}
-
 function obterRetanguloPortal(portal) {
     if (!portal) return null;
     const cx = Number(portal.visualX ?? portal.posicaoTravadaX) || 0;
@@ -739,7 +719,6 @@ function respawnCooperativoPorConflitoDePortal(scene) {
     resetarEstadoTravessiaPortal();
     if (player1) executarRespawnIndividual(scene, 0);
     if (player2) executarRespawnIndividual(scene, 1);
-    portalCooldownAte = performance.now() + TEMPO_COOLDOWN_PORTAL_MS;
 }
 
 function executarTransicaoPortalComEstados(scene, portalOrigem, registros) {
@@ -776,18 +755,13 @@ function executarTransicaoPortalComEstados(scene, portalOrigem, registros) {
             aplicarEstadoFisicoJogador(scene, p, destino, reg.estado || capturarEstadoFisicoJogador(p));
 
             // O jogador nasce no ponto equivalente dentro da ÁREA DE ENTRADA
-            // do portal de destino. A área de ativação e a área de entrada são
-            // independentes. Esse mesmo portal fica bloqueado SOMENTE para este jogador até
-            // ele realmente sair da sua área. Isso impede o retorno instantâneo
-            // para a sala anterior sem depender apenas de um cooldown temporal.
-            p.portalBloqueadoAteSairId = obterIdRuntimePortal(portalDestino);
+            // do portal de destino. A área de ativação e a área de entrada são independentes.
         };
         aplicarRegistro(player1, registros?.[0]);
         aplicarRegistro(player2, registros?.[1]);
 
         resetarEstadoTravessiaPortal();
-        portalCooldownAte = performance.now() + TEMPO_COOLDOWN_PORTAL_MS;
-        const alvoCamera = player1 || player2;
+            const alvoCamera = player1 || player2;
         if (alvoCamera?.body) posicionarCameraInicialNoJogador(scene, alvoCamera);
         return true;
     } finally {
@@ -828,18 +802,12 @@ function verificarPortaisDaSala(scene) {
     const jogadoresAtivos = [player1, player2].filter(j => j?.body);
     if (!portais.length || !jogadoresAtivos.length) return;
 
-    // O desbloqueio do portal de chegada é espacial, não temporal. Fazemos esta
-    // verificação mesmo enquanto o cooldown geral ainda está ativo.
-    jogadoresAtivos.forEach(p => atualizarBloqueioDeRetornoDoPortal(p, portais));
-    if (performance.now() < portalCooldownAte) return;
-
     // Um jogador: a troca ocorre imediatamente ao tocar a área, mantendo pose,
     // velocidade e o ponto relativo dentro do retângulo.
     if (jogadoresAtivos.length === 1) {
         const p = jogadoresAtivos[0];
         for (const portal of portais) {
             if (!jogadorDentroDaAreaPortal(p, portal)) continue;
-            if (p.portalBloqueadoAteSairId && obterIdRuntimePortal(portal) === p.portalBloqueadoAteSairId) continue;
             const reg = { rel: obterCoordenadaRelativaNoPortal(p, portal), estado: capturarEstadoFisicoJogador(p) };
             const regs = {}; regs[p.id] = reg;
             executarTransicaoPortalComEstados(scene, portal, regs);
@@ -865,7 +833,6 @@ function verificarPortaisDaSala(scene) {
     for (const portal of portais) {
         for (const p of jogadoresAtivos) {
             if (!jogadorDentroDaAreaPortal(p, portal)) continue;
-            if (p.portalBloqueadoAteSairId && obterIdRuntimePortal(portal) === p.portalBloqueadoAteSairId) continue;
 
             if (estadoTravessiaPortal) {
                 const atualId = estadoTravessiaPortal.portalId;
@@ -1354,8 +1321,7 @@ function alternarModoEditor(scene) {
         scene.matter.world.resume();
         garantirSessaoDeJogo();
         salaEmJogoAtual = salaAtual.id;
-        portalCooldownAte = performance.now() + TEMPO_COOLDOWN_PORTAL_MS;
-        panel.style.display = 'none'; aviso.innerText = "Aperte [F4] para abrir o Editor"; aviso.style.color = "#fff";
+            panel.style.display = 'none'; aviso.innerText = "Aperte [F4] para abrir o Editor"; aviso.style.color = "#fff";
     }
     alternarVisibilidadeGrade();
     desenharGradeConstrucao();
@@ -2281,7 +2247,7 @@ function createHeaveHoCharacter(scene, x, y, pad, id, col) {
     lL.forEach(e => e.ladoBraco = 'esquerdo');
     rL.forEach(e => e.ladoBraco = 'direito');
     
-    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, juntasEstruturaisDosBramos: juntasBraço, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null, apoiosCorpo: new Set(), apoiosEsquerdo: new Set(), apoiosDireito: new Set(), portalBloqueadoAteSairId: null };
+    return { id: id, body: b, leftHand: lH, rightHand: rH, leftElos: lL, rightElos: rL, juntasEstruturaisDosBramos: juntasBraço, gfx: scene.add.graphics().setDepth(10), bodyColor: col, pad: pad, leftJoint: null, rightJoint: null, apoiosCorpo: new Set(), apoiosEsquerdo: new Set(), apoiosDireito: new Set() };
 }
 
 function obterJogadorPorCorpo(corpo) {
