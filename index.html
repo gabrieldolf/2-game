@@ -2723,6 +2723,21 @@ function maoPodeAgarrarEsfera(obj, handX, handY, alcance = 16) {
     return Math.hypot(handX - cx, handY - cy) <= raioVisual + Math.max(0, Number(alcance) || 0);
 }
 
+// Retorna o Pai Giratório que controla um corpo, quando esse corpo pertence
+// a um objeto filho do rotador. Isto inclui corpos físicos normais e elos de corda.
+function encontrarRotatorPaiDoCorpo(corpo) {
+    if (!corpo) return null;
+    for (const rotator of listaObjetosEditaveis) {
+        if (!rotator || rotator.shape !== 'rotator' || !Array.isArray(rotator.filhosIds)) continue;
+        for (const id of rotator.filhosIds) {
+            const filho = encontrarObjetoCenaPorId(id);
+            if (!filho) continue;
+            if (filho.body === corpo || (Array.isArray(filho.ropeElos) && filho.ropeElos.includes(corpo))) return rotator;
+        }
+    }
+    return null;
+}
+
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         const alcanceGarra = obterAlcanceGarraAtual();
@@ -2777,13 +2792,21 @@ function processarGarra(s, p, h, jKey, grab) {
             s.matter.body.setVelocity(h, { x: 0, y: 0 }); s.matter.body.setAngularVelocity(h, 0);
             
             let dx = h.position.x - alvoValido.position.x, dy = h.position.y - alvoValido.position.y;
-            let r = alvoValido.rotation ? alvoValido.rotation : 0; if (isNaN(r)) r = 0;
+            // Matter usa `angle` para a orientação do Body. O ponto de garra precisa
+            // ser convertido para coordenadas LOCAIS do objeto no instante do agarre.
+            // Assim, quando o objeto gira, o ponto preso gira junto com ele.
+            let r = Number(alvoValido.angle) || 0;
             let localOffset = { x: dx * Math.cos(-r) - dy * Math.sin(-r), y: dx * Math.sin(-r) + dy * Math.cos(-r) };
 
             let rigidezAgarrar = (alvoValido.label === 'corpo_elo') ? 0.2 : 1.0;
             let amortecimentoAgarrar = (alvoValido.label === 'corpo_elo') ? 0.1 : 0;
+            const rotatorPai = encontrarRotatorPaiDoCorpo(alvoValido);
 
-            if (alvoValido.isStatic) {
+            // Objetos estáticos comuns continuam usando um ponto fixo no mundo.
+            // Porém, se um objeto está sendo movido/rotacionado por um Pai Giratório,
+            // a mão deve ficar presa ao ponto LOCAL do próprio objeto. Nesse caso
+            // criamos uma constraint body-to-body mesmo que o filho seja isStatic.
+            if (alvoValido.isStatic && !rotatorPai) {
                 p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
                 p[jKey] = s.matter.add.worldConstraint(h, 0, rigidezAgarrar, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 }, stiffness: rigidezAgarrar, damping: amortecimentoAgarrar });
             } else {
