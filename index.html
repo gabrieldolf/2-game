@@ -403,6 +403,9 @@ function serializarObjetoDaSala(obj) {
         base.rotatorVelocidadeDeg = Math.max(0, Number(obj.rotatorVelocidadeDeg) || 0);
         base.rotatorAnguloAtual = Number(obj.rotatorAnguloAtual) || 0;
         base.filhosIds = Array.isArray(obj.filhosIds) ? [...new Set(obj.filhosIds.filter(Boolean))] : [];
+        base.vinculosFilhos = obj.vinculosFilhos && typeof obj.vinculosFilhos === 'object'
+            ? JSON.parse(JSON.stringify(obj.vinculosFilhos))
+            : {};
         return base;
     }
 
@@ -504,17 +507,76 @@ function alternarModoVincularFilhosRotator() {
 function limparFilhosRotatorSelecionado() {
     if (objetoSelecionado?.shape !== 'rotator') return;
     objetoSelecionado.filhosIds = [];
+    objetoSelecionado.vinculosFilhos = {};
     modoVincularFilhosRotator = false;
     marcarSalaComoAlterada();
     atualizarStatusFilhosRotator();
+}
+
+function capturarTransformacaoRelativaFilhoRotator(rotator, filho) {
+    if (!rotator || !filho) return null;
+    const cx = Number(rotator.visualX) || 0, cy = Number(rotator.visualY) || 0;
+    const angPai = Number(rotator.rotatorAnguloAtual) || 0;
+    const c = Math.cos(-angPai), sn = Math.sin(-angPai);
+    const paraLocal = (x, y) => {
+        const dx = (Number(x) || 0) - cx, dy = (Number(y) || 0) - cy;
+        return { x: dx * c - dy * sn, y: dx * sn + dy * c };
+    };
+
+    const vinculo = { tipo: filho.shape };
+    if (filho.body) {
+        const lp = paraLocal(filho.body.position.x, filho.body.position.y);
+        vinculo.localX = lp.x;
+        vinculo.localY = lp.y;
+        vinculo.localAngle = (Number(filho.body.angle) || 0) - angPai;
+        if (filho.shape === 'seesaw' && filho.seesawConstraint?.pointA) {
+            const la = paraLocal(filho.seesawConstraint.pointA.x, filho.seesawConstraint.pointA.y);
+            vinculo.seesawAnchorLocalX = la.x;
+            vinculo.seesawAnchorLocalY = la.y;
+            vinculo.seesawBaseAngleLocal = (Number(filho.seesawBaseAngle) || 0) - angPai;
+        }
+        return vinculo;
+    }
+
+    if (filho.shape === 'rope' && filho.ropeElos) {
+        const anchor = paraLocal(filho.posicaoTravadaX, filho.posicaoTravadaY);
+        vinculo.localX = anchor.x;
+        vinculo.localY = anchor.y;
+        vinculo.elos = filho.ropeElos.map(elo => {
+            const lp = paraLocal(elo.position.x, elo.position.y);
+            return { x: lp.x, y: lp.y, angle: (Number(elo.angle) || 0) - angPai };
+        });
+        return vinculo;
+    }
+
+    if (['portal','respawn1','respawn2'].includes(filho.shape)) {
+        const lp = paraLocal(filho.visualX, filho.visualY);
+        vinculo.localX = lp.x;
+        vinculo.localY = lp.y;
+        if (filho.shape === 'portal') {
+            const le = paraLocal(filho.portalEntradaX ?? filho.visualX, filho.portalEntradaY ?? filho.visualY);
+            vinculo.portalEntradaLocalXRotator = le.x;
+            vinculo.portalEntradaLocalYRotator = le.y;
+        }
+        return vinculo;
+    }
+    return null;
 }
 
 function alternarVinculoFilhoRotator(rotator, filho) {
     if (!rotator || rotator.shape !== 'rotator' || !filho || filho === rotator || filho.shape === 'rotator') return false;
     const id = garantirIdObjetoCena(filho);
     if (!Array.isArray(rotator.filhosIds)) rotator.filhosIds = [];
+    if (!rotator.vinculosFilhos || typeof rotator.vinculosFilhos !== 'object') rotator.vinculosFilhos = {};
     const i = rotator.filhosIds.indexOf(id);
-    if (i >= 0) rotator.filhosIds.splice(i, 1); else rotator.filhosIds.push(id);
+    if (i >= 0) {
+        rotator.filhosIds.splice(i, 1);
+        delete rotator.vinculosFilhos[id];
+    } else {
+        rotator.filhosIds.push(id);
+        const vinculo = capturarTransformacaoRelativaFilhoRotator(rotator, filho);
+        if (vinculo) rotator.vinculosFilhos[id] = vinculo;
+    }
     marcarSalaComoAlterada();
     atualizarStatusFilhosRotator();
     return true;
@@ -525,58 +587,96 @@ function rotacionarPontoAoRedor(cx, cy, x, y, ang) {
     return { x: cx + dx * c - dy * sn, y: cy + dx * sn + dy * c };
 }
 
-function transformarFilhoPorRotacao(scene, filho, cx, cy, deltaAng) {
-    if (!filho || Math.abs(deltaAng) < 0.0000001) return;
+function aplicarTransformacaoRelativaFilhoRotator(scene, rotator, filho, vinculo) {
+    if (!rotator || !filho || !vinculo) return;
+    const cx = Number(rotator.visualX) || 0, cy = Number(rotator.visualY) || 0;
+    const angPai = Number(rotator.rotatorAnguloAtual) || 0;
+    const c = Math.cos(angPai), sn = Math.sin(angPai);
+    const paraMundo = (lx, ly) => ({
+        x: cx + (Number(lx) || 0) * c - (Number(ly) || 0) * sn,
+        y: cy + (Number(lx) || 0) * sn + (Number(ly) || 0) * c
+    });
+
     if (filho.body) {
-        const np = rotacionarPontoAoRedor(cx, cy, filho.body.position.x, filho.body.position.y, deltaAng);
+        const np = paraMundo(vinculo.localX, vinculo.localY);
+        const ang = angPai + (Number(vinculo.localAngle) || 0);
         scene.matter.body.setPosition(filho.body, np);
-        scene.matter.body.setAngle(filho.body, (Number(filho.body.angle) || 0) + deltaAng);
+        scene.matter.body.setAngle(filho.body, ang);
+        // O Pai Giratório define a transformação absoluta do filho. Zeramos
+        // velocidades residuais para impedir que a física acumule deriva entre frames.
+        scene.matter.body.setVelocity(filho.body, { x: 0, y: 0 });
+        scene.matter.body.setAngularVelocity(filho.body, 0);
         filho.visualX = filho.posicaoTravadaX = np.x;
         filho.visualY = filho.posicaoTravadaY = np.y;
         if (filho.shape === 'seesaw' && filho.seesawConstraint?.pointA) {
-            const a = filho.seesawConstraint.pointA;
-            const na = rotacionarPontoAoRedor(cx, cy, a.x, a.y, deltaAng);
-            a.x = na.x; a.y = na.y;
-            filho.seesawBaseAngle = (Number(filho.seesawBaseAngle) || 0) + deltaAng;
+            const na = paraMundo(vinculo.seesawAnchorLocalX ?? vinculo.localX, vinculo.seesawAnchorLocalY ?? vinculo.localY);
+            filho.seesawConstraint.pointA.x = na.x;
+            filho.seesawConstraint.pointA.y = na.y;
+            filho.seesawBaseAngle = angPai + (Number(vinculo.seesawBaseAngleLocal) || 0);
         }
         return;
     }
+
     if (filho.shape === 'rope' && filho.ropeElos) {
-        filho.ropeElos.forEach(elo => {
-            const np = rotacionarPontoAoRedor(cx, cy, elo.position.x, elo.position.y, deltaAng);
+        const dadosElos = Array.isArray(vinculo.elos) ? vinculo.elos : [];
+        filho.ropeElos.forEach((elo, i) => {
+            const d = dadosElos[i]; if (!d) return;
+            const np = paraMundo(d.x, d.y);
             scene.matter.body.setPosition(elo, np);
-            scene.matter.body.setAngle(elo, (Number(elo.angle) || 0) + deltaAng);
+            scene.matter.body.setAngle(elo, angPai + (Number(d.angle) || 0));
+            scene.matter.body.setVelocity(elo, { x: 0, y: 0 });
+            scene.matter.body.setAngularVelocity(elo, 0);
         });
-        const np = rotacionarPontoAoRedor(cx, cy, Number(filho.posicaoTravadaX)||0, Number(filho.posicaoTravadaY)||0, deltaAng);
-        filho.posicaoTravadaX = filho.visualX = np.x; filho.posicaoTravadaY = filho.visualY = np.y;
+        const anchor = paraMundo(vinculo.localX, vinculo.localY);
+        filho.posicaoTravadaX = filho.visualX = anchor.x;
+        filho.posicaoTravadaY = filho.visualY = anchor.y;
         const primeira = filho.ropeConstraints?.[0];
-        if (primeira?.pointA) {
-            const na = rotacionarPontoAoRedor(cx, cy, primeira.pointA.x, primeira.pointA.y, deltaAng);
-            primeira.pointA.x = na.x; primeira.pointA.y = na.y;
-        }
+        if (primeira?.pointA) { primeira.pointA.x = anchor.x; primeira.pointA.y = anchor.y; }
         return;
     }
+
     if (['portal','respawn1','respawn2'].includes(filho.shape)) {
-        const np = rotacionarPontoAoRedor(cx, cy, Number(filho.visualX)||0, Number(filho.visualY)||0, deltaAng);
+        const np = paraMundo(vinculo.localX, vinculo.localY);
+        filho.visualX = filho.posicaoTravadaX = np.x;
+        filho.visualY = filho.posicaoTravadaY = np.y;
         if (filho.shape === 'portal') {
-            const ne = rotacionarPontoAoRedor(cx, cy, Number(filho.portalEntradaX ?? filho.visualX)||0, Number(filho.portalEntradaY ?? filho.visualY)||0, deltaAng);
-            filho.portalEntradaX = ne.x; filho.portalEntradaY = ne.y;
+            const ne = paraMundo(vinculo.portalEntradaLocalXRotator ?? vinculo.localX, vinculo.portalEntradaLocalYRotator ?? vinculo.localY);
+            filho.portalEntradaX = ne.x;
+            filho.portalEntradaY = ne.y;
         }
-        filho.visualX = filho.posicaoTravadaX = np.x; filho.visualY = filho.posicaoTravadaY = np.y;
     }
+}
+
+function garantirVinculosRelativosRotator(rotator) {
+    if (!rotator || rotator.shape !== 'rotator') return;
+    if (!rotator.vinculosFilhos || typeof rotator.vinculosFilhos !== 'object') rotator.vinculosFilhos = {};
+    (rotator.filhosIds || []).forEach(id => {
+        if (rotator.vinculosFilhos[id]) return;
+        const filho = encontrarObjetoCenaPorId(id);
+        const vinculo = capturarTransformacaoRelativaFilhoRotator(rotator, filho);
+        if (vinculo) rotator.vinculosFilhos[id] = vinculo;
+    });
 }
 
 function atualizarRotadores(scene, deltaSegundos) {
     if (modoEditorAtivo || !scene || !Number.isFinite(deltaSegundos) || deltaSegundos <= 0) return;
     listaObjetosEditaveis.forEach(rotator => {
-        if (!rotator || rotator.shape !== 'rotator' || rotator.rotatorAtivo === false) return;
-        const velDeg = Math.max(0, Number(rotator.rotatorVelocidadeDeg) || 0);
-        if (velDeg <= 0) return;
-        const direcao = Number(rotator.rotatorDirecao) < 0 ? -1 : 1;
-        const deltaAng = Phaser.Math.DegToRad(velDeg) * direcao * deltaSegundos;
-        const cx = Number(rotator.visualX) || 0, cy = Number(rotator.visualY) || 0;
-        (rotator.filhosIds || []).forEach(id => transformarFilhoPorRotacao(scene, encontrarObjetoCenaPorId(id), cx, cy, deltaAng));
-        rotator.rotatorAnguloAtual = (Number(rotator.rotatorAnguloAtual) || 0) + deltaAng;
+        if (!rotator || rotator.shape !== 'rotator') return;
+        garantirVinculosRelativosRotator(rotator);
+        if (rotator.rotatorAtivo !== false) {
+            const velDeg = Math.max(0, Number(rotator.rotatorVelocidadeDeg) || 0);
+            if (velDeg > 0) {
+                const direcao = Number(rotator.rotatorDirecao) < 0 ? -1 : 1;
+                rotator.rotatorAnguloAtual = (Number(rotator.rotatorAnguloAtual) || 0) + Phaser.Math.DegToRad(velDeg) * direcao * deltaSegundos;
+            }
+        }
+        // Mesmo se a rotação estiver pausada, reaplicamos a transformação de vínculo
+        // para que os filhos não derivem por forças, colisões ou gravidade.
+        (rotator.filhosIds || []).forEach(id => {
+            const filho = encontrarObjetoCenaPorId(id);
+            const vinculo = rotator.vinculosFilhos?.[id];
+            if (filho && vinculo) aplicarTransformacaoRelativaFilhoRotator(scene, rotator, filho, vinculo);
+        });
     });
 }
 
@@ -1195,7 +1295,8 @@ function adicionarObjetoSerializado(scene, dados) {
             manuseavel: false, naoAgarravel: true, isStatic: true, idPersistente: dados.idPersistente || null, persistirSessao: false,
             rotatorAtivo: dados.rotatorAtivo !== false, rotatorDirecao: Number(dados.rotatorDirecao) < 0 ? -1 : 1,
             rotatorVelocidadeDeg: Math.max(0, Number(dados.rotatorVelocidadeDeg) || 0), rotatorAnguloAtual: Number(dados.rotatorAnguloAtual) || 0,
-            filhosIds: Array.isArray(dados.filhosIds) ? [...new Set(dados.filhosIds.filter(Boolean))] : []
+            filhosIds: Array.isArray(dados.filhosIds) ? [...new Set(dados.filhosIds.filter(Boolean))] : [],
+            vinculosFilhos: dados.vinculosFilhos && typeof dados.vinculosFilhos === 'object' ? JSON.parse(JSON.stringify(dados.vinculosFilhos)) : {}
         });
         return;
     }
@@ -1954,7 +2055,7 @@ function executarCriacaoObjeto(scene, x, y) {
             gravity: false, lockPos: true, lockRot: true, mass: 0, air: 0, bounce: 0, maxVel: 0, maxRot: 0,
             manuseavel: false, naoAgarravel: true, isStatic: true, idPersistente: null, persistirSessao: false,
             rotatorAtivo: c.rotatorAtivo, rotatorDirecao: c.rotatorDirecao, rotatorVelocidadeDeg: c.rotatorVelocidadeDeg,
-            rotatorAnguloAtual: 0, filhosIds: []
+            rotatorAnguloAtual: 0, filhosIds: [], vinculosFilhos: {}
         };
         listaObjetosEditaveis.push(obj); selecionarObjetoDoEditor(obj); marcarSalaComoAlterada(); return;
     }
@@ -2182,7 +2283,7 @@ function atualizarObjetoExistente() {
             gravity:false, lockPos:true, lockRot:true, mass:0, air:0, bounce:0, maxVel:0, maxRot:0,
             manuseavel:false, naoAgarravel:true, isStatic:true, idPersistente:null, persistirSessao:false,
             rotatorAtivo:c.rotatorAtivo, rotatorDirecao:c.rotatorDirecao, rotatorVelocidadeDeg:c.rotatorVelocidadeDeg,
-            rotatorAnguloAtual:0, filhosIds:[] });
+            rotatorAnguloAtual:0, filhosIds:[], vinculosFilhos:{} });
         garantirIdObjetoCena(obj); marcarSalaComoAlterada(); atualizarStatusFilhosRotator(); return;
     }
     if (obj.shape === 'rotator' && c.shape === 'rotator') {
@@ -2281,7 +2382,11 @@ function atualizarObjetoExistente() {
 function deletarObjetoSelecionado() {
     if (!objetoSelecionado) return; let scene = game.scene.getScene('default');
     const idRemovido = objetoSelecionado.idObjeto;
-    if (idRemovido) listaObjetosEditaveis.forEach(o => { if (o?.shape === 'rotator' && Array.isArray(o.filhosIds)) o.filhosIds = o.filhosIds.filter(id => id !== idRemovido); });
+    if (idRemovido) listaObjetosEditaveis.forEach(o => {
+        if (o?.shape !== 'rotator') return;
+        if (Array.isArray(o.filhosIds)) o.filhosIds = o.filhosIds.filter(id => id !== idRemovido);
+        if (o.vinculosFilhos && typeof o.vinculosFilhos === 'object') delete o.vinculosFilhos[idRemovido];
+    });
     if (objetoSelecionado.seesawConstraint) { scene.matter.world.remove(objetoSelecionado.seesawConstraint); objetoSelecionado.seesawConstraint = null; }
     if (objetoSelecionado.shape === 'rope') {
         if (objetoSelecionado.ropeConstraints) objetoSelecionado.ropeConstraints.forEach(co => scene.matter.world.remove(co));
