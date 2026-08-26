@@ -914,6 +914,7 @@ function aplicarEstadoFisicoJogador(scene, p, posDestino, estado) {
     if (p.rightJoint) { scene.matter.world.remove(p.rightJoint); p.rightJoint = null; }
     p.leftJointTarget = p.rightJointTarget = null;
     p.leftJointPontoPivorMundo = p.rightJointPontoPivorMundo = null;
+    p.leftJointRotatorPai = p.rightJointRotatorPai = null;
     if (p.leftHand) { p.leftHand.corpoTocadoAgora = null; p.leftHand.pontoDeContatoGlobal = null; }
     if (p.rightHand) { p.rightHand.corpoTocadoAgora = null; p.rightHand.pontoDeContatoGlobal = null; }
     if (p.apoiosCorpo) p.apoiosCorpo.clear();
@@ -1141,6 +1142,7 @@ function reposicionarJogadorCompleto(scene, p, pos) {
     if (p.rightJoint) { scene.matter.world.remove(p.rightJoint); p.rightJoint = null; }
     p.leftJointTarget = p.rightJointTarget = null;
     p.leftJointPontoPivorMundo = p.rightJointPontoPivorMundo = null;
+    p.leftJointRotatorPai = p.rightJointRotatorPai = null;
     if (p.leftHand) { p.leftHand.corpoTocadoAgora = null; p.leftHand.pontoDeContatoGlobal = null; }
     if (p.rightHand) { p.rightHand.corpoTocadoAgora = null; p.rightHand.pontoDeContatoGlobal = null; }
     if (p.apoiosCorpo) p.apoiosCorpo.clear();
@@ -2907,14 +2909,29 @@ function processarGarra(s, p, h, jKey, grab) {
             let amortecimentoAgarrar = (alvoValido.label === 'corpo_elo') ? 0.1 : 0;
             const rotatorPai = encontrarRotatorPaiDoCorpo(alvoValido);
 
-            // Objetos estáticos comuns continuam usando um ponto fixo no mundo.
-            // Porém, se um objeto está sendo movido/rotacionado por um Pai Giratório,
-            // a mão deve ficar presa ao ponto LOCAL do próprio objeto. Nesse caso
-            // criamos uma constraint body-to-body mesmo que o filho seja isStatic.
-            if (alvoValido.isStatic && !rotatorPai) {
+            // IMPORTANTE: filhos do Pai Giratório são reposicionados cinematicamente
+            // a cada frame para manter exatamente sua transformação relativa ao eixo.
+            // Uma constraint mão<->filho faria o solver Matter tentar empurrar o filho
+            // ao mesmo tempo em que o rotador o teleporta para a transformação correta,
+            // produzindo forças enormes, tremores e outros comportamentos bizarros.
+            //
+            // Para filhos de rotador, portanto, a mão é presa a um PONTO DO MUNDO
+            // que acompanha o ponto local exato do objeto agarrado. Assim o jogador é
+            // carregado pela plataforma, mas a mão nunca aplica força física no filho.
+            if (rotatorPai) {
+                p[jKey + 'RotatorPai'] = rotatorPai;
+                p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
+                p[jKey] = s.matter.add.worldConstraint(h, 0, rigidezAgarrar, {
+                    pointA: { x: h.position.x, y: h.position.y },
+                    pointB: { x: 0, y: 0 },
+                    stiffness: rigidezAgarrar, damping: amortecimentoAgarrar
+                });
+            } else if (alvoValido.isStatic) {
+                p[jKey + 'RotatorPai'] = null;
                 p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
                 p[jKey] = s.matter.add.worldConstraint(h, 0, rigidezAgarrar, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 }, stiffness: rigidezAgarrar, damping: amortecimentoAgarrar });
             } else {
+                p[jKey + 'RotatorPai'] = null;
                 p[jKey + 'PontoPivorMundo'] = null;
                 p[jKey] = s.matter.add.constraint(h, alvoValido, 0, rigidezAgarrar, { pointA: { x: 0, y: 0 }, pointB: localOffset, stiffness: rigidezAgarrar, damping: amortecimentoAgarrar });
             }
@@ -2923,7 +2940,41 @@ function processarGarra(s, p, h, jKey, grab) {
         }
     } else if (!grab && p[jKey]) {
         if (p[jKey]) s.matter.world.remove(p[jKey]);
-        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null; p[jKey + 'PontoPivorMundo'] = null;
+        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null; p[jKey + 'PontoPivorMundo'] = null; p[jKey + 'RotatorPai'] = null;
+    }
+}
+
+
+// Atualiza o ponto de ancoragem de uma mão que está agarrando um objeto filho
+// de Pai Giratório. O ponto é reconstruído usando a posição/ângulo atuais do
+// corpo alvo e o offset LOCAL registrado no instante exato em que a mão agarrou.
+function atualizarPontoGarraFilhoRotator(p, jKey) {
+    if (!p || !p[jKey] || !p[jKey + 'RotatorPai']) return;
+    const alvo = p[jKey + 'Target'];
+    const local = p[jKey + 'LocalOffset'];
+    if (!alvo?.position || !local) return;
+
+    // Se o corpo deixar de pertencer ao rotador (por exemplo, foi desvinculado
+    // no editor entre execuções), não mantemos um estado especial inválido.
+    const paiAtual = encontrarRotatorPaiDoCorpo(alvo);
+    if (!paiAtual) {
+        p[jKey + 'RotatorPai'] = null;
+        return;
+    }
+
+    const ang = Number(alvo.angle) || 0;
+    const c = Math.cos(ang), sn = Math.sin(ang);
+    p[jKey + 'PontoPivorMundo'] = {
+        x: alvo.position.x + local.x * c - local.y * sn,
+        y: alvo.position.y + local.x * sn + local.y * c
+    };
+
+    // Mantemos também a âncora da worldConstraint sincronizada. A mão é
+    // posicionada nesse mesmo ponto mais abaixo no update, como já acontece
+    // com garras em cenário estático.
+    if (p[jKey].pointA && p[jKey + 'PontoPivorMundo']) {
+        p[jKey].pointA.x = p[jKey + 'PontoPivorMundo'].x;
+        p[jKey].pointA.y = p[jKey + 'PontoPivorMundo'].y;
     }
 }
 
@@ -3139,6 +3190,10 @@ function update(time, delta) {
     
     [player1, player2].forEach(p => {
         if (!p) return;
+        // Para objetos filhos de um Pai Giratório, recalculamos primeiro o
+        // ponto mundial correspondente ao ponto local onde cada mão agarrou.
+        atualizarPontoGarraFilhoRotator(p, 'leftJoint');
+        atualizarPontoGarraFilhoRotator(p, 'rightJoint');
         if (p.leftJoint && p.leftJointPontoPivorMundo) {
             sAct.matter.body.setPosition(p.leftHand, { x: p.leftJointPontoPivorMundo.x, y: p.leftJointPontoPivorMundo.y });
             sAct.matter.body.setVelocity(p.leftHand, { x: 0, y: 0 });
