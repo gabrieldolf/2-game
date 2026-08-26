@@ -80,7 +80,7 @@
     </div>
     <div class="section">
         <h3 id="status-modo" style="color:#55ff55;">Criando novos objetos</h3>
-        <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option><option value="rope">Corda / Corrente</option><option value="seesaw">Gangorra</option><option value="portal">Portal / Conexão</option><option value="respawn1">Respawn Jogador 1</option><option value="respawn2">Respawn Jogador 2</option></select></div>
+        <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option><option value="rope">Corda / Corrente</option><option value="seesaw">Gangorra</option><option value="rotator">Pai Giratório / Eixo</option><option value="portal">Portal / Conexão</option><option value="respawn1">Respawn Jogador 1</option><option value="respawn2">Respawn Jogador 2</option></select></div>
         <div id="painel-propriedades-comuns">
             <div class="prop-row" style="background:#27ae60; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Objeto Manuseável:</label><input type="checkbox" id="prop-manuseavel" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" style="background:#e74c3c; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Trava Agarrar (Não Agarrável):</label><input type="checkbox" id="prop-lock-grab" onchange="atualizarObjetoExistente()"></div>
@@ -132,6 +132,16 @@
             <div class="prop-row"><label>Amortecimento:</label><input type="number" id="prop-seesaw-damping" value="0.08" min="0" max="1" step="0.01" onchange="atualizarObjetoExistente()"></div>
             <p style="font-size:10px;color:#ffe8d8;margin:2px 0 0;">O pivô é fixo no mundo. Offset X/Y desloca o eixo em relação ao centro da prancha.</p>
         </div>
+        <div id="painel-propriedades-rotator" style="display:none; background:#1f6f78; padding:8px; border-radius:4px; margin-top:5px; flex-direction:column; gap:6px;">
+            <h3 style="color:#fff; font-weight:bold;">Ajustes do Pai Giratório</h3>
+            <div class="prop-row"><label>Rotação ativa:</label><input type="checkbox" id="prop-rotator-active" checked onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Sentido:</label><select id="prop-rotator-direction" onchange="atualizarObjetoExistente()"><option value="1">Horário</option><option value="-1">Anti-horário</option></select></div>
+            <div class="prop-row"><label>Velocidade (°/s):</label><input type="number" id="prop-rotator-speed" value="30" min="0" max="1080" step="1" onchange="atualizarObjetoExistente()"></div>
+            <button id="btn-rotator-link" style="background:#16a085;" onclick="alternarModoVincularFilhosRotator()">Vincular / Desvincular Filhos</button>
+            <button style="background:#7f8c8d;" onclick="limparFilhosRotatorSelecionado()">Remover todos os vínculos</button>
+            <div id="status-filhos-rotator" style="font-size:10px;color:#d8f3f8;line-height:1.35;">0 objeto(s) vinculado(s).</div>
+            <p style="font-size:10px;color:#d8f3f8;margin:2px 0 0;">Selecione este objeto e ative “Vincular / Desvincular Filhos”. Depois clique nos objetos da sala. O eixo permanece fixo e invisível durante a gameplay.</p>
+        </div>
         <button id="btn-delete" style="background:#ff4757; display:none; margin-top:10px;" onclick="deletarObjetoSelecionado()">Deletar Objeto</button>
     </div>
 </div>
@@ -176,6 +186,7 @@ let arrastandoGrade = false, modoPincelGrade = null, ultimaCelulaGradeArrastada 
 let modoEditorAtivo = false, cameraSalvaX = 0, cameraSalvaY = 0, cameraSalvaZoom = 1;
 let clickOffsetX = 0, clickOffsetY = 0;
 let arrastandoObjetoSelecionado = false;
+let modoVincularFilhosRotator = false;
 let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
 const CHAVE_ARMAZENAMENTO_SESSAO = 'metroidvania_ho_sessao_jogo_v1';
@@ -365,6 +376,7 @@ function obterDadosSalaAtual() {
 function serializarObjetoDaSala(obj) {
     if (!obj) return null;
     const base = {
+        idObjeto: garantirIdObjetoCena(obj),
         shape: obj.shape,
         idPersistente: obj.idPersistente || null,
         persistirSessao: !!obj.persistirSessao,
@@ -382,6 +394,17 @@ function serializarObjetoDaSala(obj) {
         maxVel: Number(obj.maxVel) || 0,
         maxRot: Number(obj.maxRot) || 0
     };
+
+    if (obj.shape === 'rotator') {
+        base.x = Number(obj.visualX) || 0;
+        base.y = Number(obj.visualY) || 0;
+        base.rotatorAtivo = obj.rotatorAtivo !== false;
+        base.rotatorDirecao = Number(obj.rotatorDirecao) < 0 ? -1 : 1;
+        base.rotatorVelocidadeDeg = Math.max(0, Number(obj.rotatorVelocidadeDeg) || 0);
+        base.rotatorAnguloAtual = Number(obj.rotatorAnguloAtual) || 0;
+        base.filhosIds = Array.isArray(obj.filhosIds) ? [...new Set(obj.filhosIds.filter(Boolean))] : [];
+        return base;
+    }
 
     if (['portal', 'respawn1', 'respawn2'].includes(obj.shape)) {
         base.x = Number(obj.visualX) || 0;
@@ -442,6 +465,138 @@ function gerarIdObjetoPersistente() {
     const usados = new Set(listaObjetosEditaveis.map(o => o && o.idPersistente).filter(Boolean));
     do { id = 'obj_especial_' + n++; } while (usados.has(id));
     return id;
+}
+
+function gerarIdObjetoCena() {
+    let n = 1, id;
+    const usados = new Set(listaObjetosEditaveis.map(o => o && o.idObjeto).filter(Boolean));
+    do { id = 'obj_cena_' + n++; } while (usados.has(id));
+    return id;
+}
+
+function garantirIdObjetoCena(obj) {
+    if (!obj) return null;
+    if (!obj.idObjeto) obj.idObjeto = gerarIdObjetoCena();
+    return obj.idObjeto;
+}
+
+function encontrarObjetoCenaPorId(id) {
+    return listaObjetosEditaveis.find(o => o && o.idObjeto === id) || null;
+}
+
+function atualizarStatusFilhosRotator() {
+    const el = document.getElementById('status-filhos-rotator');
+    if (!el) return;
+    const r = objetoSelecionado?.shape === 'rotator' ? objetoSelecionado : null;
+    const qtd = r && Array.isArray(r.filhosIds) ? r.filhosIds.length : 0;
+    el.textContent = qtd + ' objeto(s) vinculado(s).' + (modoVincularFilhosRotator ? ' Clique nos objetos da cena para alternar o vínculo.' : '');
+    const btn = document.getElementById('btn-rotator-link');
+    if (btn) { btn.className = modoVincularFilhosRotator ? 'active' : ''; btn.innerText = modoVincularFilhosRotator ? 'Finalizar Vínculo de Filhos' : 'Vincular / Desvincular Filhos'; }
+}
+
+function alternarModoVincularFilhosRotator() {
+    if (!modoEditorAtivo || objetoSelecionado?.shape !== 'rotator') return;
+    modoVincularFilhosRotator = !modoVincularFilhosRotator;
+    arrastandoObjetoSelecionado = false;
+    atualizarStatusFilhosRotator();
+}
+
+function limparFilhosRotatorSelecionado() {
+    if (objetoSelecionado?.shape !== 'rotator') return;
+    objetoSelecionado.filhosIds = [];
+    modoVincularFilhosRotator = false;
+    marcarSalaComoAlterada();
+    atualizarStatusFilhosRotator();
+}
+
+function alternarVinculoFilhoRotator(rotator, filho) {
+    if (!rotator || rotator.shape !== 'rotator' || !filho || filho === rotator || filho.shape === 'rotator') return false;
+    const id = garantirIdObjetoCena(filho);
+    if (!Array.isArray(rotator.filhosIds)) rotator.filhosIds = [];
+    const i = rotator.filhosIds.indexOf(id);
+    if (i >= 0) rotator.filhosIds.splice(i, 1); else rotator.filhosIds.push(id);
+    marcarSalaComoAlterada();
+    atualizarStatusFilhosRotator();
+    return true;
+}
+
+function rotacionarPontoAoRedor(cx, cy, x, y, ang) {
+    const dx = x - cx, dy = y - cy, c = Math.cos(ang), sn = Math.sin(ang);
+    return { x: cx + dx * c - dy * sn, y: cy + dx * sn + dy * c };
+}
+
+function transformarFilhoPorRotacao(scene, filho, cx, cy, deltaAng) {
+    if (!filho || Math.abs(deltaAng) < 0.0000001) return;
+    if (filho.body) {
+        const np = rotacionarPontoAoRedor(cx, cy, filho.body.position.x, filho.body.position.y, deltaAng);
+        scene.matter.body.setPosition(filho.body, np);
+        scene.matter.body.setAngle(filho.body, (Number(filho.body.angle) || 0) + deltaAng);
+        filho.visualX = filho.posicaoTravadaX = np.x;
+        filho.visualY = filho.posicaoTravadaY = np.y;
+        if (filho.shape === 'seesaw' && filho.seesawConstraint?.pointA) {
+            const a = filho.seesawConstraint.pointA;
+            const na = rotacionarPontoAoRedor(cx, cy, a.x, a.y, deltaAng);
+            a.x = na.x; a.y = na.y;
+            filho.seesawBaseAngle = (Number(filho.seesawBaseAngle) || 0) + deltaAng;
+        }
+        return;
+    }
+    if (filho.shape === 'rope' && filho.ropeElos) {
+        filho.ropeElos.forEach(elo => {
+            const np = rotacionarPontoAoRedor(cx, cy, elo.position.x, elo.position.y, deltaAng);
+            scene.matter.body.setPosition(elo, np);
+            scene.matter.body.setAngle(elo, (Number(elo.angle) || 0) + deltaAng);
+        });
+        const np = rotacionarPontoAoRedor(cx, cy, Number(filho.posicaoTravadaX)||0, Number(filho.posicaoTravadaY)||0, deltaAng);
+        filho.posicaoTravadaX = filho.visualX = np.x; filho.posicaoTravadaY = filho.visualY = np.y;
+        const primeira = filho.ropeConstraints?.[0];
+        if (primeira?.pointA) {
+            const na = rotacionarPontoAoRedor(cx, cy, primeira.pointA.x, primeira.pointA.y, deltaAng);
+            primeira.pointA.x = na.x; primeira.pointA.y = na.y;
+        }
+        return;
+    }
+    if (['portal','respawn1','respawn2'].includes(filho.shape)) {
+        const np = rotacionarPontoAoRedor(cx, cy, Number(filho.visualX)||0, Number(filho.visualY)||0, deltaAng);
+        if (filho.shape === 'portal') {
+            const ne = rotacionarPontoAoRedor(cx, cy, Number(filho.portalEntradaX ?? filho.visualX)||0, Number(filho.portalEntradaY ?? filho.visualY)||0, deltaAng);
+            filho.portalEntradaX = ne.x; filho.portalEntradaY = ne.y;
+        }
+        filho.visualX = filho.posicaoTravadaX = np.x; filho.visualY = filho.posicaoTravadaY = np.y;
+    }
+}
+
+function atualizarRotadores(scene, deltaSegundos) {
+    if (modoEditorAtivo || !scene || !Number.isFinite(deltaSegundos) || deltaSegundos <= 0) return;
+    listaObjetosEditaveis.forEach(rotator => {
+        if (!rotator || rotator.shape !== 'rotator' || rotator.rotatorAtivo === false) return;
+        const velDeg = Math.max(0, Number(rotator.rotatorVelocidadeDeg) || 0);
+        if (velDeg <= 0) return;
+        const direcao = Number(rotator.rotatorDirecao) < 0 ? -1 : 1;
+        const deltaAng = Phaser.Math.DegToRad(velDeg) * direcao * deltaSegundos;
+        const cx = Number(rotator.visualX) || 0, cy = Number(rotator.visualY) || 0;
+        (rotator.filhosIds || []).forEach(id => transformarFilhoPorRotacao(scene, encontrarObjetoCenaPorId(id), cx, cy, deltaAng));
+        rotator.rotatorAnguloAtual = (Number(rotator.rotatorAnguloAtual) || 0) + deltaAng;
+    });
+}
+
+function transladarFilhosDoRotator(scene, rotator, dx, dy) {
+    if (!rotator || rotator.shape !== 'rotator' || (!dx && !dy)) return;
+    (rotator.filhosIds || []).forEach(id => {
+        const filho = encontrarObjetoCenaPorId(id); if (!filho) return;
+        if (filho.body) {
+            scene.matter.body.setPosition(filho.body, { x: filho.body.position.x + dx, y: filho.body.position.y + dy });
+            filho.visualX = filho.posicaoTravadaX = filho.body.position.x; filho.visualY = filho.posicaoTravadaY = filho.body.position.y;
+            if (filho.shape === 'seesaw' && filho.seesawConstraint?.pointA) { filho.seesawConstraint.pointA.x += dx; filho.seesawConstraint.pointA.y += dy; }
+        } else if (filho.shape === 'rope' && filho.ropeElos) {
+            filho.ropeElos.forEach(elo => scene.matter.body.setPosition(elo, { x: elo.position.x + dx, y: elo.position.y + dy }));
+            filho.posicaoTravadaX += dx; filho.posicaoTravadaY += dy; filho.visualX += dx; filho.visualY += dy;
+            if (filho.ropeConstraints?.[0]?.pointA) { filho.ropeConstraints[0].pointA.x += dx; filho.ropeConstraints[0].pointA.y += dy; }
+        } else if (['portal','respawn1','respawn2'].includes(filho.shape)) {
+            filho.visualX += dx; filho.visualY += dy; filho.posicaoTravadaX += dx; filho.posicaoTravadaY += dy;
+            if (filho.shape === 'portal') { filho.portalEntradaX += dx; filho.portalEntradaY += dy; }
+        }
+    });
 }
 
 function carregarEstadoSessaoPersistido() {
@@ -1031,6 +1186,20 @@ function removerCorposDaSalaAtual(scene) {
 function adicionarObjetoSerializado(scene, dados) {
     if (!dados || !dados.shape) return;
 
+    if (dados.shape === 'rotator') {
+        const x = Number(dados.x) || 0, y = Number(dados.y) || 0;
+        listaObjetosEditaveis.push({
+            idObjeto: dados.idObjeto || gerarIdObjetoCena(), body: null, gfx: scene.add.graphics().setDepth(7), shape: 'rotator',
+            w: 44, h: 44, visualX: x, visualY: y, posicaoTravadaX: x, posicaoTravadaY: y,
+            gravity: false, lockPos: true, lockRot: true, mass: 0, air: 0, bounce: 0, maxVel: 0, maxRot: 0,
+            manuseavel: false, naoAgarravel: true, isStatic: true, idPersistente: dados.idPersistente || null, persistirSessao: false,
+            rotatorAtivo: dados.rotatorAtivo !== false, rotatorDirecao: Number(dados.rotatorDirecao) < 0 ? -1 : 1,
+            rotatorVelocidadeDeg: Math.max(0, Number(dados.rotatorVelocidadeDeg) || 0), rotatorAnguloAtual: Number(dados.rotatorAnguloAtual) || 0,
+            filhosIds: Array.isArray(dados.filhosIds) ? [...new Set(dados.filhosIds.filter(Boolean))] : []
+        });
+        return;
+    }
+
     // Portais e pontos de respawn são marcadores lógicos/editoriais.
     // Eles NÃO criam corpos Matter, portanto nunca podem bloquear, empurrar
     // ou colidir com os jogadores durante a gameplay.
@@ -1038,6 +1207,7 @@ function adicionarObjetoSerializado(scene, dados) {
         const x = Number(dados.x) || 0;
         const y = Number(dados.y) || 0;
         listaObjetosEditaveis.push({
+            idObjeto: dados.idObjeto || gerarIdObjetoCena(),
             body: null,
             gfx: scene.add.graphics().setDepth(6),
             shape: dados.shape,
@@ -1087,7 +1257,7 @@ function adicionarObjetoSerializado(scene, dados) {
         scene.matter.body.setInertia(body, dados.lockRot ? Infinity : body.inertia);
         scene.matter.body.setAngle(body, Number(dados.angle) || 0);
     }
-    listaObjetosEditaveis.push({ body, gfx: scene.add.graphics().setDepth(3), shape: dados.shape, w: Number(dados.w) || 50, h: Number(dados.h) || 50, gravity: dados.gravity !== false, lockPos: !!dados.lockPos, lockRot: !!dados.lockRot, mass: Number(dados.mass) || 1, air: Number(dados.air) || 0, bounce: Number(dados.bounce) || 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, posicaoTravadaX: Number(dados.x) || 0, posicaoTravadaY: Number(dados.y) || 0, physicsActive: true, visualX: Number(dados.x) || 0, visualY: Number(dados.y) || 0, dadosDesenhoVisual: null, manuseavel: !!dados.manuseavel, naoAgarravel: !!dados.naoAgarravel, isStatic: !!dados.isStatic, idPersistente: dados.idPersistente || null, persistirSessao: !!dados.persistirSessao });
+    listaObjetosEditaveis.push({ idObjeto: dados.idObjeto || gerarIdObjetoCena(), body, gfx: scene.add.graphics().setDepth(3), shape: dados.shape, w: Number(dados.w) || 50, h: Number(dados.h) || 50, gravity: dados.gravity !== false, lockPos: !!dados.lockPos, lockRot: !!dados.lockRot, mass: Number(dados.mass) || 1, air: Number(dados.air) || 0, bounce: Number(dados.bounce) || 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, posicaoTravadaX: Number(dados.x) || 0, posicaoTravadaY: Number(dados.y) || 0, physicsActive: true, visualX: Number(dados.x) || 0, visualY: Number(dados.y) || 0, dadosDesenhoVisual: null, manuseavel: !!dados.manuseavel, naoAgarravel: !!dados.naoAgarravel, isStatic: !!dados.isStatic, idPersistente: dados.idPersistente || null, persistirSessao: !!dados.persistirSessao });
 }
 
 function normalizarAnguloRad(a) {
@@ -1128,6 +1298,7 @@ function criarGangorraAPartirDeDados(scene, dados) {
     });
 
     const obj = {
+        idObjeto: dados.idObjeto || gerarIdObjetoCena(),
         body, seesawConstraint: constraint, gfx: scene.add.graphics().setDepth(3), shape: 'seesaw',
         w, h, gravity: dados.gravity !== false, lockPos: false, lockRot: false,
         mass: Math.max(0.1, Number(dados.mass) || 6), air: Math.max(0, Number(dados.air) || 0.02),
@@ -1161,7 +1332,7 @@ function criarPoligonoAPartirDeDados(scene, dados) {
     body.manuseavel = !!dados.manuseavel; body.naoAgarravel = !!dados.naoAgarravel;
     scene.matter.world.add(body); scene.matter.body.setPosition(body, { x: centroX, y: centroY });
     if (!body.isStatic) { scene.matter.body.setInertia(body, dados.lockRot ? Infinity : body.inertia); scene.matter.body.setAngle(body, Number(dados.angle) || 0); }
-    listaObjetosEditaveis.push({ body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: dados.gravity !== false, lockPos: !!dados.lockPos, lockRot: !!dados.lockRot, mass: Number(dados.mass) || 1, air: Number(dados.air) || 0, bounce: Number(dados.bounce) || 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: vertices.map(v => ({ x: Number(v.x) || 0, y: Number(v.y) || 0 })), manuseavel: !!dados.manuseavel, naoAgarravel: !!dados.naoAgarravel, isStatic: !!dados.isStatic, idPersistente: dados.idPersistente || null, persistirSessao: !!dados.persistirSessao });
+    listaObjetosEditaveis.push({ idObjeto: dados.idObjeto || gerarIdObjetoCena(), body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: dados.gravity !== false, lockPos: !!dados.lockPos, lockRot: !!dados.lockRot, mass: Number(dados.mass) || 1, air: Number(dados.air) || 0, bounce: Number(dados.bounce) || 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: vertices.map(v => ({ x: Number(v.x) || 0, y: Number(v.y) || 0 })), manuseavel: !!dados.manuseavel, naoAgarravel: !!dados.naoAgarravel, isStatic: !!dados.isStatic, idPersistente: dados.idPersistente || null, persistirSessao: !!dados.persistirSessao });
 }
 
 function criarCordaAPartirDeDados(scene, dados) {
@@ -1176,7 +1347,7 @@ function criarCordaAPartirDeDados(scene, dados) {
         else constraints.push(scene.matter.add.constraint(lastBody, elo, 0, 0.15, { pointA: { x: 0, y: segmentLen / 2 }, pointB: { x: 0, y: -segmentLen / 2 }, damping: 0.2 }));
         lastBody = elo;
     }
-    listaObjetosEditaveis.push({ body: null, ropeElos: elos, ropeConstraints: constraints, shape: 'rope', w: Number(dados.w) || 0, h: Number(dados.h) || 0, gravity: dados.gravity !== false, lockPos: dados.lockPos !== false, lockRot: !!dados.lockRot, mass: Number(dados.mass) || 0.8, air: Number(dados.air) || 0.08, bounce: Number(dados.bounce) || 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, ropeLen, ropeSegments, ropeColor, gfx: scene.add.graphics().setDepth(3), posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: !!dados.manuseavel, naoAgarravel: !!dados.naoAgarravel, isStatic: dados.isStatic !== false, idPersistente: dados.idPersistente || null, persistirSessao: !!dados.persistirSessao });
+    listaObjetosEditaveis.push({ idObjeto: dados.idObjeto || gerarIdObjetoCena(), body: null, ropeElos: elos, ropeConstraints: constraints, shape: 'rope', w: Number(dados.w) || 0, h: Number(dados.h) || 0, gravity: dados.gravity !== false, lockPos: dados.lockPos !== false, lockRot: !!dados.lockRot, mass: Number(dados.mass) || 0.8, air: Number(dados.air) || 0.08, bounce: Number(dados.bounce) || 0, maxVel: Number(dados.maxVel) || 0, maxRot: Number(dados.maxRot) || 0, ropeLen, ropeSegments, ropeColor, gfx: scene.add.graphics().setDepth(3), posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: !!dados.manuseavel, naoAgarravel: !!dados.naoAgarravel, isStatic: dados.isStatic !== false, idPersistente: dados.idPersistente || null, persistirSessao: !!dados.persistirSessao });
 }
 
 function carregarSalaPorId(id) {
@@ -1259,8 +1430,10 @@ function inicializarSistemaDeSalas() {
     atualizarCamposSala();
 }
 
-function desmarcarObjetoDoEditor() { arrastandoObjetoSelecionado = false; objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; }
+function desmarcarObjetoDoEditor() { modoVincularFilhosRotator = false; arrastandoObjetoSelecionado = false; objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; atualizarStatusFilhosRotator(); }
 function setFerramenta(f) {
+    modoVincularFilhosRotator = false;
+    atualizarStatusFilhosRotator();
     const scene = game.scene.getScene('default');
     if (verticesCriacaoAtiva.length > 0) cancelarCriacaoPoligonoPendente(scene);
     arrastandoGrade = false; modoPincelGrade = null; ultimaCelulaGradeArrastada = null;
@@ -1602,6 +1775,28 @@ function create() {
             return;
         }
         if (ferramentaAtual === 'select') {
+            if (modoVincularFilhosRotator && objetoSelecionado?.shape === 'rotator') {
+                const pai = objetoSelecionado;
+                let alvo = null, menor = Infinity;
+                listaObjetosEditaveis.forEach(obj => {
+                    if (!obj || obj === pai || obj.shape === 'rotator') return;
+                    let hit = false;
+                    if (obj.body) {
+                        if (obj.shape === 'polygon') hit = maoPodeAgarrarPoligonoCustomizado(obj, p.worldX, p.worldY, 0);
+                        else if (obj.shape === 'seesaw') hit = maoPodeAgarrarGangorra(obj, p.worldX, p.worldY, 0);
+                        else hit = Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices, {x:p.worldX,y:p.worldY});
+                    } else if (obj.shape === 'rope' && obj.ropeElos) {
+                        hit = obj.ropeElos.some(elo => Phaser.Physics.Matter.Matter.Vertices.contains(elo.vertices, {x:p.worldX,y:p.worldY}));
+                    } else if (['portal','respawn1','respawn2'].includes(obj.shape)) {
+                        const ox=Number(obj.visualX)||0, oy=Number(obj.visualY)||0;
+                        const hw=obj.shape==='portal'?Math.max(20,Number(obj.portalAreaW)||100)/2:28, hh=obj.shape==='portal'?Math.max(20,Number(obj.portalAreaH)||120)/2:28;
+                        hit=Math.abs(p.worldX-ox)<=hw && Math.abs(p.worldY-oy)<=hh;
+                    }
+                    if (hit) { const ox=obj.body?obj.body.position.x:Number(obj.visualX)||0, oy=obj.body?obj.body.position.y:Number(obj.visualY)||0, d=Math.hypot(ox-p.worldX,oy-p.worldY); if(d<menor){menor=d;alvo=obj;} }
+                });
+                if (alvo) alternarVinculoFilhoRotator(pai, alvo);
+                return;
+            }
             arrastandoObjetoSelecionado = executarSelecaoObjeto(this, p.worldX, p.worldY, p);
             return;
         }
@@ -1648,6 +1843,11 @@ function create() {
                 }
             }
             else { 
+                if (objetoSelecionado.shape === 'rotator') {
+                    const dxRot = pos.x - (Number(objetoSelecionado.visualX) || 0);
+                    const dyRot = pos.y - (Number(objetoSelecionado.visualY) || 0);
+                    transladarFilhosDoRotator(this, objetoSelecionado, dxRot, dyRot);
+                }
                 // Ao arrastar um portal, movemos também sua área de entrada pelo
                 // mesmo deslocamento, preservando a distância configurada entre
                 // a área de ativação e a área de chegada.
@@ -1689,13 +1889,15 @@ function atualizarInterfaceForma() {
     }
     const especial = ['portal', 'respawn1', 'respawn2'].includes(s);
     const gangorra = s === 'seesaw';
-    const fisico = !especial && s !== 'rope';
+    const rotator = s === 'rotator';
+    const fisico = !especial && s !== 'rope' && !rotator;
     document.getElementById('painel-propriedades-comuns').style.display = fisico ? 'block' : 'none';
     document.getElementById('painel-propriedades-corda').style.display = (s === 'rope') ? 'flex' : 'none';
     document.getElementById('painel-propriedades-gangorra').style.display = gangorra ? 'flex' : 'none';
+    document.getElementById('painel-propriedades-rotator').style.display = rotator ? 'flex' : 'none';
     document.getElementById('painel-propriedades-especiais').style.display = especial ? 'flex' : 'none';
-    document.getElementById('row-h').style.display = (s === 'circle' || s === 'polygon' || s === 'rope' || especial) ? 'none' : 'flex';
-    document.getElementById('row-w').style.display = (s === 'polygon' || s === 'rope' || especial) ? 'none' : 'flex';
+    document.getElementById('row-h').style.display = (s === 'circle' || s === 'polygon' || s === 'rope' || especial || rotator) ? 'none' : 'flex';
+    document.getElementById('row-w').style.display = (s === 'polygon' || s === 'rope' || especial || rotator) ? 'none' : 'flex';
     document.getElementById('row-is-static')?.style && (document.getElementById('row-is-static').style.display = gangorra ? 'none' : 'flex');
     document.getElementById('row-id-persistente').style.display = (especial || document.getElementById('prop-persistir-sessao').checked) ? 'flex' : 'none';
     document.getElementById('row-portal-destino').style.display = s === 'portal' ? 'flex' : 'none';
@@ -1703,7 +1905,9 @@ function atualizarInterfaceForma() {
     document.getElementById('painel-area-portal').style.display = s === 'portal' ? 'block' : 'none';
     document.getElementById('label-w').innerText = s === 'circle' ? "Raio (px):" : (gangorra ? "Comprimento (px):" : "Largura (px):");
     document.getElementById('label-h').innerText = gangorra ? "Espessura (px):" : "Altura (px):";
-    ['row-lock-pos','row-lock-rot'].forEach(id => { const el=document.getElementById(id); if(el) el.style.display = gangorra ? 'none' : 'flex'; });
+    ['row-lock-pos','row-lock-rot'].forEach(id => { const el=document.getElementById(id); if(el) el.style.display = (gangorra || rotator) ? 'none' : 'flex'; });
+    if (!rotator) modoVincularFilhosRotator = false;
+    atualizarStatusFilhosRotator();
 }
 
 function extrairCamposPainel() {
@@ -1734,16 +1938,30 @@ function extrairCamposPainel() {
         seesawPivotX: parseFloat(document.getElementById('prop-seesaw-pivot-x').value) || 0,
         seesawPivotY: parseFloat(document.getElementById('prop-seesaw-pivot-y').value) || 0,
         seesawStiffness: Math.min(1, Math.max(0.05, parseFloat(document.getElementById('prop-seesaw-stiffness').value) || 1)),
-        seesawDamping: Math.max(0, parseFloat(document.getElementById('prop-seesaw-damping').value) || 0)
+        seesawDamping: Math.max(0, parseFloat(document.getElementById('prop-seesaw-damping').value) || 0),
+        rotatorAtivo: !!document.getElementById('prop-rotator-active')?.checked,
+        rotatorDirecao: Number(document.getElementById('prop-rotator-direction')?.value) < 0 ? -1 : 1,
+        rotatorVelocidadeDeg: Math.max(0, parseFloat(document.getElementById('prop-rotator-speed')?.value) || 0)
     };
 }
 
 function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
+    if (c.shape === 'rotator') {
+        const obj = {
+            idObjeto: gerarIdObjetoCena(), body: null, gfx: scene.add.graphics().setDepth(7), shape: 'rotator',
+            w: 44, h: 44, visualX: ax, visualY: ay, posicaoTravadaX: ax, posicaoTravadaY: ay,
+            gravity: false, lockPos: true, lockRot: true, mass: 0, air: 0, bounce: 0, maxVel: 0, maxRot: 0,
+            manuseavel: false, naoAgarravel: true, isStatic: true, idPersistente: null, persistirSessao: false,
+            rotatorAtivo: c.rotatorAtivo, rotatorDirecao: c.rotatorDirecao, rotatorVelocidadeDeg: c.rotatorVelocidadeDeg,
+            rotatorAnguloAtual: 0, filhosIds: []
+        };
+        listaObjetosEditaveis.push(obj); selecionarObjetoDoEditor(obj); marcarSalaComoAlterada(); return;
+    }
     if (['portal', 'respawn1', 'respawn2'].includes(c.shape)) {
         const idPersistente = c.idPersistente || gerarIdObjetoPersistente();
         const obj = {
-            body: null, gfx: scene.add.graphics().setDepth(6), shape: c.shape,
+            idObjeto: gerarIdObjetoCena(), body: null, gfx: scene.add.graphics().setDepth(6), shape: c.shape,
             w: c.shape === 'portal' ? c.portalAreaW : 50, h: c.shape === 'portal' ? c.portalAreaH : 50, gravity: false, lockPos: true, lockRot: true, mass: 1, air: 0, bounce: 0,
             maxVel: 0, maxRot: 0, posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay,
             manuseavel: false, naoAgarravel: true, isStatic: true,
@@ -1793,7 +2011,7 @@ function executarCriacaoObjeto(scene, x, y) {
             else constraints.push(scene.matter.add.constraint(lastBody, elo, 0, 0.15, { pointA: { x: 0, y: segmentLen/2 }, pointB: { x: 0, y: -segmentLen/2 }, damping: 0.2 }));
             lastBody = elo;
         }
-        listaObjetosEditaveis.push({ body: null, ropeElos: elos, ropeConstraints: constraints, shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, ropeLen: c.ropeLen, ropeSegments: c.ropeSegments, ropeColor: c.ropeColor, gfx: scene.add.graphics().setDepth(3), posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: false, naoAgarravel: false, isStatic: true, idPersistente: c.persistirSessao ? (c.idPersistente || gerarIdObjetoPersistente()) : null, persistirSessao: !!c.persistirSessao });
+        listaObjetosEditaveis.push({ idObjeto: gerarIdObjetoCena(), body: null, ropeElos: elos, ropeConstraints: constraints, shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, ropeLen: c.ropeLen, ropeSegments: c.ropeSegments, ropeColor: c.ropeColor, gfx: scene.add.graphics().setDepth(3), posicaoTravadaX: ax, posicaoTravadaY: ay, visualX: ax, visualY: ay, manuseavel: false, naoAgarravel: false, isStatic: true, idPersistente: c.persistirSessao ? (c.idPersistente || gerarIdObjetoPersistente()) : null, persistirSessao: !!c.persistirSessao });
         marcarSalaComoAlterada();
         return;
     }
@@ -1801,7 +2019,7 @@ function executarCriacaoObjeto(scene, x, y) {
     let body = (c.shape === 'box') ? scene.matter.add.rectangle(ax, ay, c.w, c.h, conf) : scene.matter.add.circle(ax, ay, c.w, conf);
     body.manuseavel = c.manuseavel; body.naoAgarravel = c.lockGrab; body.label = 'ambiente';
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
-    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel, naoAgarravel: c.lockGrab, isStatic: c.isStatic, idPersistente: c.persistirSessao ? (c.idPersistente || gerarIdObjetoPersistente()) : null, persistirSessao: !!c.persistirSessao });
+    listaObjetosEditaveis.push({ idObjeto: gerarIdObjetoCena(), body: body, gfx: scene.add.graphics().setDepth(3), shape: c.shape, w: c.w, h: c.h, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, posicaoTravadaX: ax, posicaoTravadaY: ay, physicsActive: true, visualX: ax, visualY: ay, dadosDesenhoVisual: null, manuseavel: c.manuseavel, naoAgarravel: c.lockGrab, isStatic: c.isStatic, idPersistente: c.persistirSessao ? (c.idPersistente || gerarIdObjetoPersistente()) : null, persistirSessao: !!c.persistirSessao });
     marcarSalaComoAlterada();
 }
 
@@ -1836,7 +2054,7 @@ function finalizarCriacaoPoligono(scene) {
     scene.matter.world.add(body); scene.matter.body.setPosition(body, { x: centroX, y: centroY });
     if (!body.isStatic) { scene.matter.body.setInertia(body, c.lockRot ? Infinity : body.inertia); }
     let verticesLocaisRelativos = verticesCriacaoAtiva.map(v => { return { x: v.x - centroX, y: v.y - centroY }; });
-    listaObjetosEditaveis.push({ body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: verticesLocaisRelativos, manuseavel: c.manuseavel, naoAgarravel: c.lockGrab, isStatic: c.isStatic, idPersistente: c.persistirSessao ? (c.idPersistente || gerarIdObjetoPersistente()) : null, persistirSessao: !!c.persistirSessao });
+    listaObjetosEditaveis.push({ idObjeto: gerarIdObjetoCena(), body: body, gfx: scene.add.graphics().setDepth(3), shape: 'polygon', w: 0, h: 0, gravity: c.gravity, lockPos: c.lockPos, lockRot: c.lockRot, mass: c.mass, air: c.air, bounce: c.bounce, maxVel: c.maxVel, maxRot: c.maxRot, posicaoTravadaX: centroX, posicaoTravadaY: centroY, physicsActive: true, visualX: centroX, visualY: centroY, dadosDesenhoVisual: verticesLocaisRelativos, manuseavel: c.manuseavel, naoAgarravel: c.lockGrab, isStatic: c.isStatic, idPersistente: c.persistirSessao ? (c.idPersistente || gerarIdObjetoPersistente()) : null, persistirSessao: !!c.persistirSessao });
     
     verticesCriacaoAtiva = []; 
     limparBolinhasGuiaDoPoligono(scene);
@@ -1851,6 +2069,10 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
             if (obj.shape === 'polygon') colidiu = maoPodeAgarrarPoligonoCustomizado(obj, x, y, 0);
             else if (obj.shape === 'seesaw') colidiu = maoPodeAgarrarGangorra(obj, x, y, 0);
             else colidiu = Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices, { x: x, y: y });
+        }
+        else if (obj.shape === 'rotator') {
+            const px = Number(obj.visualX) || 0, py = Number(obj.visualY) || 0;
+            colidiu = Math.hypot(x - px, y - py) <= 24;
         }
         else if (['portal', 'respawn1', 'respawn2'].includes(obj.shape)) {
             const px = Number(obj.visualX) || 0, py = Number(obj.visualY) || 0;
@@ -1904,7 +2126,13 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('prop-portal-entrada-w').value = Math.max(20, Number(obj.portalEntradaW) || Number(obj.portalAreaW) || 100);
     document.getElementById('prop-portal-entrada-h').value = Math.max(20, Number(obj.portalEntradaH) || Number(obj.portalAreaH) || 120);
     document.getElementById('prop-nome-ponto').value = obj.nomePonto || '';
-    if (obj.shape === 'seesaw') {
+    if (obj.shape === 'rotator') {
+        document.getElementById('prop-rotator-active').checked = obj.rotatorAtivo !== false;
+        document.getElementById('prop-rotator-direction').value = Number(obj.rotatorDirecao) < 0 ? '-1' : '1';
+        document.getElementById('prop-rotator-speed').value = Math.max(0, Number(obj.rotatorVelocidadeDeg) || 0);
+        atualizarStatusFilhosRotator();
+    }
+    else if (obj.shape === 'seesaw') {
         document.getElementById('prop-w').value = obj.w || 240;
         document.getElementById('prop-h').value = obj.h || 24;
         document.getElementById('prop-gravity').checked = obj.gravity !== false;
@@ -1943,6 +2171,24 @@ function atualizarObjetoExistente() {
     let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
     let px = obj.body ? obj.body.position.x : obj.visualX; let py = obj.body ? obj.body.position.y : obj.visualY;
     let anguloSalvo = obj.body ? obj.body.angle : 0;
+    if (c.shape === 'rotator' && obj.shape !== 'rotator') {
+        if (obj.seesawConstraint) { scene.matter.world.remove(obj.seesawConstraint); obj.seesawConstraint = null; }
+        if (obj.shape === 'rope') {
+            if (obj.ropeConstraints) obj.ropeConstraints.forEach(co => { if (co) scene.matter.world.remove(co); });
+            if (obj.ropeElos) obj.ropeElos.forEach(el => { if (el) scene.matter.world.remove(el); });
+        } else if (obj.body) scene.matter.world.remove(obj.body);
+        obj.body = null; obj.ropeElos = null; obj.ropeConstraints = null;
+        Object.assign(obj, { shape:'rotator', w:44, h:44, visualX:px, visualY:py, posicaoTravadaX:px, posicaoTravadaY:py,
+            gravity:false, lockPos:true, lockRot:true, mass:0, air:0, bounce:0, maxVel:0, maxRot:0,
+            manuseavel:false, naoAgarravel:true, isStatic:true, idPersistente:null, persistirSessao:false,
+            rotatorAtivo:c.rotatorAtivo, rotatorDirecao:c.rotatorDirecao, rotatorVelocidadeDeg:c.rotatorVelocidadeDeg,
+            rotatorAnguloAtual:0, filhosIds:[] });
+        garantirIdObjetoCena(obj); marcarSalaComoAlterada(); atualizarStatusFilhosRotator(); return;
+    }
+    if (obj.shape === 'rotator' && c.shape === 'rotator') {
+        obj.rotatorAtivo = c.rotatorAtivo; obj.rotatorDirecao = c.rotatorDirecao; obj.rotatorVelocidadeDeg = c.rotatorVelocidadeDeg;
+        marcarSalaComoAlterada(); atualizarStatusFilhosRotator(); return;
+    }
     if (['portal', 'respawn1', 'respawn2'].includes(obj.shape) || ['portal', 'respawn1', 'respawn2'].includes(c.shape)) {
         if (obj.seesawConstraint) { scene.matter.world.remove(obj.seesawConstraint); obj.seesawConstraint = null; }
         if (obj.shape === 'rope') {
@@ -2034,6 +2280,8 @@ function atualizarObjetoExistente() {
 
 function deletarObjetoSelecionado() {
     if (!objetoSelecionado) return; let scene = game.scene.getScene('default');
+    const idRemovido = objetoSelecionado.idObjeto;
+    if (idRemovido) listaObjetosEditaveis.forEach(o => { if (o?.shape === 'rotator' && Array.isArray(o.filhosIds)) o.filhosIds = o.filhosIds.filter(id => id !== idRemovido); });
     if (objetoSelecionado.seesawConstraint) { scene.matter.world.remove(objetoSelecionado.seesawConstraint); objetoSelecionado.seesawConstraint = null; }
     if (objetoSelecionado.shape === 'rope') {
         if (objetoSelecionado.ropeConstraints) objetoSelecionado.ropeConstraints.forEach(co => scene.matter.world.remove(co));
@@ -2067,6 +2315,30 @@ function desenharObjetoEditor(obj) {
 
     const posX = obj.body ? obj.body.position.x : obj.visualX;
     const posY = obj.body ? obj.body.position.y : obj.visualY;
+
+    if (obj.shape === 'rotator') {
+        if (!modoEditorAtivo) { g.setVisible(false); return; }
+        g.setVisible(true); g.x = 0; g.y = 0; g.rotation = 0;
+        const selecionado = obj === objetoSelecionado;
+        const cor = selecionado ? 0xffea00 : 0x57e3ff;
+        g.lineStyle(selecionado ? 4 : 3, cor, 1);
+        g.strokeCircle(posX, posY, 18);
+        g.lineBetween(posX - 24, posY, posX + 24, posY);
+        g.lineBetween(posX, posY - 24, posX, posY + 24);
+        const a = Number(obj.rotatorAnguloAtual) || 0;
+        g.lineBetween(posX, posY, posX + Math.cos(a) * 30, posY + Math.sin(a) * 30);
+        g.fillStyle(cor, 1); g.fillCircle(posX, posY, 5);
+        if (Array.isArray(obj.filhosIds)) {
+            g.lineStyle(2, 0x57e3ff, 0.45);
+            obj.filhosIds.forEach(id => {
+                const filho = encontrarObjetoCenaPorId(id); if (!filho) return;
+                const fx = filho.body ? filho.body.position.x : Number(filho.visualX)||0;
+                const fy = filho.body ? filho.body.position.y : Number(filho.visualY)||0;
+                g.lineBetween(posX, posY, fx, fy);
+            });
+        }
+        return;
+    }
 
     // Elementos especiais não são corpos físicos: desenhamos um ícone claro
     // diretamente na posição do elemento para que o autor da sala saiba onde
@@ -2685,7 +2957,7 @@ function executarRespawnIndividual(scene, pNum) {
     else { const e = entradas.jogador2 || { x: 500, y: WORLD_HEIGHT - 150 }; player2 = createHeaveHoCharacter(scene, e.x, e.y, p.pad, 1, 0xffff00); }
 }
 
-function update() {
+function update(time, delta) {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
     aplicarModoDebug(this);
     verificarInicioPorGamepad(this);
@@ -2732,6 +3004,7 @@ function update() {
         return;
     }
     atualizarMolduraReferencia16x9();
+    atualizarRotadores(this, Math.min(50, Math.max(0, Number(delta) || 16.6667)) / 1000);
     if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2);
     verificarPortaisDaSala(this);
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10); });
