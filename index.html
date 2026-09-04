@@ -80,7 +80,7 @@
     </div>
     <div class="section">
         <h3 id="status-modo" style="color:#55ff55;">Criando novos objetos</h3>
-        <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option><option value="rope">Corda / Corrente</option><option value="seesaw">Gangorra</option><option value="rotator">Pai Giratório / Eixo</option><option value="portal">Portal / Conexão</option><option value="respawn1">Respawn Jogador 1</option><option value="respawn2">Respawn Jogador 2</option></select></div>
+        <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option><option value="rope">Corda / Corrente</option><option value="seesaw">Gangorra</option><option value="rotator">Pai Giratório / Eixo</option><option value="npc">NPC / Evento</option><option value="coin">Moeda</option><option value="portal">Portal / Conexão</option><option value="respawn1">Respawn Jogador 1</option><option value="respawn2">Respawn Jogador 2</option></select></div>
         <div id="painel-propriedades-comuns">
             <div class="prop-row" style="background:#27ae60; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Objeto Manuseável:</label><input type="checkbox" id="prop-manuseavel" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" style="background:#e74c3c; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Trava Agarrar (Não Agarrável):</label><input type="checkbox" id="prop-lock-grab" onchange="atualizarObjetoExistente()"></div>
@@ -116,6 +116,36 @@
             </div>
             <div class="prop-row"><label>ID / Nome do ponto:</label><input type="text" id="prop-nome-ponto" value="" onchange="atualizarObjetoExistente()"></div>
         </div>
+        <div id="painel-propriedades-npc" style="display:none; background:#34495e; padding:10px; border:2px solid #5dade2; border-radius:6px; margin-top:7px; flex-direction:column; gap:7px;">
+            <h3 style="color:#bde7ff; font-weight:bold; margin:0;">NPC / Eventos</h3>
+            <div style="font-size:10px;color:#d6eaf8;line-height:1.35;">Configurações exclusivas do NPC. Cada estado possui animação, diálogo e transições próprias.</div>
+            <div class="prop-row"><label>ID do NPC:</label><input type="text" id="prop-npc-id" value="npc_1" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Nome:</label><input type="text" id="prop-npc-name" value="NPC" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Spritesheet URL:</label><input type="text" id="prop-npc-sheet-url" value="" placeholder="assets/npc.png" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Largura frame:</label><input type="number" id="prop-npc-frame-w" value="64" min="1" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Altura frame:</label><input type="number" id="prop-npc-frame-h" value="64" min="1" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Escala visual:</label><input type="number" id="prop-npc-scale" value="1" min="0.1" max="10" step="0.1" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Raio de diálogo:</label><input type="number" id="prop-npc-radius" value="180" min="20" max="1000" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Estado inicial:</label><input type="text" id="prop-npc-initial-state" value="inicial" onchange="atualizarObjetoExistente()"></div>
+            <label style="font-size:11px;color:#fff;font-weight:bold;">Estados do NPC (JSON)</label>
+            <textarea id="prop-npc-states" rows="14" style="width:100%;box-sizing:border-box;background:#16222a;color:#dff9fb;border:1px solid #5dade2;border-radius:4px;font:11px monospace;resize:vertical;" onchange="atualizarObjetoExistente()">[
+  {
+    "id": "inicial",
+    "anim": {"start": 0, "end": 3, "fps": 6, "repeat": -1},
+    "dialogo": "Olá!",
+    "negociacao": {"custo": 0, "evento": "", "proximoEstado": ""},
+    "transicoes": []
+  }
+]</textarea>
+            <div style="font-size:10px;color:#bdc3c7;line-height:1.35;">Transições aceitas: <b>falou_npc</b> {npcId}, <b>item</b> {itemId} e <b>sala</b> {salaId}. Cada transição usa também <b>estado</b>. A negociação desconta moedas, ativa “evento” e pode mudar para “proximoEstado”.</div>
+            <button style="background:#2471a3;" onclick="formatarJSONEstadosNPC()">Validar / Formatar estados</button>
+        </div>
+        <div id="painel-propriedades-moeda" style="display:none; background:#7d6608; padding:9px; border:2px solid #f4d03f; border-radius:6px; margin-top:7px; flex-direction:column; gap:7px;">
+            <h3 style="color:#fff3a0;font-weight:bold;margin:0;">Moeda</h3>
+            <div class="prop-row"><label>Valor:</label><input type="number" id="prop-coin-value" value="1" min="1" max="9999" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>ID da moeda:</label><input type="text" id="prop-coin-id" value="" placeholder="automático" onchange="atualizarObjetoExistente()"></div>
+            <div style="font-size:10px;color:#fff8c6;">Coletada ao encostar e permanece coletada durante a sessão.</div>
+        </div>
         <div id="painel-propriedades-corda" style="display:none; background:#8e44ad; padding:8px; border-radius:4px; margin-top:5px; flex-direction:column; gap:6px;">
             <h3 style="color:#fff; font-weight:bold;">Ajustes da Corda</h3>
             <div class="prop-row"><label>Comprimento Total:</label><input type="number" id="prop-rope-len" value="250" min="30" max="800" onchange="atualizarObjetoExistente()"></div>
@@ -149,6 +179,12 @@
     <div id="aviso-modo">Aperte [F4] para abrir o Editor</div>
     <div id="indicador-debug">MODO DEBUG</div>
     <div id="moldura-info">VISÃO DE REFERÊNCIA 16:9 · 1920 × 1080</div>
+    <div id="npc-dialogo-ui" style="display:none;position:absolute;left:50%;bottom:26px;transform:translateX(-50%);width:min(760px,86%);background:rgba(8,12,18,.94);border:2px solid #ecf0f1;border-radius:10px;padding:14px 16px;z-index:10000;color:#fff;box-shadow:0 6px 30px rgba(0,0,0,.55);">
+        <div id="npc-dialogo-nome" style="font-weight:bold;color:#7ed6ff;font-size:16px;margin-bottom:6px;"></div>
+        <div id="npc-dialogo-texto" style="font-size:14px;line-height:1.4;white-space:pre-wrap;"></div>
+        <div id="npc-dialogo-acoes" style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;"></div>
+        <div id="npc-dialogo-moedas" style="font-size:11px;color:#f9ca24;margin-top:8px;"></div>
+    </div>
 </div>
 <script>
 // O jogo usa uma resolução lógica fixa 16:9. Phaser escala o canvas para caber
@@ -192,6 +228,15 @@ const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
 const CHAVE_ARMAZENAMENTO_SESSAO = 'metroidvania_ho_sessao_jogo_v1';
 let estadoSessaoJogo = null;
 let salaEmJogoAtual = null;
+const CHAVE_ESTADO_NARRATIVA = 'metroidvania_ho_estado_narrativa_v1';
+let estadoNarrativa = { moedas: 0, moedasColetadas: {}, npcEstados: {}, npcConversados: {}, itens: {}, eventos: {}, salasVisitadas: {} };
+let npcDialogoAtual = null, npcDialogoUltimaProximidade = null;
+function carregarEstadoNarrativa(){try{const salvo=JSON.parse(sessionStorage.getItem(CHAVE_ESTADO_NARRATIVA)||'null');if(salvo&&typeof salvo==='object')estadoNarrativa=Object.assign(estadoNarrativa,salvo);}catch(e){} estadoNarrativa.moedasColetadas||={};estadoNarrativa.npcEstados||={};estadoNarrativa.npcConversados||={};estadoNarrativa.itens||={};estadoNarrativa.eventos||={};estadoNarrativa.salasVisitadas||={};}
+function salvarEstadoNarrativa(){try{sessionStorage.setItem(CHAVE_ESTADO_NARRATIVA,JSON.stringify(estadoNarrativa));}catch(e){}}
+function jogadorPossuiItem(itemId){return !!estadoNarrativa.itens[String(itemId||'')];}
+function darItemAoJogador(itemId,quantidade=1){const id=String(itemId||'').trim();if(!id)return;estadoNarrativa.itens[id]=(Number(estadoNarrativa.itens[id])||0)+Math.max(1,Number(quantidade)||1);salvarEstadoNarrativa();}
+function ativarEventoJogo(eventoId){const id=String(eventoId||'').trim();if(!id)return;estadoNarrativa.eventos[id]=true;salvarEstadoNarrativa();window.dispatchEvent(new CustomEvent('metroidvania-evento',{detail:{id}}));}
+
 let modoDebugAtivo = false;
 let transicaoPortalEmAndamento = false;
 let ultimoPortalSemDestinoAvisado = '';
@@ -394,6 +439,9 @@ function serializarObjetoDaSala(obj) {
         maxVel: Number(obj.maxVel) || 0,
         maxRot: Number(obj.maxRot) || 0
     };
+
+    if (obj.shape === 'npc') { base.x=Number(obj.visualX)||0;base.y=Number(obj.visualY)||0;base.npcId=obj.npcId||'';base.npcNome=obj.npcNome||'NPC';base.npcSpritesheetUrl=obj.npcSpritesheetUrl||'';base.npcFrameW=Math.max(1,Number(obj.npcFrameW)||64);base.npcFrameH=Math.max(1,Number(obj.npcFrameH)||64);base.npcEscala=Math.max(.1,Number(obj.npcEscala)||1);base.npcRaioDialogo=Math.max(20,Number(obj.npcRaioDialogo)||180);base.npcEstadoInicial=obj.npcEstadoInicial||'inicial';base.npcEstados=Array.isArray(obj.npcEstados)?JSON.parse(JSON.stringify(obj.npcEstados)):[];return base; }
+    if (obj.shape === 'coin') { base.x=obj.body?Number(obj.body.position.x)||0:Number(obj.visualX)||0;base.y=obj.body?Number(obj.body.position.y)||0:Number(obj.visualY)||0;base.coinValue=Math.max(1,Number(obj.coinValue)||1);base.coinId=obj.coinId||garantirIdObjetoCena(obj);return base; }
 
     if (obj.shape === 'rotator') {
         base.x = Number(obj.visualX) || 0;
@@ -1195,6 +1243,7 @@ function reposicionarJogadorCompleto(scene, p, pos) {
 }
 
 function carregarSalaFisicamente(scene, dados) {
+    if (dados?.id) { estadoNarrativa.salasVisitadas[String(dados.id)] = true; salvarEstadoNarrativa(); }
     // Durante o primeiro segundo após carregar uma sala, a área de alcance das mãos
     // recebe uma pequena tolerância extra (19 px em vez de 16 px).
     alcanceGarraTemporarioAte = performance.now() + 1000;
@@ -1278,6 +1327,7 @@ function removerCorposDaSalaAtual(scene) {
         } else if (obj.body) {
             scene.matter.world.remove(obj.body);
         }
+        if (obj.npcSprite) { obj.npcSprite.destroy(); obj.npcSprite = null; }
         if (obj.gfx) obj.gfx.destroy();
     });
     listaObjetosEditaveis = [];
@@ -1287,6 +1337,9 @@ function removerCorposDaSalaAtual(scene) {
 
 function adicionarObjetoSerializado(scene, dados) {
     if (!dados || !dados.shape) return;
+
+    if (dados.shape === 'npc') { const x=Number(dados.x)||0,y=Number(dados.y)||0;const obj={idObjeto:dados.idObjeto||gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(8),shape:'npc',w:Math.max(1,Number(dados.npcFrameW)||64),h:Math.max(1,Number(dados.npcFrameH)||64),visualX:x,visualY:y,posicaoTravadaX:x,posicaoTravadaY:y,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,npcId:String(dados.npcId||dados.idObjeto||'npc'),npcNome:String(dados.npcNome||'NPC'),npcSpritesheetUrl:String(dados.npcSpritesheetUrl||''),npcFrameW:Math.max(1,Number(dados.npcFrameW)||64),npcFrameH:Math.max(1,Number(dados.npcFrameH)||64),npcEscala:Math.max(.1,Number(dados.npcEscala)||1),npcRaioDialogo:Math.max(20,Number(dados.npcRaioDialogo)||180),npcEstadoInicial:String(dados.npcEstadoInicial||'inicial'),npcEstados:Array.isArray(dados.npcEstados)?JSON.parse(JSON.stringify(dados.npcEstados)):[],npcSprite:null};listaObjetosEditaveis.push(obj);prepararSpriteNPC(scene,obj);return; }
+    if (dados.shape === 'coin') { const x=Number(dados.x)||0,y=Number(dados.y)||0,id=String(dados.coinId||dados.idObjeto||gerarIdObjetoCena());const body=scene.matter.add.circle(x,y,16,{isStatic:true,isSensor:true,label:'moeda',collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER}});body.naoAgarravel=true;const obj={idObjeto:dados.idObjeto||gerarIdObjetoCena(),body,gfx:scene.add.graphics().setDepth(5),shape:'coin',w:16,h:32,visualX:x,visualY:y,posicaoTravadaX:x,posicaoTravadaY:y,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,coinValue:Math.max(1,Number(dados.coinValue)||1),coinId:id,coinColetada:!!estadoNarrativa.moedasColetadas[id]};body.objetoEditavelRef=obj;if(obj.coinColetada){scene.matter.world.remove(body);obj.body=null;}listaObjetosEditaveis.push(obj);return; }
 
     if (dados.shape === 'rotator') {
         const x = Number(dados.x) || 0, y = Number(dados.y) || 0;
@@ -1799,6 +1852,7 @@ function create() {
     gradeConstrucaoGraphics = this.add.graphics().setDepth(0.5);
     previewGraphicsPoligono = this.add.graphics().setDepth(15);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
+    carregarEstadoNarrativa();
     inicializarSistemaDeSalas();
     reconstruirLimitesDaSala(this);
     carregarSalaPorId(salaAtual.id);
@@ -1993,14 +2047,17 @@ function atualizarInterfaceForma() {
     const especial = ['portal', 'respawn1', 'respawn2'].includes(s);
     const gangorra = s === 'seesaw';
     const rotator = s === 'rotator';
-    const fisico = !especial && s !== 'rope' && !rotator;
+    const npc = s === 'npc', moeda = s === 'coin';
+    const fisico = !especial && s !== 'rope' && !rotator && !npc && !moeda;
     document.getElementById('painel-propriedades-comuns').style.display = fisico ? 'block' : 'none';
     document.getElementById('painel-propriedades-corda').style.display = (s === 'rope') ? 'flex' : 'none';
     document.getElementById('painel-propriedades-gangorra').style.display = gangorra ? 'flex' : 'none';
     document.getElementById('painel-propriedades-rotator').style.display = rotator ? 'flex' : 'none';
+    document.getElementById('painel-propriedades-npc').style.display = npc ? 'flex' : 'none';
+    document.getElementById('painel-propriedades-moeda').style.display = moeda ? 'flex' : 'none';
     document.getElementById('painel-propriedades-especiais').style.display = especial ? 'flex' : 'none';
-    document.getElementById('row-h').style.display = (s === 'circle' || s === 'polygon' || s === 'rope' || especial || rotator) ? 'none' : 'flex';
-    document.getElementById('row-w').style.display = (s === 'polygon' || s === 'rope' || especial || rotator) ? 'none' : 'flex';
+    document.getElementById('row-h').style.display = (s === 'circle' || s === 'polygon' || s === 'rope' || especial || rotator || npc || moeda) ? 'none' : 'flex';
+    document.getElementById('row-w').style.display = (s === 'polygon' || s === 'rope' || especial || rotator || npc || moeda) ? 'none' : 'flex';
     document.getElementById('row-is-static')?.style && (document.getElementById('row-is-static').style.display = gangorra ? 'none' : 'flex');
     document.getElementById('row-id-persistente').style.display = (especial || document.getElementById('prop-persistir-sessao').checked) ? 'flex' : 'none';
     document.getElementById('row-portal-destino').style.display = s === 'portal' ? 'flex' : 'none';
@@ -2044,12 +2101,15 @@ function extrairCamposPainel() {
         seesawDamping: Math.max(0, parseFloat(document.getElementById('prop-seesaw-damping').value) || 0),
         rotatorAtivo: !!document.getElementById('prop-rotator-active')?.checked,
         rotatorDirecao: Number(document.getElementById('prop-rotator-direction')?.value) < 0 ? -1 : 1,
-        rotatorVelocidadeDeg: Math.max(0, parseFloat(document.getElementById('prop-rotator-speed')?.value) || 0)
+        rotatorVelocidadeDeg: Math.max(0, parseFloat(document.getElementById('prop-rotator-speed')?.value) || 0),
+        npcId:(document.getElementById('prop-npc-id')?.value||'npc').trim(),npcNome:(document.getElementById('prop-npc-name')?.value||'NPC').trim(),npcSpritesheetUrl:(document.getElementById('prop-npc-sheet-url')?.value||'').trim(),npcFrameW:Math.max(1,parseInt(document.getElementById('prop-npc-frame-w')?.value)||64),npcFrameH:Math.max(1,parseInt(document.getElementById('prop-npc-frame-h')?.value)||64),npcEscala:Math.max(.1,parseFloat(document.getElementById('prop-npc-scale')?.value)||1),npcRaioDialogo:Math.max(20,parseFloat(document.getElementById('prop-npc-radius')?.value)||180),npcEstadoInicial:(document.getElementById('prop-npc-initial-state')?.value||'inicial').trim(),npcEstados:parsearEstadosNPCDoPainel(),coinValue:Math.max(1,parseInt(document.getElementById('prop-coin-value')?.value)||1),coinId:(document.getElementById('prop-coin-id')?.value||'').trim()
     };
 }
 
 function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
+    if(c.shape==='npc'){const obj={idObjeto:gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(8),shape:'npc',w:c.npcFrameW,h:c.npcFrameH,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,npcId:c.npcId||('npc_'+Date.now()),npcNome:c.npcNome||'NPC',npcSpritesheetUrl:c.npcSpritesheetUrl,npcFrameW:c.npcFrameW,npcFrameH:c.npcFrameH,npcEscala:c.npcEscala,npcRaioDialogo:c.npcRaioDialogo,npcEstadoInicial:c.npcEstadoInicial||'inicial',npcEstados:c.npcEstados,npcSprite:null};listaObjetosEditaveis.push(obj);prepararSpriteNPC(scene,obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
+    if(c.shape==='coin'){const id=c.coinId||('moeda_'+Date.now()+'_'+Math.floor(Math.random()*99999));const body=scene.matter.add.circle(ax,ay,16,{isStatic:true,isSensor:true,label:'moeda',collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER}});body.naoAgarravel=true;const obj={idObjeto:gerarIdObjetoCena(),body,gfx:scene.add.graphics().setDepth(5),shape:'coin',w:16,h:32,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,coinValue:c.coinValue,coinId:id,coinColetada:false};body.objetoEditavelRef=obj;listaObjetosEditaveis.push(obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
     if (c.shape === 'rotator') {
         const obj = {
             idObjeto: gerarIdObjetoCena(), body: null, gfx: scene.add.graphics().setDepth(7), shape: 'rotator',
@@ -2173,6 +2233,7 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
             else if (obj.shape === 'seesaw') colidiu = maoPodeAgarrarGangorra(obj, x, y, 0);
             else colidiu = Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices, { x: x, y: y });
         }
+        else if(obj.shape==='npc'){const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0,hw=Math.max(20,(Number(obj.npcFrameW)||64)*(Number(obj.npcEscala)||1)/2),hh=Math.max(20,(Number(obj.npcFrameH)||64)*(Number(obj.npcEscala)||1)/2);colidiu=Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh;}
         else if (obj.shape === 'rotator') {
             const px = Number(obj.visualX) || 0, py = Number(obj.visualY) || 0;
             colidiu = Math.hypot(x - px, y - py) <= 24;
@@ -2229,6 +2290,8 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('prop-portal-entrada-w').value = Math.max(20, Number(obj.portalEntradaW) || Number(obj.portalAreaW) || 100);
     document.getElementById('prop-portal-entrada-h').value = Math.max(20, Number(obj.portalEntradaH) || Number(obj.portalAreaH) || 120);
     document.getElementById('prop-nome-ponto').value = obj.nomePonto || '';
+    if(obj.shape==='npc'){document.getElementById('prop-npc-id').value=obj.npcId||'';document.getElementById('prop-npc-name').value=obj.npcNome||'NPC';document.getElementById('prop-npc-sheet-url').value=obj.npcSpritesheetUrl||'';document.getElementById('prop-npc-frame-w').value=obj.npcFrameW||64;document.getElementById('prop-npc-frame-h').value=obj.npcFrameH||64;document.getElementById('prop-npc-scale').value=obj.npcEscala||1;document.getElementById('prop-npc-radius').value=obj.npcRaioDialogo||180;document.getElementById('prop-npc-initial-state').value=obj.npcEstadoInicial||'inicial';document.getElementById('prop-npc-states').value=JSON.stringify(obj.npcEstados||[],null,2);}
+    else if(obj.shape==='coin'){document.getElementById('prop-coin-value').value=obj.coinValue||1;document.getElementById('prop-coin-id').value=obj.coinId||'';}
     if (obj.shape === 'rotator') {
         document.getElementById('prop-rotator-active').checked = obj.rotatorAtivo !== false;
         document.getElementById('prop-rotator-direction').value = Number(obj.rotatorDirecao) < 0 ? '-1' : '1';
@@ -2274,6 +2337,11 @@ function atualizarObjetoExistente() {
     let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
     let px = obj.body ? obj.body.position.x : obj.visualX; let py = obj.body ? obj.body.position.y : obj.visualY;
     let anguloSalvo = obj.body ? obj.body.angle : 0;
+    if(obj.shape==='npc'&&c.shape==='npc'){obj.npcId=c.npcId||obj.npcId;obj.npcNome=c.npcNome;obj.npcSpritesheetUrl=c.npcSpritesheetUrl;obj.npcFrameW=c.npcFrameW;obj.npcFrameH=c.npcFrameH;obj.w=c.npcFrameW;obj.h=c.npcFrameH;obj.npcEscala=c.npcEscala;obj.npcRaioDialogo=c.npcRaioDialogo;obj.npcEstadoInicial=c.npcEstadoInicial;obj.npcEstados=c.npcEstados;prepararSpriteNPC(scene,obj,true);marcarSalaComoAlterada();return;}
+    if(obj.shape==='coin'&&c.shape==='coin'){obj.coinValue=c.coinValue;obj.coinId=c.coinId||obj.coinId||garantirIdObjetoCena(obj);marcarSalaComoAlterada();return;}
+    if((obj.shape==='npc'||obj.shape==='coin')&&c.shape!==obj.shape){if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}if(obj.body){scene.matter.world.remove(obj.body);obj.body=null;}}
+    if(c.shape==='npc'&&obj.shape!=='npc'){Object.assign(obj,{shape:'npc',body:null,w:c.npcFrameW,h:c.npcFrameH,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,npcId:c.npcId||('npc_'+Date.now()),npcNome:c.npcNome,npcSpritesheetUrl:c.npcSpritesheetUrl,npcFrameW:c.npcFrameW,npcFrameH:c.npcFrameH,npcEscala:c.npcEscala,npcRaioDialogo:c.npcRaioDialogo,npcEstadoInicial:c.npcEstadoInicial,npcEstados:c.npcEstados,npcSprite:null});prepararSpriteNPC(scene,obj,true);marcarSalaComoAlterada();return;}
+    if(c.shape==='coin'&&obj.shape!=='coin'){const body=scene.matter.add.circle(px,py,16,{isStatic:true,isSensor:true,label:'moeda',collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER}});body.naoAgarravel=true;Object.assign(obj,{shape:'coin',body,w:16,h:32,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,coinValue:c.coinValue,coinId:c.coinId||('moeda_'+Date.now()),coinColetada:false});body.objetoEditavelRef=obj;marcarSalaComoAlterada();return;}
     if (c.shape === 'rotator' && obj.shape !== 'rotator') {
         if (obj.seesawConstraint) { scene.matter.world.remove(obj.seesawConstraint); obj.seesawConstraint = null; }
         if (obj.shape === 'rope') {
@@ -2394,6 +2462,7 @@ function deletarObjetoSelecionado() {
         if (objetoSelecionado.ropeConstraints) objetoSelecionado.ropeConstraints.forEach(co => scene.matter.world.remove(co));
         if (objetoSelecionado.ropeElos) objetoSelecionado.ropeElos.forEach(el => scene.matter.world.remove(el));
     } else if (objetoSelecionado.body) { scene.matter.world.remove(objetoSelecionado.body); }
+    if(objetoSelecionado.npcSprite){objetoSelecionado.npcSprite.destroy();objetoSelecionado.npcSprite=null;}
     objetoSelecionado.gfx.clear(); objetoSelecionado.gfx.destroy(); listaObjetosEditaveis = listaObjetosEditaveis.filter(o => o !== objetoSelecionado); desmarcarObjetoDoEditor(); marcarSalaComoAlterada();
 }
 
@@ -2422,6 +2491,9 @@ function desenharObjetoEditor(obj) {
 
     const posX = obj.body ? obj.body.position.x : obj.visualX;
     const posY = obj.body ? obj.body.position.y : obj.visualY;
+
+    if(obj.shape==='npc'){const sel=obj===objetoSelecionado;g.setVisible(true);g.x=0;g.y=0;g.rotation=0;if(obj.npcSprite){obj.npcSprite.setVisible(true);obj.npcSprite.setPosition(posX,posY);obj.npcSprite.setScale(Math.max(.1,Number(obj.npcEscala)||1));}if(modoEditorAtivo){g.lineStyle(sel?4:2,sel?0xffea00:0x5dade2,1);g.strokeRect(posX-obj.npcFrameW*obj.npcEscala/2,posY-obj.npcFrameH*obj.npcEscala/2,obj.npcFrameW*obj.npcEscala,obj.npcFrameH*obj.npcEscala);g.lineStyle(2,0x5dade2,.35);g.strokeCircle(posX,posY,Math.max(20,Number(obj.npcRaioDialogo)||180));}else if(!obj.npcSprite){g.fillStyle(0x5dade2,1);g.fillCircle(posX,posY,24);g.fillStyle(0xffffff,1);g.fillCircle(posX-8,posY-4,3);g.fillCircle(posX+8,posY-4,3);}return;}
+    if(obj.shape==='coin'){if(obj.coinColetada&&!modoEditorAtivo){g.setVisible(false);return;}g.setVisible(true);g.x=0;g.y=0;g.rotation=0;const sel=obj===objetoSelecionado;g.fillStyle(0xf9ca24,1);g.fillCircle(posX,posY,14);g.lineStyle(sel?4:2,sel?0xffffff:0xb7950b,1);g.strokeCircle(posX,posY,14);g.fillStyle(0xfff3a0,1);g.fillRect(posX-2,posY-9,4,18);return;}
 
     if (obj.shape === 'rotator') {
         if (!modoEditorAtivo) { g.setVisible(false); return; }
@@ -3136,6 +3208,19 @@ function executarRespawnIndividual(scene, pNum) {
     else { const e = entradas.jogador2 || { x: 500, y: WORLD_HEIGHT - 150 }; player2 = createHeaveHoCharacter(scene, e.x, e.y, p.pad, 1, 0xffff00); }
 }
 
+function parsearEstadosNPCDoPainel(){const t=document.getElementById('prop-npc-states')?.value||'[]';try{const v=JSON.parse(t);return Array.isArray(v)?v:[];}catch(e){return objetoSelecionado?.shape==='npc'?(objetoSelecionado.npcEstados||[]):[];}}
+function formatarJSONEstadosNPC(){const el=document.getElementById('prop-npc-states');if(!el)return;try{const v=JSON.parse(el.value);if(!Array.isArray(v))throw new Error('O JSON deve ser uma lista de estados.');el.value=JSON.stringify(v,null,2);atualizarObjetoExistente();alert('Estados válidos.');}catch(e){alert('JSON inválido: '+e.message);}}
+function obterEstadoNPC(obj){const id=obj?.npcId||obj?.idObjeto,atual=estadoNarrativa.npcEstados[id]||obj?.npcEstadoInicial||obj?.npcEstados?.[0]?.id;return(obj?.npcEstados||[]).find(e=>e&&e.id===atual)||(obj?.npcEstados||[])[0]||null;}
+function definirEstadoNPC(obj,estadoId){if(!obj||!estadoId)return;if(!(obj.npcEstados||[]).some(e=>e?.id===estadoId))return;estadoNarrativa.npcEstados[obj.npcId||obj.idObjeto]=estadoId;salvarEstadoNarrativa();atualizarAnimacaoNPC(obj,true);}
+function chaveTextureNPC(obj){return'npc_sheet_'+String(obj.idObjeto||obj.npcId||'npc').replace(/[^a-z0-9_]/gi,'_');}
+function prepararSpriteNPC(scene,obj,forcar=false){if(!scene||!obj)return;const url=String(obj.npcSpritesheetUrl||'').trim();if(!url){if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}return;}const key=chaveTextureNPC(obj),criar=()=>{if(obj.npcSprite)obj.npcSprite.destroy();obj.npcSprite=scene.add.sprite(obj.visualX,obj.visualY,key,0).setDepth(4).setScale(obj.npcEscala||1);atualizarAnimacaoNPC(obj,true);};if(scene.textures.exists(key)&&!forcar){criar();return;}if(scene.textures.exists(key)&&forcar)scene.textures.remove(key);scene.load.spritesheet(key,url,{frameWidth:Math.max(1,Number(obj.npcFrameW)||64),frameHeight:Math.max(1,Number(obj.npcFrameH)||64)});scene.load.once('filecomplete-spritesheet-'+key,criar);scene.load.start();}
+function atualizarAnimacaoNPC(obj,forcar=false){if(!obj?.npcSprite)return;const scene=obj.npcSprite.scene,est=obterEstadoNPC(obj);if(!est)return;const a=est.anim||{},start=Math.max(0,Number(a.start)||0),end=Math.max(start,Number(a.end??start)||start),fps=Math.max(1,Number(a.fps)||6),repeat=Number.isFinite(Number(a.repeat))?Number(a.repeat):-1,key='npc_anim_'+obj.idObjeto+'_'+String(est.id).replace(/\W/g,'_');if(!scene.anims.exists(key))scene.anims.create({key,frames:scene.anims.generateFrameNumbers(chaveTextureNPC(obj),{start,end}),frameRate:fps,repeat});if(forcar||obj.npcSprite.anims.currentAnim?.key!==key)obj.npcSprite.play(key,true);}
+function avaliarTransicoesNPC(obj){const est=obterEstadoNPC(obj);if(!est)return;for(const tr of(Array.isArray(est.transicoes)?est.transicoes:[])){let ok=false;if(tr.tipo==='falou_npc')ok=!!estadoNarrativa.npcConversados[String(tr.npcId||'')];else if(tr.tipo==='item')ok=jogadorPossuiItem(tr.itemId);else if(tr.tipo==='sala')ok=!!estadoNarrativa.salasVisitadas[String(tr.salaId||'')];if(ok&&tr.estado){definirEstadoNPC(obj,tr.estado);break;}}}
+function mostrarDialogoNPC(obj){const est=obterEstadoNPC(obj);if(!est)return;npcDialogoAtual=obj;estadoNarrativa.npcConversados[obj.npcId||obj.idObjeto]=true;salvarEstadoNarrativa();const ui=document.getElementById('npc-dialogo-ui');document.getElementById('npc-dialogo-nome').textContent=obj.npcNome||'NPC';document.getElementById('npc-dialogo-texto').textContent=est.dialogo||'';document.getElementById('npc-dialogo-moedas').textContent='Moedas: '+(Number(estadoNarrativa.moedas)||0);const a=document.getElementById('npc-dialogo-acoes');a.innerHTML='';const n=est.negociacao||{},custo=Math.max(0,Number(n.custo)||0);if(custo>0||n.evento||n.proximoEstado){const b=document.createElement('button');b.textContent=custo>0?'Pagar '+custo+' moeda(s)':'Ativar';b.disabled=(Number(estadoNarrativa.moedas)||0)<custo;b.onclick=realizarNegociacaoNPC;a.appendChild(b);}const fechar=document.createElement('button');fechar.textContent='Fechar';fechar.onclick=fecharDialogoNPC;a.appendChild(fechar);ui.style.display='block';}
+function fecharDialogoNPC(){document.getElementById('npc-dialogo-ui').style.display='none';npcDialogoAtual=null;}
+function realizarNegociacaoNPC(){const obj=npcDialogoAtual,est=obterEstadoNPC(obj);if(!obj||!est)return;const n=est.negociacao||{},c=Math.max(0,Number(n.custo)||0);if((Number(estadoNarrativa.moedas)||0)<c)return;estadoNarrativa.moedas-=c;if(n.evento)ativarEventoJogo(n.evento);if(n.proximoEstado)definirEstadoNPC(obj,n.proximoEstado);salvarEstadoNarrativa();mostrarDialogoNPC(obj);}
+function processarNPCsEMoedas(scene){const jogadores=[player1,player2].filter(p=>p?.body);let npcProximo=null,distProx=Infinity;for(const obj of listaObjetosEditaveis){if(!obj)continue;if(obj.shape==='coin'&&!obj.coinColetada){for(const p of jogadores){const pos=obj.body?.position||{x:obj.visualX,y:obj.visualY};if(Math.hypot(p.body.position.x-pos.x,p.body.position.y-pos.y)<=42){obj.coinColetada=true;estadoNarrativa.moedasColetadas[obj.coinId]=true;estadoNarrativa.moedas=(Number(estadoNarrativa.moedas)||0)+Math.max(1,Number(obj.coinValue)||1);salvarEstadoNarrativa();if(obj.body){scene.matter.world.remove(obj.body);obj.body=null;}break;}}}else if(obj.shape==='npc'){avaliarTransicoesNPC(obj);atualizarAnimacaoNPC(obj);for(const p of jogadores){const d=Math.hypot(p.body.position.x-(Number(obj.visualX)||0),p.body.position.y-(Number(obj.visualY)||0));if(d<=Math.max(20,Number(obj.npcRaioDialogo)||180)&&d<distProx){distProx=d;npcProximo=obj;}}}}if(npcProximo!==npcDialogoUltimaProximidade){npcDialogoUltimaProximidade=npcProximo;if(npcProximo)mostrarDialogoNPC(npcProximo);else if(npcDialogoAtual)fecharDialogoNPC();}}
+
 function update(time, delta) {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
     aplicarModoDebug(this);
@@ -3184,6 +3269,7 @@ function update(time, delta) {
     }
     atualizarMolduraReferencia16x9();
     atualizarRotadores(this, Math.min(50, Math.max(0, Number(delta) || 16.6667)) / 1000);
+    processarNPCsEMoedas(this);
     if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2);
     verificarPortaisDaSala(this);
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10); });
