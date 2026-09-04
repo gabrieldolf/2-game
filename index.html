@@ -2337,7 +2337,26 @@ function atualizarObjetoExistente() {
     let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
     let px = obj.body ? obj.body.position.x : obj.visualX; let py = obj.body ? obj.body.position.y : obj.visualY;
     let anguloSalvo = obj.body ? obj.body.angle : 0;
-    if(obj.shape==='npc'&&c.shape==='npc'){obj.npcId=c.npcId||obj.npcId;obj.npcNome=c.npcNome;obj.npcSpritesheetUrl=c.npcSpritesheetUrl;obj.npcFrameW=c.npcFrameW;obj.npcFrameH=c.npcFrameH;obj.w=c.npcFrameW;obj.h=c.npcFrameH;obj.npcEscala=c.npcEscala;obj.npcRaioDialogo=c.npcRaioDialogo;obj.npcEstadoInicial=c.npcEstadoInicial;obj.npcEstados=c.npcEstados;prepararSpriteNPC(scene,obj,true);marcarSalaComoAlterada();return;}
+    if(obj.shape==='npc'&&c.shape==='npc'){
+        // Alterações puramente visuais (como Escala visual) não devem descarregar
+        // a textura que o sprite está usando. Remover uma textura durante o frame
+        // de renderização deixava o WebGL tentando acessar uma frame sem source e
+        // causava: Cannot read properties of null (reading 'resolution').
+        const precisaRecarregarSpritesheet =
+            String(obj.npcSpritesheetUrl||'') !== String(c.npcSpritesheetUrl||'') ||
+            Number(obj.npcFrameW||64) !== Number(c.npcFrameW||64) ||
+            Number(obj.npcFrameH||64) !== Number(c.npcFrameH||64);
+        obj.npcId=c.npcId||obj.npcId;obj.npcNome=c.npcNome;obj.npcSpritesheetUrl=c.npcSpritesheetUrl;obj.npcFrameW=c.npcFrameW;obj.npcFrameH=c.npcFrameH;obj.w=c.npcFrameW;obj.h=c.npcFrameH;obj.npcEscala=c.npcEscala;obj.npcRaioDialogo=c.npcRaioDialogo;obj.npcEstadoInicial=c.npcEstadoInicial;obj.npcEstados=c.npcEstados;
+        if(precisaRecarregarSpritesheet) prepararSpriteNPC(scene,obj,true);
+        else {
+            if(obj.npcSprite){
+                obj.npcSprite.setScale(obj.npcEscala||1);
+                obj.npcSprite.setPosition(Number(obj.visualX)||0,Number(obj.visualY)||0);
+            }
+            atualizarAnimacaoNPC(obj,true);
+        }
+        marcarSalaComoAlterada();return;
+    }
     if(obj.shape==='coin'&&c.shape==='coin'){obj.coinValue=c.coinValue;obj.coinId=c.coinId||obj.coinId||garantirIdObjetoCena(obj);marcarSalaComoAlterada();return;}
     if((obj.shape==='npc'||obj.shape==='coin')&&c.shape!==obj.shape){if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}if(obj.body){scene.matter.world.remove(obj.body);obj.body=null;}}
     if(c.shape==='npc'&&obj.shape!=='npc'){Object.assign(obj,{shape:'npc',body:null,w:c.npcFrameW,h:c.npcFrameH,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,npcId:c.npcId||('npc_'+Date.now()),npcNome:c.npcNome,npcSpritesheetUrl:c.npcSpritesheetUrl,npcFrameW:c.npcFrameW,npcFrameH:c.npcFrameH,npcEscala:c.npcEscala,npcRaioDialogo:c.npcRaioDialogo,npcEstadoInicial:c.npcEstadoInicial,npcEstados:c.npcEstados,npcSprite:null});prepararSpriteNPC(scene,obj,true);marcarSalaComoAlterada();return;}
@@ -3213,7 +3232,45 @@ function formatarJSONEstadosNPC(){const el=document.getElementById('prop-npc-sta
 function obterEstadoNPC(obj){const id=obj?.npcId||obj?.idObjeto,atual=estadoNarrativa.npcEstados[id]||obj?.npcEstadoInicial||obj?.npcEstados?.[0]?.id;return(obj?.npcEstados||[]).find(e=>e&&e.id===atual)||(obj?.npcEstados||[])[0]||null;}
 function definirEstadoNPC(obj,estadoId){if(!obj||!estadoId)return;if(!(obj.npcEstados||[]).some(e=>e?.id===estadoId))return;estadoNarrativa.npcEstados[obj.npcId||obj.idObjeto]=estadoId;salvarEstadoNarrativa();atualizarAnimacaoNPC(obj,true);}
 function chaveTextureNPC(obj){return'npc_sheet_'+String(obj.idObjeto||obj.npcId||'npc').replace(/[^a-z0-9_]/gi,'_');}
-function prepararSpriteNPC(scene,obj,forcar=false){if(!scene||!obj)return;const url=String(obj.npcSpritesheetUrl||'').trim();if(!url){if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}return;}const key=chaveTextureNPC(obj),criar=()=>{if(obj.npcSprite)obj.npcSprite.destroy();obj.npcSprite=scene.add.sprite(obj.visualX,obj.visualY,key,0).setDepth(4).setScale(obj.npcEscala||1);atualizarAnimacaoNPC(obj,true);};if(scene.textures.exists(key)&&!forcar){criar();return;}if(scene.textures.exists(key)&&forcar)scene.textures.remove(key);scene.load.spritesheet(key,url,{frameWidth:Math.max(1,Number(obj.npcFrameW)||64),frameHeight:Math.max(1,Number(obj.npcFrameH)||64)});scene.load.once('filecomplete-spritesheet-'+key,criar);scene.load.start();}
+function removerAnimacoesNPC(scene,obj){
+    if(!scene?.anims||!obj)return;
+    const prefix='npc_anim_'+obj.idObjeto+'_';
+    // As animações guardam referências às frames da textura. Elas precisam ser
+    // removidas antes de uma troca real de spritesheet para não conservar frames
+    // pertencentes à textura anterior.
+    const keys=[];
+    if(scene.anims.anims?.entries) scene.anims.anims.entries.forEach((v,k)=>{if(String(k).startsWith(prefix))keys.push(k);});
+    else if(scene.anims.anims instanceof Map) scene.anims.anims.forEach((v,k)=>{if(String(k).startsWith(prefix))keys.push(k);});
+    keys.forEach(k=>scene.anims.remove(k));
+}
+function prepararSpriteNPC(scene,obj,forcar=false){
+    if(!scene||!obj)return;
+    const url=String(obj.npcSpritesheetUrl||'').trim();
+    const key=chaveTextureNPC(obj);
+    if(!url){
+        if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}
+        removerAnimacoesNPC(scene,obj);
+        if(scene.textures.exists(key)) scene.textures.remove(key);
+        return;
+    }
+    const criar=()=>{
+        if(!scene.textures.exists(key))return;
+        if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}
+        obj.npcSprite=scene.add.sprite(Number(obj.visualX)||0,Number(obj.visualY)||0,key,0).setDepth(4).setScale(obj.npcEscala||1);
+        atualizarAnimacaoNPC(obj,true);
+    };
+    if(scene.textures.exists(key)&&!forcar){criar();return;}
+    if(forcar){
+        // Primeiro retiramos do pipeline todos os usuários da textura; somente
+        // depois ela é removida. Isso evita uma frame inválida no render atual.
+        if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}
+        removerAnimacoesNPC(scene,obj);
+        if(scene.textures.exists(key)) scene.textures.remove(key);
+    }
+    scene.load.spritesheet(key,url,{frameWidth:Math.max(1,Number(obj.npcFrameW)||64),frameHeight:Math.max(1,Number(obj.npcFrameH)||64)});
+    scene.load.once('filecomplete-spritesheet-'+key,criar);
+    scene.load.start();
+}
 function atualizarAnimacaoNPC(obj,forcar=false){if(!obj?.npcSprite)return;const scene=obj.npcSprite.scene,est=obterEstadoNPC(obj);if(!est)return;const a=est.anim||{},start=Math.max(0,Number(a.start)||0),end=Math.max(start,Number(a.end??start)||start),fps=Math.max(1,Number(a.fps)||6),repeat=Number.isFinite(Number(a.repeat))?Number(a.repeat):-1,key='npc_anim_'+obj.idObjeto+'_'+String(est.id).replace(/\W/g,'_');if(!scene.anims.exists(key))scene.anims.create({key,frames:scene.anims.generateFrameNumbers(chaveTextureNPC(obj),{start,end}),frameRate:fps,repeat});if(forcar||obj.npcSprite.anims.currentAnim?.key!==key)obj.npcSprite.play(key,true);}
 function avaliarTransicoesNPC(obj){const est=obterEstadoNPC(obj);if(!est)return;for(const tr of(Array.isArray(est.transicoes)?est.transicoes:[])){let ok=false;if(tr.tipo==='falou_npc')ok=!!estadoNarrativa.npcConversados[String(tr.npcId||'')];else if(tr.tipo==='item')ok=jogadorPossuiItem(tr.itemId);else if(tr.tipo==='sala')ok=!!estadoNarrativa.salasVisitadas[String(tr.salaId||'')];if(ok&&tr.estado){definirEstadoNPC(obj,tr.estado);break;}}}
 function mostrarDialogoNPC(obj){const est=obterEstadoNPC(obj);if(!est)return;npcDialogoAtual=obj;estadoNarrativa.npcConversados[obj.npcId||obj.idObjeto]=true;salvarEstadoNarrativa();const ui=document.getElementById('npc-dialogo-ui');document.getElementById('npc-dialogo-nome').textContent=obj.npcNome||'NPC';document.getElementById('npc-dialogo-texto').textContent=est.dialogo||'';document.getElementById('npc-dialogo-moedas').textContent='Moedas: '+(Number(estadoNarrativa.moedas)||0);const a=document.getElementById('npc-dialogo-acoes');a.innerHTML='';const n=est.negociacao||{},custo=Math.max(0,Number(n.custo)||0);if(custo>0||n.evento||n.proximoEstado){const b=document.createElement('button');b.textContent=custo>0?'Pagar '+custo+' moeda(s)':'Ativar';b.disabled=(Number(estadoNarrativa.moedas)||0)<custo;b.onclick=realizarNegociacaoNPC;a.appendChild(b);}const fechar=document.createElement('button');fechar.textContent='Fechar';fechar.onclick=fecharDialogoNPC;a.appendChild(fechar);ui.style.display='block';}
