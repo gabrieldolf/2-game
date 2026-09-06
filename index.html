@@ -24,6 +24,12 @@
         #status-sala { font-size:11px; color:#9bd4ff; line-height:1.35; word-break:break-word; }
         #input-importar-sala { display:none; }
         #indicador-debug { position:absolute; top:10px; right:10px; background:rgba(255,0,0,0.78); color:#fff; padding:6px 10px; border-radius:4px; font:bold 12px Arial; z-index:20; pointer-events:none; display:none; }
+        #painel-desenho { background:#263238; border:1px solid #546e7a; padding:8px; border-radius:5px; display:flex; flex-direction:column; gap:7px; }
+        .barra-desenho { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; }
+        .barra-desenho button { padding:7px 2px; font-size:15px; min-width:0; }
+        .barra-desenho button.active { background:#26c6da; color:#07191d; }
+        #painel-desenho input[type="color"] { width:52px; height:28px; padding:1px; }
+        #painel-desenho select { width:105px; }
     </style>
     <script src="phaser.min.js"></script>
 </head>
@@ -68,6 +74,25 @@
         <h3>Construção da Sala</h3>
         <button id="btn-grid-build" style="background:#e67e22;" onclick="alternarModoConstrucaoGrade()">Construir Sala por Grade (50 px)</button>
         <p style="font-size:10px; color:#aaa; margin:0;">Cada quadrado tem 50 × 50 px. Clique para alternar entre bloco e vazio.</p>
+    </div>
+    <div class="section" id="painel-desenho">
+        <h3 style="color:#80deea;">Desenhar na fase</h3>
+        <div class="barra-desenho">
+            <button id="draw-tool-pencil" title="Lápis" onclick="ativarFerramentaDesenho('pencil')">✎</button>
+            <button id="draw-tool-line" title="Linha" onclick="ativarFerramentaDesenho('line')">╱</button>
+            <button id="draw-tool-rect" title="Retângulo" onclick="ativarFerramentaDesenho('rect')">▭</button>
+            <button id="draw-tool-ellipse" title="Elipse" onclick="ativarFerramentaDesenho('ellipse')">◯</button>
+            <button id="draw-tool-eraser" title="Borracha" onclick="ativarFerramentaDesenho('eraser')">⌫</button>
+        </div>
+        <div class="prop-row"><label>Cor:</label><input type="color" id="draw-color" value="#ffffff"></div>
+        <div class="prop-row"><label>Espessura:</label><input type="number" id="draw-width" value="6" min="1" max="100" step="1"></div>
+        <div class="prop-row"><label>Preencher formas:</label><input type="checkbox" id="draw-fill"></div>
+        <div class="prop-row"><label>Camada:</label><select id="draw-layer"><option value="back">Atrás dos objetos</option><option value="front">Na frente dos objetos</option></select></div>
+        <div class="sala-acoes">
+            <button style="background:#607d8b;" onclick="desfazerUltimoDesenho()">Desfazer</button>
+            <button style="background:#c0392b;" onclick="limparDesenhosDaSala()">Limpar desenhos</button>
+        </div>
+        <p style="font-size:10px; color:#b0bec5; margin:0;">Escolha uma ferramenta e arraste sobre a fase. Os desenhos são salvos junto com a sala e não possuem colisão.</p>
     </div>
     <div class="section">
         <h3>Auxílios</h3>
@@ -253,6 +278,12 @@ let bancoDeSalas = {};
 let salaAtual = { id: 'sala_inicial', nome: 'Sala Inicial' };
 let salaFoiAlterada = false;
 
+// Camadas de desenho decorativo da sala. São puramente visuais e não possuem física.
+let desenhosSala = [];
+let desenhoEmAndamento = null;
+let desenhoGraphicsAtras = null, desenhoGraphicsFrente = null, desenhoPreviewGraphics = null;
+let ferramentaDesenhoAtual = 'pencil';
+
 function aplicarModoDebug(scene) {
     if (!scene || !scene.matter || !scene.matter.world) return;
     const mundo = scene.matter.world;
@@ -373,6 +404,7 @@ function criarEstruturaSalaVazia(id, nome) {
             jogador2: { x: 500, y: Math.max(100, altura - 150) }
         },
         blocosGrade: [],
+        desenhos: [],
         objetos: [],
         portais: []
     };
@@ -413,6 +445,7 @@ function obterDadosSalaAtual() {
     dados.configuracao.tamanhoGrade = parseInt(document.getElementById('prop-grid-size')?.value) || 64;
     dados.pontosDeEntrada = obterPontosEspeciaisDaSala();
     dados.blocosGrade = blocosGradeSala.map(c => ({ coluna: c.coluna, linha: c.linha }));
+    dados.desenhos = desenhosSala.map(d => JSON.parse(JSON.stringify(d)));
     dados.objetos = listaObjetosEditaveis.map(serializarObjetoDaSala).filter(Boolean);
     dados.portais = dados.objetos.filter(obj => obj && obj.shape === 'portal');
     return dados;
@@ -1259,6 +1292,9 @@ function carregarSalaFisicamente(scene, dados) {
     if (dados.configuracao?.tamanhoGrade !== undefined) document.getElementById('prop-grid-size').value = dados.configuracao.tamanhoGrade;
     blocosGradeSala = normalizarBlocosGrade(dados.blocosGrade);
     reconstruirBlocosGradeFisicos(scene);
+    desenhosSala = Array.isArray(dados.desenhos) ? JSON.parse(JSON.stringify(dados.desenhos)) : [];
+    desenhoEmAndamento = null;
+    redesenharDesenhosSala();
     (dados.objetos || []).forEach(obj => adicionarObjetoSerializado(scene, obj));
 }
 
@@ -1274,7 +1310,7 @@ function salvarSalaAtual() {
     salaFoiAlterada = false;
     persistirBancoDeSalas();
     atualizarCamposSala();
-    atualizarStatusSala('Sala salva: ' + dados.nome + ' [' + dados.id + '] • ' + dados.objetos.length + ' objeto(s)', '#55ff55');
+    atualizarStatusSala('Sala salva: ' + dados.nome + ' [' + dados.id + '] • ' + dados.objetos.length + ' objeto(s) • ' + dados.desenhos.length + ' desenho(s)', '#55ff55');
 }
 
 function criarNovaSala() {
@@ -1600,9 +1636,133 @@ function setFerramenta(f) {
         desenharGradeConstrucao();
     }
     ferramentaAtual = f;
+    desenhoEmAndamento = null;
+    if (desenhoPreviewGraphics) desenhoPreviewGraphics.clear();
     document.getElementById('btn-create').className = f==='create'?'active':'';
     document.getElementById('btn-select').className = f==='select'?'active':'';
+    atualizarBotoesFerramentaDesenho();
 }
+
+function atualizarBotoesFerramentaDesenho() {
+    ['pencil','line','rect','ellipse','eraser'].forEach(t => {
+        const b = document.getElementById('draw-tool-' + t);
+        if (b) b.className = (ferramentaAtual === 'draw' && ferramentaDesenhoAtual === t) ? 'active' : '';
+    });
+}
+
+function ativarFerramentaDesenho(tipo) {
+    ferramentaDesenhoAtual = ['pencil','line','rect','ellipse','eraser'].includes(tipo) ? tipo : 'pencil';
+    setFerramenta('draw');
+    ferramentaAtual = 'draw';
+    atualizarBotoesFerramentaDesenho();
+    const status = document.getElementById('status-modo');
+    if (status) { status.innerText = 'Desenhando na fase'; status.style.color = '#80deea'; }
+}
+
+function obterOpcoesDesenho() {
+    return {
+        cor: document.getElementById('draw-color')?.value || '#ffffff',
+        espessura: Math.max(1, Number(document.getElementById('draw-width')?.value) || 6),
+        preencher: !!document.getElementById('draw-fill')?.checked,
+        camada: document.getElementById('draw-layer')?.value === 'front' ? 'front' : 'back'
+    };
+}
+
+function corDesenhoNumero(cor) {
+    const txt = String(cor || '#ffffff').replace('#','');
+    const n = parseInt(txt, 16);
+    return Number.isFinite(n) ? n : 0xffffff;
+}
+
+function desenharRegistroNoGraphics(g, d) {
+    if (!g || !d) return;
+    const cor = corDesenhoNumero(d.cor), e = Math.max(1, Number(d.espessura) || 1);
+    g.lineStyle(e, cor, 1);
+    if (d.tipo === 'pencil') {
+        const pts = Array.isArray(d.pontos) ? d.pontos : [];
+        if (!pts.length) return;
+        if (pts.length === 1) { g.fillStyle(cor,1); g.fillCircle(pts[0].x, pts[0].y, e/2); return; }
+        g.beginPath(); g.moveTo(pts[0].x, pts[0].y);
+        for (let i=1;i<pts.length;i++) g.lineTo(pts[i].x, pts[i].y);
+        g.strokePath();
+        return;
+    }
+    const x1=Number(d.x1)||0, y1=Number(d.y1)||0, x2=Number(d.x2)||0, y2=Number(d.y2)||0;
+    if (d.tipo === 'line') { g.lineBetween(x1,y1,x2,y2); return; }
+    const l=Math.min(x1,x2), t=Math.min(y1,y2), w=Math.abs(x2-x1), h=Math.abs(y2-y1);
+    if (d.preencher) g.fillStyle(cor, 1);
+    if (d.tipo === 'rect') {
+        if (d.preencher) g.fillRect(l,t,w,h); else g.strokeRect(l,t,w,h);
+    } else if (d.tipo === 'ellipse') {
+        const cx=(x1+x2)/2, cy=(y1+y2)/2;
+        if (d.preencher) g.fillEllipse(cx,cy,Math.max(1,w),Math.max(1,h)); else g.strokeEllipse(cx,cy,Math.max(1,w),Math.max(1,h));
+    }
+}
+
+function redesenharDesenhosSala() {
+    if (!desenhoGraphicsAtras || !desenhoGraphicsFrente) return;
+    desenhoGraphicsAtras.clear(); desenhoGraphicsFrente.clear();
+    for (const d of desenhosSala) desenharRegistroNoGraphics(d.camada === 'front' ? desenhoGraphicsFrente : desenhoGraphicsAtras, d);
+}
+
+function iniciarDesenhoEditor(x,y) {
+    if (ferramentaDesenhoAtual === 'eraser') { apagarDesenhoEm(x,y); return; }
+    const o=obterOpcoesDesenho();
+    desenhoEmAndamento = {tipo:ferramentaDesenhoAtual, cor:o.cor, espessura:o.espessura, preencher:o.preencher, camada:o.camada, x1:x,y1:y,x2:x,y2:y};
+    if (ferramentaDesenhoAtual === 'pencil') desenhoEmAndamento.pontos=[{x,y}];
+    atualizarPreviewDesenho(x,y);
+}
+
+function continuarDesenhoEditor(x,y) {
+    if (!desenhoEmAndamento) return;
+    desenhoEmAndamento.x2=x; desenhoEmAndamento.y2=y;
+    if (desenhoEmAndamento.tipo === 'pencil') {
+        const pts=desenhoEmAndamento.pontos, ult=pts[pts.length-1];
+        if (!ult || Math.hypot(x-ult.x,y-ult.y) >= 2) pts.push({x,y});
+    }
+    atualizarPreviewDesenho(x,y);
+}
+
+function atualizarPreviewDesenho(x,y) {
+    if (!desenhoPreviewGraphics || !desenhoEmAndamento) return;
+    desenhoPreviewGraphics.clear();
+    if (Number.isFinite(x)) { desenhoEmAndamento.x2=x; desenhoEmAndamento.y2=y; }
+    desenharRegistroNoGraphics(desenhoPreviewGraphics, desenhoEmAndamento);
+}
+
+function finalizarDesenhoEditor(x,y) {
+    if (!desenhoEmAndamento) return;
+    if (Number.isFinite(x)) continuarDesenhoEditor(x,y);
+    const d=desenhoEmAndamento; desenhoEmAndamento=null;
+    if (desenhoPreviewGraphics) desenhoPreviewGraphics.clear();
+    let valido=true;
+    if (d.tipo==='pencil') valido=Array.isArray(d.pontos)&&d.pontos.length>0;
+    else valido=Math.hypot((d.x2||0)-(d.x1||0),(d.y2||0)-(d.y1||0))>=1;
+    if (valido) { desenhosSala.push(d); redesenharDesenhosSala(); marcarSalaComoAlterada(); }
+}
+
+function distanciaPontoSegmentoDesenho(px,py,x1,y1,x2,y2) {
+    const dx=x2-x1,dy=y2-y1, l2=dx*dx+dy*dy;
+    if (!l2) return Math.hypot(px-x1,py-y1);
+    const t=Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/l2));
+    return Math.hypot(px-(x1+t*dx),py-(y1+t*dy));
+}
+
+function desenhoAtingePonto(d,x,y) {
+    const tol=Math.max(8,(Number(d.espessura)||1)/2+5);
+    if (d.tipo==='pencil') { const p=d.pontos||[]; for(let i=1;i<p.length;i++) if(distanciaPontoSegmentoDesenho(x,y,p[i-1].x,p[i-1].y,p[i].x,p[i].y)<=tol)return true; return p.length===1&&Math.hypot(x-p[0].x,y-p[0].y)<=tol; }
+    if (d.tipo==='line') return distanciaPontoSegmentoDesenho(x,y,d.x1,d.y1,d.x2,d.y2)<=tol;
+    const l=Math.min(d.x1,d.x2),r=Math.max(d.x1,d.x2),t=Math.min(d.y1,d.y2),b=Math.max(d.y1,d.y2);
+    if (d.tipo==='rect') return d.preencher ? x>=l-tol&&x<=r+tol&&y>=t-tol&&y<=b+tol : (x>=l-tol&&x<=r+tol&&y>=t-tol&&y<=b+tol&&(Math.min(Math.abs(x-l),Math.abs(x-r),Math.abs(y-t),Math.abs(y-b))<=tol));
+    if (d.tipo==='ellipse') { const rx=Math.max(.5,(r-l)/2),ry=Math.max(.5,(b-t)/2),cx=(l+r)/2,cy=(t+b)/2,q=Math.sqrt(((x-cx)/rx)**2+((y-cy)/ry)**2); return d.preencher ? q<=1+tol/Math.max(rx,ry) : Math.abs(q-1)<=tol/Math.max(1,Math.min(rx,ry)); }
+    return false;
+}
+
+function apagarDesenhoEm(x,y) {
+    for (let i=desenhosSala.length-1;i>=0;i--) if (desenhoAtingePonto(desenhosSala[i],x,y)) { desenhosSala.splice(i,1); redesenharDesenhosSala(); marcarSalaComoAlterada(); return; }
+}
+function desfazerUltimoDesenho(){ if(!desenhosSala.length)return; desenhosSala.pop(); redesenharDesenhosSala(); marcarSalaComoAlterada(); }
+function limparDesenhosDaSala(){ if(!desenhosSala.length)return; if(!confirm('Remover todos os desenhos desta sala?'))return; desenhosSala=[]; desenhoEmAndamento=null; if(desenhoPreviewGraphics)desenhoPreviewGraphics.clear(); redesenharDesenhosSala(); marcarSalaComoAlterada(); }
 
 function atualizarMolduraReferencia16x9() {
     if (!molduraReferenciaGraphics) return;
@@ -1850,6 +2010,9 @@ function create() {
     gridGraphics = this.add.graphics().setDepth(1);
     molduraReferenciaGraphics = this.add.graphics().setDepth(9000);
     gradeConstrucaoGraphics = this.add.graphics().setDepth(0.5);
+    desenhoGraphicsAtras = this.add.graphics().setDepth(-20);
+    desenhoGraphicsFrente = this.add.graphics().setDepth(50);
+    desenhoPreviewGraphics = this.add.graphics().setDepth(8990);
     previewGraphicsPoligono = this.add.graphics().setDepth(15);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
     carregarEstadoNarrativa();
@@ -1927,6 +2090,10 @@ function create() {
     
     this.input.on('pointerdown', (p) => {
         if (!modoEditorAtivo) return;
+        if (ferramentaAtual === 'draw') {
+            iniciarDesenhoEditor(p.worldX, p.worldY);
+            return;
+        }
         if (modoConstrucaoGrade) {
             iniciarPincelGrade(this, p.worldX, p.worldY);
             return;
@@ -1981,6 +2148,11 @@ function create() {
     });
 
     this.input.on('pointermove', function(p) {
+        if (modoEditorAtivo && ferramentaAtual === 'draw' && p.isDown) {
+            if (ferramentaDesenhoAtual === 'eraser') apagarDesenhoEm(p.worldX, p.worldY);
+            else continuarDesenhoEditor(p.worldX, p.worldY);
+            return;
+        }
         if (modoEditorAtivo && modoConstrucaoGrade && arrastandoGrade && p.isDown) {
             aplicarPincelNaGrade(this, p.worldX, p.worldY, modoPincelGrade);
             return;
@@ -2027,8 +2199,8 @@ function create() {
         }
     }, this);
 
-    this.input.on('pointerup', () => { finalizarPincelGrade(); arrastandoObjetoSelecionado = false; });
-    this.input.on('gameout', () => { finalizarPincelGrade(); arrastandoObjetoSelecionado = false; });
+    this.input.on('pointerup', (p) => { if (modoEditorAtivo && ferramentaAtual === 'draw' && ferramentaDesenhoAtual !== 'eraser') finalizarDesenhoEditor(p.worldX, p.worldY); finalizarPincelGrade(); arrastandoObjetoSelecionado = false; });
+    this.input.on('gameout', () => { if (desenhoEmAndamento) { desenhoEmAndamento=null; if(desenhoPreviewGraphics)desenhoPreviewGraphics.clear(); } finalizarPincelGrade(); arrastandoObjetoSelecionado = false; });
 
     this.input.keyboard.on('keydown-F4', () => { alternarModoEditor(this); });
     this.input.keyboard.on('keydown-F3', () => { alternarModoDebug(!modoDebugAtivo); });
