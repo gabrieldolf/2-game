@@ -162,7 +162,7 @@
     "transicoes": []
   }
 ]</textarea>
-            <div style="font-size:10px;color:#bdc3c7;line-height:1.35;">Transições aceitas: <b>falou_npc</b> {npcId}, <b>item</b> {itemId} e <b>sala</b> {salaId}. Cada transição usa também <b>estado</b>. A negociação desconta moedas, ativa “evento” e pode mudar para “proximoEstado”.</div>
+            <div style="font-size:10px;color:#bdc3c7;line-height:1.35;">Transições aceitas: <b>falou_npc</b> {npcId}, <b>item</b> {itemId} e <b>sala</b> {salaId}. Cada transição usa também <b>estado</b>. A negociação desconta moedas, ativa “evento” e pode mudar para “proximoEstado”. Você pode usar <b>Enter dentro do texto do diálogo</b>; o editor converte automaticamente essas quebras para JSON válido.</div>
             <button style="background:#2471a3;" onclick="formatarJSONEstadosNPC()">Validar / Formatar estados</button>
         </div>
         <div id="painel-propriedades-moeda" style="display:none; background:#7d6608; padding:9px; border:2px solid #f4d03f; border-radius:6px; margin-top:7px; flex-direction:column; gap:7px;">
@@ -3399,8 +3399,85 @@ function executarRespawnIndividual(scene, pNum) {
     else { const e = entradas.jogador2 || { x: 500, y: WORLD_HEIGHT - 150 }; player2 = createHeaveHoCharacter(scene, e.x, e.y, p.pad, 1, 0xffff00); }
 }
 
-function parsearEstadosNPCDoPainel(){const t=document.getElementById('prop-npc-states')?.value||'[]';try{const v=JSON.parse(t);return Array.isArray(v)?v:[];}catch(e){return objetoSelecionado?.shape==='npc'?(objetoSelecionado.npcEstados||[]):[];}}
-function formatarJSONEstadosNPC(){const el=document.getElementById('prop-npc-states');if(!el)return;try{const v=JSON.parse(el.value);if(!Array.isArray(v))throw new Error('O JSON deve ser uma lista de estados.');el.value=JSON.stringify(v,null,2);atualizarObjetoExistente();alert('Estados válidos.');}catch(e){alert('JSON inválido: '+e.message);}}
+// O campo de estados do NPC é editado por pessoas, não apenas por código.
+// JSON puro não permite Enter/Tab literais dentro de uma string (por exemplo,
+// no meio de um diálogo). Esta normalização converte somente caracteres de
+// controle que estejam DENTRO de strings JSON para suas formas escapadas,
+// preservando as quebras de linha usadas para formatar o próprio documento.
+function normalizarJSONEstadosNPC(texto) {
+    const src = String(texto ?? '');
+    let out = '';
+    let dentroString = false;
+    let escapado = false;
+    for (let i = 0; i < src.length; i++) {
+        const ch = src[i];
+        if (!dentroString) {
+            out += ch;
+            if (ch === '"') dentroString = true;
+            continue;
+        }
+        if (escapado) {
+            out += ch;
+            escapado = false;
+            continue;
+        }
+        if (ch === '\\') {
+            out += ch;
+            escapado = true;
+            continue;
+        }
+        if (ch === '"') {
+            out += ch;
+            dentroString = false;
+            continue;
+        }
+        if (ch === '\n') { out += '\\n'; continue; }
+        if (ch === '\r') { out += '\\r'; continue; }
+        if (ch === '\t') { out += '\\t'; continue; }
+        const code = ch.charCodeAt(0);
+        if (code >= 0 && code < 32) {
+            out += '\\u' + code.toString(16).padStart(4, '0');
+            continue;
+        }
+        out += ch;
+    }
+    return out;
+}
+
+function parsearEstadosNPCDoPainel(){
+    const el=document.getElementById('prop-npc-states');
+    const t=el?.value||'[]';
+    try{
+        const normalizado=normalizarJSONEstadosNPC(t);
+        const v=JSON.parse(normalizado);
+        if(!Array.isArray(v)) return objetoSelecionado?.shape==='npc'?(objetoSelecionado.npcEstados||[]):[];
+        // Se havia Enter/Tab literal dentro de um diálogo, já deixa o conteúdo
+        // corrigido no textarea para que o próximo salvamento seja JSON válido.
+        if(el && normalizado!==t) el.value=normalizado;
+        return v;
+    }catch(e){
+        return objetoSelecionado?.shape==='npc'?(objetoSelecionado.npcEstados||[]):[];
+    }
+}
+function formatarJSONEstadosNPC(){
+    const el=document.getElementById('prop-npc-states');
+    if(!el)return;
+    try{
+        const original=el.value;
+        const normalizado=normalizarJSONEstadosNPC(original);
+        const corrigiuControles=normalizado!==original;
+        const v=JSON.parse(normalizado);
+        if(!Array.isArray(v))throw new Error('O JSON deve ser uma lista de estados.');
+        el.value=JSON.stringify(v,null,2);
+        atualizarObjetoExistente();
+        alert(corrigiuControles
+            ? 'Estados válidos. Quebras de linha ou tabulações dentro dos diálogos foram corrigidas automaticamente.'
+            : 'Estados válidos.');
+        el.dataset.ultimoTextoValidado=el.value;
+    }catch(e){
+        alert('JSON inválido: '+e.message+'\n\nDica: você pode apertar Enter dentro de um diálogo; o editor agora converte essa quebra de linha automaticamente. Verifique principalmente aspas não fechadas e vírgulas ausentes.');
+    }
+}
 function obterEstadoNPC(obj){const id=obj?.npcId||obj?.idObjeto,atual=estadoNarrativa.npcEstados[id]||obj?.npcEstadoInicial||obj?.npcEstados?.[0]?.id;return(obj?.npcEstados||[]).find(e=>e&&e.id===atual)||(obj?.npcEstados||[])[0]||null;}
 function definirEstadoNPC(obj,estadoId){if(!obj||!estadoId)return;if(!(obj.npcEstados||[]).some(e=>e?.id===estadoId))return;estadoNarrativa.npcEstados[obj.npcId||obj.idObjeto]=estadoId;salvarEstadoNarrativa();atualizarAnimacaoNPC(obj,true);}
 function chaveTextureNPC(obj){return'npc_sheet_'+String(obj.idObjeto||obj.npcId||'npc').replace(/[^a-z0-9_]/gi,'_');}
