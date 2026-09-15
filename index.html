@@ -2968,7 +2968,7 @@ function desenharObjetoEditor(obj) {
         const ox = Number(obj.seesawPivotX) || 0, oy = Number(obj.seesawPivotY) || 0;
         g.fillStyle(0x202020, 1); g.fillCircle(ox, oy, Math.max(6, Math.min(12, obj.h * 0.45)));
         if (modoEditorAtivo) { g.lineStyle(2, 0xffd166, 1); g.strokeCircle(ox, oy, Math.max(10, Math.min(16, obj.h * 0.65))); }
-        if(modoEditorAtivo&&obj.shape==='launcherSeesaw'){const lado=Number(obj.launcherSide)<0?-1:1,z=obj.w*Math.max(.2,Math.min(1,(Number(obj.launcherZonePct)||70)/100))/2,cx=lado*(obj.w/2-z/2);g.fillStyle(0xff9f43,.22);g.fillRect(cx-z/2,-obj.h/2-70,z,obj.h+100);g.lineStyle(2,0xff9f43,1);g.strokeRect(cx-z/2,-obj.h/2-70,z,obj.h+100);const qx=-lado*obj.w*.38,qy=-(Number(obj.launcherWeightHeight)||220);g.lineStyle(2,0x00e5ff,1);g.strokeCircle(qx,qy,16);g.lineBetween(qx-22,qy,qx+22,qy);g.lineBetween(qx,qy-22,qx,qy+22);}
+        if(modoEditorAtivo&&obj.shape==='launcherSeesaw'){const lado=Number(obj.launcherSide)<0?-1:1,z=obj.w*Math.max(.2,Math.min(1,(Number(obj.launcherZonePct)||70)/100))/2,cx=lado*(obj.w/2-z/2);g.fillStyle(0xff9f43,.22);g.fillRect(cx-z/2,-obj.h/2-70,z,obj.h+100);g.lineStyle(2,0xff9f43,1);g.strokeRect(cx-z/2,-obj.h/2-70,z,obj.h+100);const qw=pontoPesoGangorraLancadora(obj),ang=-(obj.body?.angle||0),dx=qw.x-posX,dy=qw.y-posY,qx=dx*Math.cos(ang)-dy*Math.sin(ang),qy=dx*Math.sin(ang)+dy*Math.cos(ang);g.lineStyle(2,0x00e5ff,1);g.strokeCircle(qx,qy,16);g.lineBetween(qx-22,qy,qx+22,qy);g.lineBetween(qx,qy-22,qx,qy+22);}
     }
     else if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); }
@@ -3720,8 +3720,27 @@ function jogadorNaZonaGangorraLancadora(obj,p){
     return lado*lx>=inicio && lado*lx<=metade+30 && ly>=-obj.h/2-90 && ly<=obj.h/2+35;
 }
 function pontoPesoGangorraLancadora(obj){
-    const ladoPeso=-(Number(obj.launcherSide)<0?-1:1), localX=ladoPeso*obj.w*0.38, localY=-(Number(obj.launcherWeightHeight)||220), a=obj.body.angle||0;
-    return {x:obj.body.position.x+localX*Math.cos(a)-localY*Math.sin(a),y:obj.body.position.y+localX*Math.sin(a)+localY*Math.cos(a)};
+    if(!obj?.body) return {x:0,y:0};
+    // O ponto de surgimento pertence ao MUNDO, não à prancha giratória.
+    // Calculamos a posição que ele teria com a gangorra em seu ângulo-base,
+    // usando o pivô fixo como referência. Assim ele não acompanha a rotação
+    // atual (nem pequenas oscilações de posição do corpo causadas pelo solver).
+    const ladoPeso=-(Number(obj.launcherSide)<0?-1:1);
+    const localX=ladoPeso*(Number(obj.w)||0)*0.38;
+    const altura=Number(obj.launcherWeightHeight)||220;
+    const base=Number(obj.seesawBaseAngle)||0;
+    const ox=Number(obj.seesawPivotX)||0, oy=Number(obj.seesawPivotY)||0;
+    const ancoraX=Number(obj.seesawConstraint?.pointA?.x);
+    const ancoraY=Number(obj.seesawConstraint?.pointA?.y);
+    const ax=Number.isFinite(ancoraX)?ancoraX:(obj.body.position.x+ox*Math.cos(obj.body.angle||0)-oy*Math.sin(obj.body.angle||0));
+    const ay=Number.isFinite(ancoraY)?ancoraY:(obj.body.position.y+ox*Math.sin(obj.body.angle||0)+oy*Math.cos(obj.body.angle||0));
+    // Centro da prancha quando ela está na posição-base.
+    const baseCx=ax-(ox*Math.cos(base)-oy*Math.sin(base));
+    const baseCy=ay-(ox*Math.sin(base)+oy*Math.cos(base));
+    // A posição horizontal acompanha a orientação BASE da gangorra, mas a altura
+    // é sempre vertical no mundo. Depois de criada, esta coordenada não depende
+    // do ângulo atual da prancha.
+    return {x:baseCx+localX*Math.cos(base), y:baseCy+localX*Math.sin(base)-altura};
 }
 function processarGangorrasLancadoras(scene,delta){
     const jogadores=[player1,player2].filter(p=>p?.body),dt=Math.max(0,Number(delta)||16.67);
