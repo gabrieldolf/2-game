@@ -259,7 +259,7 @@ const config = {
         default: 'matter', 
         matter: { 
             gravity: { y:1.5 }, debug: true,
-            runner: { constraintIterations: 12, positionIterations: 12, velocityIterations: 10 }
+            constraintIterations: 12, positionIterations: 14, velocityIterations: 12
         } 
     },
     input: { gamepad: true }, scene: { preload: preload, create: create, update: update }
@@ -1602,6 +1602,22 @@ function normalizarAnguloRad(a) {
     return a;
 }
 
+// Matter usa detecção de colisão discreta. Uma gangorra atingida por um peso muito
+// pesado pode ganhar velocidade angular suficiente para atravessar o jogador entre
+// dois passos da física. Limitamos apenas a velocidade angular das gangorras a uma
+// quantidade baseada no comprimento da prancha. Isto NÃO teletransporta a gangorra:
+// só impede que sua extremidade avance mais que ~9 px em um único passo.
+function limitarVelocidadeAngularGangorra(scene, obj) {
+    if (!obj?.body || (obj.shape !== 'seesaw' && obj.shape !== 'launcherSeesaw')) return;
+    const raioMax = Math.max(20, Number(obj.w) || 240) / 2;
+    const deslocamentoMaxPorPasso = 9;
+    const limiteAngular = Math.min(0.10, deslocamentoMaxPorPasso / raioMax);
+    const av = Number(obj.body.angularVelocity) || 0;
+    if (Math.abs(av) > limiteAngular) {
+        scene.matter.body.setAngularVelocity(obj.body, Math.sign(av) * limiteAngular);
+    }
+}
+
 function criarGangorraAPartirDeDados(scene, dados) {
     const x = Number(dados.x) || 0;
     const y = Number(dados.y) || 0;
@@ -2167,6 +2183,11 @@ function create() {
     carregarSalaPorId(salaAtual.id);
     aplicarModoDebug(this);
     
+    this.matter.world.on('beforeupdate', () => {
+        if (modoEditorAtivo) return;
+        for (const obj of listaObjetosEditaveis) limitarVelocidadeAngularGangorra(this, obj);
+    });
+
     this.matter.world.on('afterupdate', () => {
         if (modoEditorAtivo) return;
         
@@ -2174,6 +2195,9 @@ function create() {
             if (!obj || !obj.body || obj.body.isStatic) return;
 
             if (obj.shape === 'seesaw' || obj.shape === 'launcherSeesaw') {
+                // Proteção anti-tunneling: a extremidade da prancha não pode saltar
+                // uma distância grande entre dois passos discretos do Matter.
+                limitarVelocidadeAngularGangorra(this, obj);
                 // Pivô físico sem correção por teletransporte: um torque de mola
                 // mantém a gangorra perto do ângulo base e cria batentes progressivos.
                 const base = Number(obj.seesawBaseAngle) || 0;
