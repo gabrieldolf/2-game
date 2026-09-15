@@ -2204,6 +2204,7 @@ function create() {
                 // Proteção anti-tunneling: a extremidade da prancha não pode saltar
                 // uma distância grande entre dois passos discretos do Matter.
                 limitarVelocidadeAngularGangorra(this, obj);
+                transferirImpulsoGangorraParaJogadores(this, obj);
                 // Pivô físico sem correção por teletransporte: um torque de mola
                 // mantém a gangorra perto do ângulo base e cria batentes progressivos.
                 const base = Number(obj.seesawBaseAngle) || 0;
@@ -3295,6 +3296,56 @@ function maoPodeAgarrarGangorra(obj, handX, handY, alcance = 16) {
     return Math.hypot(foraX, foraY) <= Math.max(0, Number(alcance) || 0);
 }
 
+// Converte a posição da mão no ponto REAL mais próximo da superfície da gangorra.
+// A detecção pode alcançar alguns pixels além da prancha, mas a constraint nunca
+// deve ser criada nesse espaço vazio: seu ponto B fica preso ao retângulo físico.
+function obterPontoLocalGarraGangorra(obj, worldX, worldY) {
+    if (!obj?.body || (obj.shape !== 'seesaw' && obj.shape !== 'launcherSeesaw')) return null;
+    const cx=obj.body.position.x, cy=obj.body.position.y, ang=Number(obj.body.angle)||0;
+    const dx=worldX-cx, dy=worldY-cy, c=Math.cos(ang), sn=Math.sin(ang);
+    let x=dx*c+dy*sn, y=-dx*sn+dy*c;
+    const hw=Math.max(1,Number(obj.w)||0)/2, hh=Math.max(1,Number(obj.h)||0)/2;
+    const dentroX=Math.abs(x)<=hw, dentroY=Math.abs(y)<=hh;
+    if (dentroX && dentroY) {
+        // Se o centro da mão já está dentro, prende à face mais próxima.
+        const dL=x+hw,dR=hw-x,dT=y+hh,dB=hh-y,m=Math.min(dL,dR,dT,dB);
+        if(m===dL)x=-hw; else if(m===dR)x=hw; else if(m===dT)y=-hh; else y=hh;
+    } else {
+        x=Math.max(-hw,Math.min(hw,x)); y=Math.max(-hh,Math.min(hh,y));
+    }
+    return {x,y};
+}
+
+// Complemento de gameplay para impactos muito rápidos. O anti-tunneling precisa
+// limitar a rotação por passo; sem isto o Matter pode atravessar o jogador. Em vez
+// de devolver velocidades perigosas à prancha, transferimos ao corpo do jogador
+// a velocidade tangencial que a superfície da gangorra realmente possui no ponto
+// de contato. Isso preserva o efeito de catapulta sem reabrir o tunneling.
+function transferirImpulsoGangorraParaJogadores(scene, obj) {
+    if (!obj?.body || (obj.shape !== 'seesaw' && obj.shape !== 'launcherSeesaw')) return;
+    const omega=Number(obj.body.angularVelocity)||0;
+    if (Math.abs(omega)<0.025) return;
+    const ang=Number(obj.body.angle)||0,c=Math.cos(ang),sn=Math.sin(ang);
+    const hw=Math.max(1,Number(obj.w)||0)/2,hh=Math.max(1,Number(obj.h)||0)/2;
+    for (const p of [player1,player2]) {
+        if(!p?.body) continue;
+        const dx=p.body.position.x-obj.body.position.x,dy=p.body.position.y-obj.body.position.y;
+        const lx=dx*c+dy*sn,ly=-dx*sn+dy*c;
+        // Corpo principal do jogador tem ~44 px; margem pequena para contato real.
+        if(Math.abs(lx)>hw+24 || Math.abs(ly)>hh+25) continue;
+        const vx=(obj.body.velocity?.x||0)-omega*dy;
+        const vy=(obj.body.velocity?.y||0)+omega*dx;
+        // Só reforça um lançamento para cima e nunca reduz uma velocidade melhor.
+        if(vy < -1.0 && vy < (p.body.velocity?.y||0)) {
+            const fator=1.55;
+            scene.matter.body.setVelocity(p.body,{
+                x:(p.body.velocity?.x||0)*0.35 + vx*fator,
+                y:Math.min(p.body.velocity?.y||0, vy*fator)
+            });
+        }
+    }
+}
+
 // Teste geométrico exato para esferas.
 // A representação visual usa obj.w como raio; portanto a região agarrável do
 // objeto também é circular com exatamente esse mesmo raio. O parâmetro alcance
@@ -3382,6 +3433,14 @@ function processarGarra(s, p, h, jKey, grab) {
             // Assim, quando o objeto gira, o ponto preso gira junto com ele.
             let r = Number(alvoValido.angle) || 0;
             let localOffset = { x: dx * Math.cos(-r) - dy * Math.sin(-r), y: dx * Math.sin(-r) + dy * Math.cos(-r) };
+            // Para gangorras, o alcance da mão serve apenas para ENCONTRAR a prancha.
+            // O ponto efetivamente agarrado é sempre projetado sobre a superfície
+            // física, impedindo a mão de permanecer presa em uma região de ar.
+            const objGangorra = listaObjetosEditaveis.find(o => o?.body === alvoValido && (o.shape === 'seesaw' || o.shape === 'launcherSeesaw'));
+            if (objGangorra) {
+                const pontoSuperficie = obterPontoLocalGarraGangorra(objGangorra, h.position.x, h.position.y);
+                if (pontoSuperficie) localOffset = pontoSuperficie;
+            }
 
             let rigidezAgarrar = (alvoValido.label === 'corpo_elo') ? 0.2 : 1.0;
             let amortecimentoAgarrar = (alvoValido.label === 'corpo_elo') ? 0.1 : 0;
