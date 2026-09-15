@@ -1601,11 +1601,15 @@ function criarGangorraAPartirDeDados(scene, dados) {
     const damping = Math.max(0, Number(dados.seesawDamping) || 0.08);
     const conf = {
         isStatic: false, label: 'ambiente', ignoreGravity: dados.gravity === false,
-        mass: Math.max(0.1, Number(dados.mass) || 6), friction: 0.8,
+        friction: 0.8, frictionStatic: 1.0,
         frictionAir: Math.max(0, Number(dados.air) || 0.02), restitution: Math.max(0, Number(dados.bounce) || 0.1),
+        // Um slop pequeno mantém o contato com a prancha fina mais preciso sem
+        // criar uma região de colisão visualmente maior que a gangorra.
+        slop: 0.02,
         collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE }
     };
     const body = scene.matter.add.rectangle(x, y, w, h, conf);
+    scene.matter.body.setMass(body, Math.max(0.1, Number(dados.mass) || 6));
     scene.matter.body.setAngle(body, angle);
     body.manuseavel = !!dados.manuseavel;
     body.naoAgarravel = !!dados.naoAgarravel;
@@ -2756,8 +2760,8 @@ function atualizarObjetoExistente() {
             };
             // Reconstrói diretamente no mesmo objeto para manter a seleção atual.
             const w = dados.w, h = dados.h, angle = dados.angle;
-            const conf = { isStatic:false, label:'ambiente', ignoreGravity: dados.gravity === false, mass:Math.max(0.1,dados.mass||6), friction:0.8, frictionAir:Math.max(0,dados.air||0.02), restitution:Math.max(0,dados.bounce||0.1), collisionFilter:{category:CAT_AMBIENTE, mask:CAT_PLAYER|CAT_AMBIENTE} };
-            const body = scene.matter.add.rectangle(px, py, w, h, conf); scene.matter.body.setAngle(body, angle);
+            const conf = { isStatic:false, label:'ambiente', ignoreGravity: dados.gravity === false, friction:0.8, frictionStatic:1.0, frictionAir:Math.max(0,dados.air||0.02), restitution:Math.max(0,dados.bounce||0.1), slop:0.02, collisionFilter:{category:CAT_AMBIENTE, mask:CAT_PLAYER|CAT_AMBIENTE} };
+            const body = scene.matter.add.rectangle(px, py, w, h, conf); scene.matter.body.setMass(body, Math.max(0.1,dados.mass||6)); scene.matter.body.setAngle(body, angle);
             body.manuseavel=!!dados.manuseavel; body.naoAgarravel=!!dados.naoAgarravel; body.label='ambiente';
             const ox=dados.seesawPivotX, oy=dados.seesawPivotY, ca=Math.cos(angle), sa=Math.sin(angle);
             const constraint=scene.matter.add.worldConstraint(body,0,dados.seesawStiffness,{pointA:{x:px+ox*ca-oy*sa,y:py+ox*sa+oy*ca},pointB:{x:ox,y:oy},stiffness:dados.seesawStiffness,damping:dados.seesawDamping});
@@ -3224,26 +3228,22 @@ function maoPodeAgarrarPoligonoCustomizado(obj, handX, handY, alcance = 16) {
 function maoPodeAgarrarGangorra(obj, handX, handY, alcance = 16) {
     if (!obj || obj.shape !== 'seesaw' || !obj.body) return false;
 
-    const cx = Number(obj.body.position?.x) || 0;
-    const cy = Number(obj.body.position?.y) || 0;
-    const angulo = Number(obj.body.angle) || 0;
-    const cos = Math.cos(-angulo);
-    const sin = Math.sin(-angulo);
+    // A área agarrável deve ser derivada do MESMO polígono que o Matter usa
+    // para colisão. Isso evita qualquer divergência entre a prancha desenhada,
+    // o corpo físico e a região usada pela mão, inclusive durante a rotação.
+    const vertices = Array.isArray(obj.body.vertices) ? obj.body.vertices : [];
+    if (vertices.length < 3) return false;
 
-    const dx = handX - cx;
-    const dy = handY - cy;
+    const ponto = { x: Number(handX) || 0, y: Number(handY) || 0 };
+    if (Phaser.Physics.Matter.Matter.Vertices.contains(vertices, ponto)) return true;
 
-    // Coordenadas da mão no referencial local da prancha.
-    const localX = dx * cos - dy * sin;
-    const localY = dx * sin + dy * cos;
-
-    const meiaLargura = Math.max(1, Number(obj.w) || 0) / 2;
-    const meiaAltura = Math.max(1, Number(obj.h) || 0) / 2;
-
-    // Distância do ponto ao retângulo real. Dentro da prancha a distância é 0.
-    const foraX = Math.max(Math.abs(localX) - meiaLargura, 0);
-    const foraY = Math.max(Math.abs(localY) - meiaAltura, 0);
-    return Math.hypot(foraX, foraY) <= alcance;
+    const margem = Math.max(0, Number(alcance) || 0);
+    for (let i = 0; i < vertices.length; i++) {
+        const a = vertices[i];
+        const b = vertices[(i + 1) % vertices.length];
+        if (distanciaPontoSegmento(ponto.x, ponto.y, a.x, a.y, b.x, b.y) <= margem) return true;
+    }
+    return false;
 }
 
 // Teste geométrico exato para esferas.
