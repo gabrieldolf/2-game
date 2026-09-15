@@ -195,7 +195,10 @@
             <div class="prop-row"><label>Atraso do peso (ms):</label><input type="number" id="prop-launcher-delay" value="250" min="0" max="5000" step="50" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row"><label>Massa do peso:</label><input type="number" id="prop-launcher-weight-mass" value="80" min="1" max="1000" step="5" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row"><label>Tamanho do peso:</label><input type="number" id="prop-launcher-weight-size" value="70" min="20" max="250" step="5" onchange="atualizarObjetoExistente()"></div>
-            <div class="prop-row"><label>Altura do peso:</label><input type="number" id="prop-launcher-weight-height" value="220" min="40" max="1200" step="10" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Spawn X:</label><input type="number" id="prop-launcher-spawn-x" value="" step="10" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Spawn Y:</label><input type="number" id="prop-launcher-spawn-y" value="" step="10" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Altura do peso (padrão):</label><input type="number" id="prop-launcher-weight-height" value="220" min="40" max="1200" step="10" onchange="atualizarObjetoExistente()"></div>
+            <p style="font-size:10px;color:#ffe0b2;margin:2px 0 0;">No modo “Selecionar e Mover”, arraste o alvo ciano para escolher livremente o ponto fixo onde o projétil surgirá.</p>
             <div class="prop-row"><label>Desaparece após (ms):</label><input type="number" id="prop-launcher-weight-life" value="1800" min="200" max="10000" step="100" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row"><label>Retorno após (ms):</label><input type="number" id="prop-launcher-return-delay" value="1200" min="0" max="10000" step="100" onchange="atualizarObjetoExistente()"></div>
         </div>
@@ -276,6 +279,7 @@ let arrastandoObjetoSelecionado = false;
 let modoVincularFilhosRotator = false;
 let modoEscolherAlvoTrigger = false;
 let arrastandoDestinoTrigger = false;
+let arrastandoSpawnLauncher = false;
 let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
 const CHAVE_ARMAZENAMENTO_SESSAO = 'metroidvania_ho_sessao_jogo_v1';
@@ -557,7 +561,7 @@ function serializarObjetoDaSala(obj) {
         base.seesawPivotY = Number(obj.seesawPivotY) || 0;
         base.seesawStiffness = Math.min(1, Math.max(0.05, Number(obj.seesawStiffness) || 1));
         base.seesawDamping = Math.max(0, Number(obj.seesawDamping) || 0);
-        if(obj.shape==='launcherSeesaw'){ base.launcherSide=Number(obj.launcherSide)<0?-1:1; base.launcherZonePct=Number(obj.launcherZonePct)||70; base.launcherDelayMs=Number(obj.launcherDelayMs)||0; base.launcherWeightMass=Number(obj.launcherWeightMass)||80; base.launcherWeightSize=Number(obj.launcherWeightSize)||70; base.launcherWeightHeight=Number(obj.launcherWeightHeight)||220; base.launcherWeightLifeMs=Number(obj.launcherWeightLifeMs)||1800; base.launcherReturnDelayMs=Number(obj.launcherReturnDelayMs)||1200; }
+        if(obj.shape==='launcherSeesaw'){ base.launcherSide=Number(obj.launcherSide)<0?-1:1; base.launcherZonePct=Number(obj.launcherZonePct)||70; base.launcherDelayMs=Number(obj.launcherDelayMs)||0; base.launcherWeightMass=Number(obj.launcherWeightMass)||80; base.launcherWeightSize=Number(obj.launcherWeightSize)||70; base.launcherWeightHeight=Number(obj.launcherWeightHeight)||220; base.launcherSpawnX=Number.isFinite(Number(obj.launcherSpawnX))?Number(obj.launcherSpawnX):null; base.launcherSpawnY=Number.isFinite(Number(obj.launcherSpawnY))?Number(obj.launcherSpawnY):null; base.launcherWeightLifeMs=Number(obj.launcherWeightLifeMs)||1800; base.launcherReturnDelayMs=Number(obj.launcherReturnDelayMs)||1200; }
         return base;
     }
 
@@ -1669,7 +1673,7 @@ function criarGangorraAPartirDeDados(scene, dados) {
         seesawLimitDeg: Math.max(0, Number(dados.seesawLimitDeg) || 35),
         seesawPivotX: pivotX, seesawPivotY: pivotY,
         seesawStiffness: stiffness, seesawDamping: damping,
-        launcherSide:Number(dados.launcherSide)<0?-1:1, launcherZonePct:Number(dados.launcherZonePct)||70, launcherDelayMs:Number(dados.launcherDelayMs)||250, launcherWeightMass:Number(dados.launcherWeightMass)||80, launcherWeightSize:Number(dados.launcherWeightSize)||70, launcherWeightHeight:Number(dados.launcherWeightHeight)||220, launcherWeightLifeMs:Number(dados.launcherWeightLifeMs)||1800, launcherReturnDelayMs:Number(dados.launcherReturnDelayMs)||1200, launcherState:'ready', launcherPlayerWasInZone:false, launcherWeightBody:null, launcherWeightGfx:null, launcherTimer:0, launcherReturnTimer:0
+        launcherSide:Number(dados.launcherSide)<0?-1:1, launcherZonePct:Number(dados.launcherZonePct)||70, launcherDelayMs:Number(dados.launcherDelayMs)||250, launcherWeightMass:Number(dados.launcherWeightMass)||80, launcherWeightSize:Number(dados.launcherWeightSize)||70, launcherWeightHeight:Number(dados.launcherWeightHeight)||220, launcherSpawnX:Number.isFinite(Number(dados.launcherSpawnX))?Number(dados.launcherSpawnX):null, launcherSpawnY:Number.isFinite(Number(dados.launcherSpawnY))?Number(dados.launcherSpawnY):null, launcherWeightLifeMs:Number(dados.launcherWeightLifeMs)||1800, launcherReturnDelayMs:Number(dados.launcherReturnDelayMs)||1200, launcherState:'ready', launcherPlayerWasInZone:false, launcherWeightBody:null, launcherWeightGfx:null, launcherTimer:0, launcherReturnTimer:0
     };
     listaObjetosEditaveis.push(obj);
     return obj;
@@ -1790,7 +1794,7 @@ function inicializarSistemaDeSalas() {
     atualizarCamposSala();
 }
 
-function desmarcarObjetoDoEditor() { modoVincularFilhosRotator = false; modoEscolherAlvoTrigger = false; arrastandoDestinoTrigger = false; arrastandoObjetoSelecionado = false; objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; atualizarStatusFilhosRotator(); }
+function desmarcarObjetoDoEditor() { modoVincularFilhosRotator = false; modoEscolherAlvoTrigger = false; arrastandoDestinoTrigger = false; arrastandoSpawnLauncher = false; arrastandoObjetoSelecionado = false; objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; atualizarStatusFilhosRotator(); }
 function setFerramenta(f) {
     modoVincularFilhosRotator = false;
     atualizarStatusFilhosRotator();
@@ -2342,6 +2346,12 @@ function create() {
             return;
         }
         if (modoEditorAtivo && ferramentaAtual === 'select' && arrastandoObjetoSelecionado && objetoSelecionado && p.isDown) {
+            if (objetoSelecionado.shape === 'launcherSeesaw' && arrastandoSpawnLauncher) {
+                objetoSelecionado.launcherSpawnX=p.worldX; objetoSelecionado.launcherSpawnY=p.worldY;
+                document.getElementById('prop-launcher-spawn-x').value=Math.round(p.worldX*100)/100;
+                document.getElementById('prop-launcher-spawn-y').value=Math.round(p.worldY*100)/100;
+                marcarSalaComoAlterada(); return;
+            }
             if (objetoSelecionado.shape === 'triggerArea' && arrastandoDestinoTrigger) {
                 objetoSelecionado.triggerDestX = p.worldX; objetoSelecionado.triggerDestY = p.worldY;
                 document.getElementById('prop-trigger-dest-x').value = Math.round(p.worldX*100)/100;
@@ -2466,7 +2476,7 @@ function extrairCamposPainel() {
         seesawPivotY: parseFloat(document.getElementById('prop-seesaw-pivot-y').value) || 0,
         seesawStiffness: Math.min(1, Math.max(0.05, parseFloat(document.getElementById('prop-seesaw-stiffness').value) || 1)),
         seesawDamping: Math.max(0, parseFloat(document.getElementById('prop-seesaw-damping').value) || 0),
-        launcherSide: Number(document.getElementById('prop-launcher-side')?.value) < 0 ? -1 : 1, launcherZonePct: Math.max(20,Math.min(100,parseFloat(document.getElementById('prop-launcher-zone')?.value)||70)), launcherDelayMs: Math.max(0,parseFloat(document.getElementById('prop-launcher-delay')?.value)||0), launcherWeightMass: Math.max(1,parseFloat(document.getElementById('prop-launcher-weight-mass')?.value)||80), launcherWeightSize: Math.max(20,parseFloat(document.getElementById('prop-launcher-weight-size')?.value)||70), launcherWeightHeight: Math.max(40,parseFloat(document.getElementById('prop-launcher-weight-height')?.value)||220), launcherWeightLifeMs: Math.max(200,parseFloat(document.getElementById('prop-launcher-weight-life')?.value)||1800), launcherReturnDelayMs: Math.max(0,parseFloat(document.getElementById('prop-launcher-return-delay')?.value)||1200),
+        launcherSide: Number(document.getElementById('prop-launcher-side')?.value) < 0 ? -1 : 1, launcherZonePct: Math.max(20,Math.min(100,parseFloat(document.getElementById('prop-launcher-zone')?.value)||70)), launcherDelayMs: Math.max(0,parseFloat(document.getElementById('prop-launcher-delay')?.value)||0), launcherWeightMass: Math.max(1,parseFloat(document.getElementById('prop-launcher-weight-mass')?.value)||80), launcherWeightSize: Math.max(20,parseFloat(document.getElementById('prop-launcher-weight-size')?.value)||70), launcherWeightHeight: Math.max(40,parseFloat(document.getElementById('prop-launcher-weight-height')?.value)||220), launcherSpawnX: parseFloat(document.getElementById('prop-launcher-spawn-x')?.value), launcherSpawnY: parseFloat(document.getElementById('prop-launcher-spawn-y')?.value), launcherWeightLifeMs: Math.max(200,parseFloat(document.getElementById('prop-launcher-weight-life')?.value)||1800), launcherReturnDelayMs: Math.max(0,parseFloat(document.getElementById('prop-launcher-return-delay')?.value)||1200),
         rotatorAtivo: !!document.getElementById('prop-rotator-active')?.checked,
         rotatorDirecao: Number(document.getElementById('prop-rotator-direction')?.value) < 0 ? -1 : 1,
         rotatorVelocidadeDeg: Math.max(0, parseFloat(document.getElementById('prop-rotator-speed')?.value) || 0),
@@ -2520,7 +2530,7 @@ function executarCriacaoObjeto(scene, x, y) {
             idPersistente: c.persistirSessao ? (c.idPersistente || gerarIdObjetoPersistente()) : null, persistirSessao: !!c.persistirSessao,
             angle: Phaser.Math.DegToRad(c.seesawAngleDeg), seesawBaseAngle: Phaser.Math.DegToRad(c.seesawAngleDeg),
             seesawLimitDeg: c.seesawLimitDeg, seesawPivotX: c.seesawPivotX, seesawPivotY: c.seesawPivotY,
-            seesawStiffness: c.seesawStiffness, seesawDamping: c.seesawDamping, launcherSide:c.launcherSide, launcherZonePct:c.launcherZonePct, launcherDelayMs:c.launcherDelayMs, launcherWeightMass:c.launcherWeightMass, launcherWeightSize:c.launcherWeightSize, launcherWeightHeight:c.launcherWeightHeight, launcherWeightLifeMs:c.launcherWeightLifeMs, launcherReturnDelayMs:c.launcherReturnDelayMs
+            seesawStiffness: c.seesawStiffness, seesawDamping: c.seesawDamping, launcherSide:c.launcherSide, launcherZonePct:c.launcherZonePct, launcherDelayMs:c.launcherDelayMs, launcherWeightMass:c.launcherWeightMass, launcherWeightSize:c.launcherWeightSize, launcherWeightHeight:c.launcherWeightHeight, launcherSpawnX:c.launcherSpawnX, launcherSpawnY:c.launcherSpawnY, launcherWeightLifeMs:c.launcherWeightLifeMs, launcherReturnDelayMs:c.launcherReturnDelayMs
         };
         const obj = criarGangorraAPartirDeDados(scene, dadosGangorra);
         if (obj) selecionarObjetoDoEditor(obj);
@@ -2598,8 +2608,9 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
     listaObjetosEditaveis.forEach(obj => {
         let colidiu = false;
         if (obj.body) {
-            if (obj.shape === 'polygon') colidiu = maoPodeAgarrarPoligonoCustomizado(obj, x, y, 0);
-            else if ((obj.shape === 'seesaw' || obj.shape === 'launcherSeesaw')) colidiu = maoPodeAgarrarGangorra(obj, x, y, 0);
+            if (obj.shape === 'launcherSeesaw') { const sp=pontoPesoGangorraLancadora(obj); if(Math.hypot(x-sp.x,y-sp.y)<=26) colidiu=true; }
+            if (!colidiu && obj.shape === 'polygon') colidiu = maoPodeAgarrarPoligonoCustomizado(obj, x, y, 0);
+            else if (!colidiu && (obj.shape === 'seesaw' || obj.shape === 'launcherSeesaw')) colidiu = maoPodeAgarrarGangorra(obj, x, y, 0);
             else colidiu = Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices, { x: x, y: y });
         }
         else if(obj.shape==='npc'){const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0,hw=Math.max(20,(Number(obj.npcFrameW)||64)*(Number(obj.npcEscala)||1)/2),hh=Math.max(20,(Number(obj.npcFrameH)||64)*(Number(obj.npcEscala)||1)/2);colidiu=Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh;}
@@ -2643,6 +2654,7 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
     if (objetoSelecionado !== prox) desmarcarObjetoDoEditor();
     selecionarObjetoDoEditor(prox);
     arrastandoDestinoTrigger = prox.shape === 'triggerArea' && Math.hypot(x-(Number(prox.triggerDestX)||0),y-(Number(prox.triggerDestY)||0))<=18;
+    arrastandoSpawnLauncher = prox.shape === 'launcherSeesaw' && (()=>{const sp=pontoPesoGangorraLancadora(prox);return Math.hypot(x-sp.x,y-sp.y)<=26;})();
     const posX = prox.body ? prox.body.position.x : prox.visualX;
     const posY = prox.body ? prox.body.position.y : prox.visualY;
     clickOffsetX = x - posX;
@@ -2691,7 +2703,7 @@ function selecionarObjetoDoEditor(obj) {
         document.getElementById('prop-seesaw-pivot-y').value = obj.seesawPivotY || 0;
         document.getElementById('prop-seesaw-stiffness').value = obj.seesawStiffness ?? 1;
         document.getElementById('prop-seesaw-damping').value = obj.seesawDamping ?? 0.08;
-        if(obj.shape==='launcherSeesaw'){document.getElementById('prop-launcher-side').value=Number(obj.launcherSide)<0?'-1':'1';document.getElementById('prop-launcher-zone').value=obj.launcherZonePct??70;document.getElementById('prop-launcher-delay').value=obj.launcherDelayMs??250;document.getElementById('prop-launcher-weight-mass').value=obj.launcherWeightMass??80;document.getElementById('prop-launcher-weight-size').value=obj.launcherWeightSize??70;document.getElementById('prop-launcher-weight-height').value=obj.launcherWeightHeight??220;document.getElementById('prop-launcher-weight-life').value=obj.launcherWeightLifeMs??1800;document.getElementById('prop-launcher-return-delay').value=obj.launcherReturnDelayMs??1200;}
+        if(obj.shape==='launcherSeesaw'){document.getElementById('prop-launcher-side').value=Number(obj.launcherSide)<0?'-1':'1';document.getElementById('prop-launcher-zone').value=obj.launcherZonePct??70;document.getElementById('prop-launcher-delay').value=obj.launcherDelayMs??250;document.getElementById('prop-launcher-weight-mass').value=obj.launcherWeightMass??80;document.getElementById('prop-launcher-weight-size').value=obj.launcherWeightSize??70;document.getElementById('prop-launcher-weight-height').value=obj.launcherWeightHeight??220;const sp=pontoPesoGangorraLancadora(obj);document.getElementById('prop-launcher-spawn-x').value=Math.round(sp.x*100)/100;document.getElementById('prop-launcher-spawn-y').value=Math.round(sp.y*100)/100;document.getElementById('prop-launcher-weight-life').value=obj.launcherWeightLifeMs??1800;document.getElementById('prop-launcher-return-delay').value=obj.launcherReturnDelayMs??1200;}
     }
     else if (obj.shape === 'rope') { document.getElementById('prop-rope-len').value = obj.ropeLen; document.getElementById('prop-rope-segments').value = obj.ropeSegments; document.getElementById('prop-rope-color').value = obj.ropeColor; }
     else if (['portal', 'respawn1', 'respawn2'].includes(obj.shape)) {
@@ -2804,7 +2816,7 @@ function atualizarObjetoExistente() {
                 angle: Phaser.Math.DegToRad(c.seesawAngleDeg), seesawBaseAngle: Phaser.Math.DegToRad(c.seesawAngleDeg),
                 seesawLimitDeg: c.seesawLimitDeg, seesawPivotX: c.seesawPivotX, seesawPivotY: c.seesawPivotY,
                 seesawStiffness: c.seesawStiffness, seesawDamping: c.seesawDamping,
-                launcherSide:c.launcherSide, launcherZonePct:c.launcherZonePct, launcherDelayMs:c.launcherDelayMs, launcherWeightMass:c.launcherWeightMass, launcherWeightSize:c.launcherWeightSize, launcherWeightHeight:c.launcherWeightHeight, launcherWeightLifeMs:c.launcherWeightLifeMs, launcherReturnDelayMs:c.launcherReturnDelayMs
+                launcherSide:c.launcherSide, launcherZonePct:c.launcherZonePct, launcherDelayMs:c.launcherDelayMs, launcherWeightMass:c.launcherWeightMass, launcherWeightSize:c.launcherWeightSize, launcherWeightHeight:c.launcherWeightHeight, launcherSpawnX:c.launcherSpawnX, launcherSpawnY:c.launcherSpawnY, launcherWeightLifeMs:c.launcherWeightLifeMs, launcherReturnDelayMs:c.launcherReturnDelayMs
             };
             // Reconstrói diretamente no mesmo objeto para manter a seleção atual.
             const w = dados.w, h = dados.h, angle = dados.angle;
@@ -2813,7 +2825,7 @@ function atualizarObjetoExistente() {
             body.manuseavel=!!dados.manuseavel; body.naoAgarravel=!!dados.naoAgarravel; body.label='ambiente';
             const ox=dados.seesawPivotX, oy=dados.seesawPivotY, ca=Math.cos(angle), sa=Math.sin(angle);
             const constraint=scene.matter.add.worldConstraint(body,0,dados.seesawStiffness,{pointA:{x:px+ox*ca-oy*sa,y:py+ox*sa+oy*ca},pointB:{x:ox,y:oy},stiffness:dados.seesawStiffness,damping:dados.seesawDamping});
-            Object.assign(obj,{body,seesawConstraint:constraint,shape:dados.shape,w,h,gravity:dados.gravity!==false,lockPos:false,lockRot:false,mass:dados.mass,air:dados.air,bounce:dados.bounce,maxVel:dados.maxVel,maxRot:dados.maxRot,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,manuseavel:!!dados.manuseavel,naoAgarravel:!!dados.naoAgarravel,isStatic:false,idPersistente:dados.idPersistente,persistirSessao:dados.persistirSessao,seesawBaseAngle:angle,seesawLimitDeg:dados.seesawLimitDeg,seesawPivotX:ox,seesawPivotY:oy,seesawStiffness:dados.seesawStiffness,seesawDamping:dados.seesawDamping,launcherSide:dados.launcherSide,launcherZonePct:dados.launcherZonePct,launcherDelayMs:dados.launcherDelayMs,launcherWeightMass:dados.launcherWeightMass,launcherWeightSize:dados.launcherWeightSize,launcherWeightHeight:dados.launcherWeightHeight,launcherWeightLifeMs:dados.launcherWeightLifeMs,launcherReturnDelayMs:dados.launcherReturnDelayMs,launcherState:'ready',launcherPlayerWasInZone:false,launcherWeightBody:null,launcherWeightGfx:null,launcherTimer:0,launcherReturnTimer:0});
+            Object.assign(obj,{body,seesawConstraint:constraint,shape:dados.shape,w,h,gravity:dados.gravity!==false,lockPos:false,lockRot:false,mass:dados.mass,air:dados.air,bounce:dados.bounce,maxVel:dados.maxVel,maxRot:dados.maxRot,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,manuseavel:!!dados.manuseavel,naoAgarravel:!!dados.naoAgarravel,isStatic:false,idPersistente:dados.idPersistente,persistirSessao:dados.persistirSessao,seesawBaseAngle:angle,seesawLimitDeg:dados.seesawLimitDeg,seesawPivotX:ox,seesawPivotY:oy,seesawStiffness:dados.seesawStiffness,seesawDamping:dados.seesawDamping,launcherSide:dados.launcherSide,launcherZonePct:dados.launcherZonePct,launcherDelayMs:dados.launcherDelayMs,launcherWeightMass:dados.launcherWeightMass,launcherWeightSize:dados.launcherWeightSize,launcherWeightHeight:dados.launcherWeightHeight,launcherSpawnX:dados.launcherSpawnX,launcherSpawnY:dados.launcherSpawnY,launcherWeightLifeMs:dados.launcherWeightLifeMs,launcherReturnDelayMs:dados.launcherReturnDelayMs,launcherState:'ready',launcherPlayerWasInZone:false,launcherWeightBody:null,launcherWeightGfx:null,launcherTimer:0,launcherReturnTimer:0});
             marcarSalaComoAlterada(); return;
         }
         // Se deixou de ser gangorra, o fluxo normal abaixo reconstruirá o novo tipo.
@@ -3917,6 +3929,7 @@ function jogadorNaZonaGangorraLancadora(obj,p){
 }
 function pontoPesoGangorraLancadora(obj){
     if(!obj?.body) return {x:0,y:0};
+    if(Number.isFinite(Number(obj.launcherSpawnX)) && Number.isFinite(Number(obj.launcherSpawnY))) return {x:Number(obj.launcherSpawnX),y:Number(obj.launcherSpawnY)};
     // O ponto de surgimento pertence ao MUNDO, não à prancha giratória.
     // Calculamos a posição que ele teria com a gangorra em seu ângulo-base,
     // usando o pivô fixo como referência. Assim ele não acompanha a rotação
