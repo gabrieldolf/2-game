@@ -3323,26 +3323,75 @@ function obterPontoLocalGarraGangorra(obj, worldX, worldY) {
 // de contato. Isso preserva o efeito de catapulta sem reabrir o tunneling.
 function transferirImpulsoGangorraParaJogadores(scene, obj) {
     if (!obj?.body || (obj.shape !== 'seesaw' && obj.shape !== 'launcherSeesaw')) return;
-    const omega=Number(obj.body.angularVelocity)||0;
-    if (Math.abs(omega)<0.025) return;
-    const ang=Number(obj.body.angle)||0,c=Math.cos(ang),sn=Math.sin(ang);
-    const hw=Math.max(1,Number(obj.w)||0)/2,hh=Math.max(1,Number(obj.h)||0)/2;
-    for (const p of [player1,player2]) {
-        if(!p?.body) continue;
-        const dx=p.body.position.x-obj.body.position.x,dy=p.body.position.y-obj.body.position.y;
-        const lx=dx*c+dy*sn,ly=-dx*sn+dy*c;
-        // Corpo principal do jogador tem ~44 px; margem pequena para contato real.
-        if(Math.abs(lx)>hw+24 || Math.abs(ly)>hh+25) continue;
-        const vx=(obj.body.velocity?.x||0)-omega*dy;
-        const vy=(obj.body.velocity?.y||0)+omega*dx;
-        // Só reforça um lançamento para cima e nunca reduz uma velocidade melhor.
-        if(vy < -1.0 && vy < (p.body.velocity?.y||0)) {
-            const fator=1.55;
-            scene.matter.body.setVelocity(p.body,{
-                x:(p.body.velocity?.x||0)*0.35 + vx*fator,
-                y:Math.min(p.body.velocity?.y||0, vy*fator)
+
+    const omega = Number(obj.body.angularVelocity) || 0;
+    const omegaAnterior = Number(obj._omegaLancamentoAnterior) || 0;
+    obj._omegaLancamentoAnterior = omega;
+    if (Math.abs(omega) < 0.018) return;
+
+    const ang = Number(obj.body.angle) || 0;
+    const c = Math.cos(ang), sn = Math.sin(ang);
+    const hw = Math.max(1, Number(obj.w) || 0) / 2;
+    const hh = Math.max(1, Number(obj.h) || 0) / 2;
+    const agora = performance.now();
+
+    // Normal da face SUPERIOR da prancha em coordenadas do mundo.
+    // Ela aponta para fora da gangorra e é a direção natural de um lançamento.
+    let nx = sn, ny = -c;
+    if (ny > 0) { nx = -nx; ny = -ny; }
+
+    for (const p of [player1, player2]) {
+        if (!p?.body) continue;
+
+        const dx = p.body.position.x - obj.body.position.x;
+        const dy = p.body.position.y - obj.body.position.y;
+        const lx = dx * c + dy * sn;
+        const ly = -dx * sn + dy * c;
+
+        // Exige contato real/próximo da face superior, em vez de uma grande AABB.
+        // O corpo principal tem raio 22 px.
+        if (Math.abs(lx) > hw + 22) continue;
+        if (ly < -hh - 31 || ly > hh + 18) continue;
+
+        // Velocidade instantânea da prancha no ponto onde o corpo está apoiado:
+        // v = vCentro + omega x raio.
+        const vxSuperficie = (obj.body.velocity?.x || 0) - omega * dy;
+        const vySuperficie = (obj.body.velocity?.y || 0) + omega * dx;
+        const velocidadeNormal = vxSuperficie * nx + vySuperficie * ny;
+
+        // A ponta que está sob o jogador precisa estar subindo. Quanto mais longe
+        // do pivô e mais rápida a rotação, maior velocidadeNormal e maior o salto.
+        if (velocidadeNormal <= 1.15) continue;
+
+        // Gangorra Lançadora recebe uma transferência mais eficiente. A prancha
+        // continua limitada contra tunneling; a energia que seria perdida pelo
+        // limite é entregue ao RAGDOLL inteiro, não só ao torso.
+        const multiplicador = obj.shape === 'launcherSeesaw' ? 3.25 : 1.85;
+        const velocidadeDesejada = Math.min(34, velocidadeNormal * multiplicador);
+        const cooldown = Number(p._gangorraLancamentoAte) || 0;
+        const acelerando = Math.abs(omega) >= Math.abs(omegaAnterior) - 0.003;
+        if (agora < cooldown && !acelerando) continue;
+
+        const atualNormal = (p.body.velocity?.x || 0) * nx + (p.body.velocity?.y || 0) * ny;
+        const ganho = velocidadeDesejada - atualNormal;
+        if (ganho <= 0.35) continue;
+
+        // Aplica o MESMO delta de velocidade a torso, elos e mãos. Assim as
+        // constraints dos braços não absorvem imediatamente o lançamento e a pose
+        // do ragdoll é preservada durante a saída da prancha.
+        const deltaVX = nx * ganho;
+        const deltaVY = ny * ganho;
+        const partes = [p.body, ...(p.leftElos || []), ...(p.rightElos || []), p.leftHand, p.rightHand].filter(Boolean);
+        for (const parte of partes) {
+            scene.matter.body.setVelocity(parte, {
+                x: (parte.velocity?.x || 0) + deltaVX,
+                y: (parte.velocity?.y || 0) + deltaVY
             });
         }
+
+        // Poucos milissegundos impedem várias aplicações contraditórias no mesmo
+        // impacto, mas não criam um cooldown perceptível para o mecanismo.
+        p._gangorraLancamentoAte = agora + 70;
     }
 }
 
