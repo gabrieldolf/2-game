@@ -3274,13 +3274,15 @@ function maoPodeAgarrarPoligonoCustomizado(obj, handX, handY, alcance = 16) {
 // prancha está inclinada, essa caixa contém grandes áreas vazias nos cantos.
 // Aqui transformamos a posição da mão para o espaço local da gangorra e medimos
 // a distância até o retângulo real rotacionado.
-function maoPodeAgarrarGangorra(obj, handX, handY, alcance = 16) {
-    if (!obj || obj.shape !== 'seesaw' && obj.shape !== 'launcherSeesaw' || !obj.body) return false;
+function maoPodeAgarrarGangorra(obj, handX, handY, alcanceIgnorado = 0) {
+    if (!obj || (obj.shape !== 'seesaw' && obj.shape !== 'launcherSeesaw') || !obj.body) return false;
 
-    // Usa a mesma forma retangular que cria o Body da gangorra, transformando
-    // o centro da mão para o referencial LOCAL da prancha. Assim a área de
-    // garra não depende da AABB do Matter nem de body.vertices alterados pelo
-    // solver/constraint: ela acompanha exatamente largura, espessura e rotação.
+    // A gangorra é uma exceção ao alcance genérico de garra (16/19 px).
+    // Aqui o contato é exatamente CÍRCULO VISUAL DA MÃO x RETÂNGULO ROTACIONADO
+    // DA PRANCHA. A mão é desenhada com raio 14 px, portanto seu centro só pode
+    // iniciar a garra se estiver a no máximo 14 px da superfície real.
+    // Isso elimina a antiga faixa invisível de 16/19 px ao redor da gangorra.
+    const RAIO_VISUAL_MAO = 14;
     const cx = Number(obj.body.position?.x) || 0;
     const cy = Number(obj.body.position?.y) || 0;
     const ang = Number(obj.body.angle) || 0;
@@ -3293,7 +3295,7 @@ function maoPodeAgarrarGangorra(obj, handX, handY, alcance = 16) {
     const hh = Math.max(1, Number(obj.h) || 0) / 2;
     const foraX = Math.max(Math.abs(localX) - hw, 0);
     const foraY = Math.max(Math.abs(localY) - hh, 0);
-    return Math.hypot(foraX, foraY) <= Math.max(0, Number(alcance) || 0);
+    return Math.hypot(foraX, foraY) <= RAIO_VISUAL_MAO;
 }
 
 // Converte a posição da mão no ponto REAL mais próximo da superfície da gangorra.
@@ -3453,7 +3455,7 @@ function processarGarra(s, p, h, jKey, grab) {
                     if (obj.shape === 'polygon') {
                         atingiu = maoPodeAgarrarPoligonoCustomizado(obj, h.position.x, h.position.y, alcanceGarra);
                     } else if ((obj.shape === 'seesaw' || obj.shape === 'launcherSeesaw')) {
-                        atingiu = maoPodeAgarrarGangorra(obj, h.position.x, h.position.y, alcanceGarra);
+                        atingiu = maoPodeAgarrarGangorra(obj, h.position.x, h.position.y);
                     } else if (obj.shape === 'circle') {
                         atingiu = maoPodeAgarrarEsfera(obj, h.position.x, h.position.y, alcanceGarra);
                     } else {
