@@ -189,7 +189,7 @@
         </div>
         <div id="painel-propriedades-launcher" style="display:none; background:#4b2e18; padding:9px; border:2px solid #ff9f43; border-radius:6px; margin-top:7px; flex-direction:column; gap:7px;">
             <h3 style="color:#ffe0b2;font-weight:bold;margin:0;">Gangorra Lançadora</h3>
-            <div style="font-size:10px;color:#ffe0b2;line-height:1.35;">Mecanismo cíclico: o jogador pisa no lado escolhido, um peso surge sobre o lado oposto, cai, desaparece e a gangorra retorna suavemente à posição inicial. Rearma somente após o jogador sair da zona.</div>
+            <div style="font-size:10px;color:#ffe0b2;line-height:1.35;">Mecanismo cíclico: o jogador pisa no lado escolhido, um peso surge sobre o lado oposto, cai e desaparece. O retorno da gangorra acontece em paralelo e o mecanismo rearma assim que o ciclo do peso termina, mesmo que o jogador continue na zona.</div>
             <div class="prop-row"><label>Lado de ativação:</label><select id="prop-launcher-side" onchange="atualizarObjetoExistente()"><option value="1">Direita</option><option value="-1">Esquerda</option></select></div>
             <div class="prop-row"><label>Zona (% do lado):</label><input type="number" id="prop-launcher-zone" value="70" min="20" max="100" step="5" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row"><label>Atraso do peso (ms):</label><input type="number" id="prop-launcher-delay" value="250" min="0" max="5000" step="50" onchange="atualizarObjetoExistente()"></div>
@@ -2179,7 +2179,7 @@ function create() {
                 const base = Number(obj.seesawBaseAngle) || 0;
                 const deltaAng = normalizarAnguloRad(obj.body.angle - base);
                 const limite = Phaser.Math.DegToRad(Math.max(0, Number(obj.seesawLimitDeg) || 0));
-                const retornoAtivo = obj.shape !== 'launcherSeesaw' || obj.launcherState === 'returning' || obj.launcherState === 'ready';
+                const retornoAtivo = obj.shape !== 'launcherSeesaw' || obj.launcherState === 'ready' || (obj.launcherState === 'fired' && obj.launcherReturnTimer <= 0);
                 const kCentro = retornoAtivo ? 0.018 : 0.0025;
                 const amort = retornoAtivo ? 0.055 : 0.018;
                 obj.body.torque += (-deltaAng * kCentro) - (obj.body.angularVelocity * amort);
@@ -3747,10 +3747,23 @@ function processarGangorrasLancadoras(scene,delta){
     for(const obj of listaObjetosEditaveis){if(!obj||obj.shape!=='launcherSeesaw'||!obj.body)continue;
         const dentro=jogadores.some(p=>jogadorNaZonaGangorraLancadora(obj,p));
         if(obj.launcherWeightGfx){obj.launcherWeightGfx.clear();if(obj.launcherWeightBody){const b=obj.launcherWeightBody,t=Number(obj.launcherWeightSize)||70;obj.launcherWeightGfx.x=b.position.x;obj.launcherWeightGfx.y=b.position.y;obj.launcherWeightGfx.rotation=b.angle||0;obj.launcherWeightGfx.fillStyle(0x3d3d3d,1);obj.launcherWeightGfx.lineStyle(3,0xd0d0d0,1);obj.launcherWeightGfx.fillRect(-t/2,-t/2,t,t);obj.launcherWeightGfx.strokeRect(-t/2,-t/2,t,t);}}
-        if(obj.launcherState==='ready' && dentro && !obj.launcherPlayerWasInZone){obj.launcherState='waiting';obj.launcherTimer=Number(obj.launcherDelayMs)||0;}
+        // O mecanismo pode iniciar sempre que estiver pronto e houver jogador na zona.
+        // Não depende de uma nova borda de entrada: permanecer sobre o lado correto
+        // permite um novo ciclo assim que o peso anterior terminar.
+        if(obj.launcherState==='ready' && dentro){obj.launcherState='waiting';obj.launcherTimer=Number(obj.launcherDelayMs)||0;}
         if(obj.launcherState==='waiting'){obj.launcherTimer-=dt;if(obj.launcherTimer<=0){const q=pontoPesoGangorraLancadora(obj),tam=Number(obj.launcherWeightSize)||70;obj.launcherWeightBody=scene.matter.add.rectangle(q.x,q.y,tam,tam,{label:'peso_gangorra_lancadora',friction:.9,restitution:0,collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER|CAT_AMBIENTE}});scene.matter.body.setMass(obj.launcherWeightBody,Math.max(1,Number(obj.launcherWeightMass)||80));obj.launcherWeightBody.naoAgarravel=true;obj.launcherWeightGfx=scene.add.graphics().setDepth(4);obj.launcherState='fired';obj.launcherTimer=Number(obj.launcherWeightLifeMs)||1800;obj.launcherReturnTimer=Number(obj.launcherReturnDelayMs)||1200;}}
-        else if(obj.launcherState==='fired'){obj.launcherTimer-=dt;obj.launcherReturnTimer-=dt;if(obj.launcherWeightBody&&obj.launcherTimer<=0){scene.matter.world.remove(obj.launcherWeightBody);obj.launcherWeightBody=null;if(obj.launcherWeightGfx){obj.launcherWeightGfx.destroy();obj.launcherWeightGfx=null;}}if(obj.launcherReturnTimer<=0)obj.launcherState='returning';}
-        else if(obj.launcherState==='returning'){if(obj.launcherWeightBody&&obj.launcherTimer<=0){scene.matter.world.remove(obj.launcherWeightBody);obj.launcherWeightBody=null;if(obj.launcherWeightGfx){obj.launcherWeightGfx.destroy();obj.launcherWeightGfx=null;}}const erro=Math.abs(normalizarAnguloRad(obj.body.angle-(Number(obj.seesawBaseAngle)||0)));if(erro<Phaser.Math.DegToRad(2)&&Math.abs(obj.body.angularVelocity)<0.03&&!dentro)obj.launcherState='ready';}
+        else if(obj.launcherState==='fired'){
+            obj.launcherTimer-=dt;
+            obj.launcherReturnTimer-=dt;
+            if(obj.launcherTimer<=0){
+                if(obj.launcherWeightBody){scene.matter.world.remove(obj.launcherWeightBody);obj.launcherWeightBody=null;}
+                if(obj.launcherWeightGfx){obj.launcherWeightGfx.destroy();obj.launcherWeightGfx=null;}
+                // Rearma imediatamente ao fim da vida do peso. Não espera a gangorra
+                // voltar ao ângulo inicial e não exige que o jogador deixe a zona.
+                obj.launcherState='ready';
+                obj.launcherTimer=0;
+            }
+        }
         obj.launcherPlayerWasInZone=dentro;
     }
 }
