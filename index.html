@@ -3318,6 +3318,37 @@ function obterPontoLocalGarraGangorra(obj, worldX, worldY) {
     return {x,y};
 }
 
+// Para gangorras a mão usa uma âncora móvel própria. Guardamos o ponto exato
+// da superfície e a normal dessa face em coordenadas locais da prancha. O centro
+// da mão fica a um raio visual (14 px) para fora da superfície; assim a mão toca
+// a madeira sem a constraint lutar contra a colisão física da própria mão.
+function obterAncoraMaoGangorra(obj, worldX, worldY) {
+    const superficie = obterPontoLocalGarraGangorra(obj, worldX, worldY);
+    if (!superficie || !obj?.body) return null;
+    const hw=Math.max(1,Number(obj.w)||0)/2, hh=Math.max(1,Number(obj.h)||0)/2;
+    let nx=0, ny=0;
+    const eps=0.001;
+    if (Math.abs(superficie.x + hw) < eps) nx=-1;
+    else if (Math.abs(superficie.x - hw) < eps) nx=1;
+    else if (Math.abs(superficie.y + hh) < eps) ny=-1;
+    else ny=1;
+    return { superficie, normal:{x:nx,y:ny} };
+}
+
+function atualizarPontoGarraGangorra(p, jKey) {
+    if (!p || !p[jKey] || !p[jKey + 'Gangorra']) return;
+    const obj=p[jKey + 'Gangorra'], local=p[jKey + 'LocalOffset'], normal=p[jKey + 'GangorraNormalLocal'];
+    if (!obj?.body || !local || !normal) return;
+    const ang=Number(obj.body.angle)||0, c=Math.cos(ang), sn=Math.sin(ang);
+    const sx=obj.body.position.x + local.x*c - local.y*sn;
+    const sy=obj.body.position.y + local.x*sn + local.y*c;
+    const nx=normal.x*c-normal.y*sn, ny=normal.x*sn+normal.y*c;
+    const raio=14;
+    const ponto={x:sx+nx*raio,y:sy+ny*raio};
+    p[jKey + 'PontoPivorMundo']=ponto;
+    if (p[jKey].pointA) { p[jKey].pointA.x=ponto.x; p[jKey].pointA.y=ponto.y; }
+}
+
 // Complemento de gameplay para impactos muito rápidos. O anti-tunneling precisa
 // limitar a rotação por passo; sem isto o Matter pode atravessar o jogador. Em vez
 // de devolver velocidades perigosas à prancha, transferimos ao corpo do jogador
@@ -3506,7 +3537,30 @@ function processarGarra(s, p, h, jKey, grab) {
             // Para filhos de rotador, portanto, a mão é presa a um PONTO DO MUNDO
             // que acompanha o ponto local exato do objeto agarrado. Assim o jogador é
             // carregado pela plataforma, mas a mão nunca aplica força física no filho.
-            if (rotatorPai) {
+            if (objGangorra) {
+                // Gangorra: não usamos uma constraint corpo<->corpo. Ela fazia o
+                // solver afastar o centro circular da mão do ponto B na madeira e,
+                // durante rotações bruscas, a garra podia parecer presa no ar.
+                // A âncora mundial acompanha rigidamente o mesmo ponto da prancha.
+                const ancora = obterAncoraMaoGangorra(objGangorra, h.position.x, h.position.y);
+                if (!ancora) return;
+                localOffset = ancora.superficie;
+                p[jKey + 'Gangorra'] = objGangorra;
+                p[jKey + 'GangorraNormalLocal'] = ancora.normal;
+                p[jKey + 'RotatorPai'] = null;
+                const angG=Number(objGangorra.body.angle)||0, cg=Math.cos(angG), sg=Math.sin(angG);
+                const sx=objGangorra.body.position.x+localOffset.x*cg-localOffset.y*sg;
+                const sy=objGangorra.body.position.y+localOffset.x*sg+localOffset.y*cg;
+                const nx=ancora.normal.x*cg-ancora.normal.y*sg, ny=ancora.normal.x*sg+ancora.normal.y*cg;
+                const ponto={x:sx+nx*14,y:sy+ny*14};
+                p[jKey + 'PontoPivorMundo'] = ponto;
+                p[jKey] = s.matter.add.worldConstraint(h, 0, rigidezAgarrar, {
+                    pointA: { x:ponto.x, y:ponto.y }, pointB:{x:0,y:0},
+                    stiffness:rigidezAgarrar, damping:amortecimentoAgarrar
+                });
+            } else if (rotatorPai) {
+                p[jKey + 'Gangorra'] = null;
+                p[jKey + 'GangorraNormalLocal'] = null;
                 p[jKey + 'RotatorPai'] = rotatorPai;
                 p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
                 p[jKey] = s.matter.add.worldConstraint(h, 0, rigidezAgarrar, {
@@ -3515,10 +3569,12 @@ function processarGarra(s, p, h, jKey, grab) {
                     stiffness: rigidezAgarrar, damping: amortecimentoAgarrar
                 });
             } else if (alvoValido.isStatic) {
+                p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
                 p[jKey + 'RotatorPai'] = null;
                 p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
                 p[jKey] = s.matter.add.worldConstraint(h, 0, rigidezAgarrar, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 }, stiffness: rigidezAgarrar, damping: amortecimentoAgarrar });
             } else {
+                p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
                 p[jKey + 'RotatorPai'] = null;
                 p[jKey + 'PontoPivorMundo'] = null;
                 p[jKey] = s.matter.add.constraint(h, alvoValido, 0, rigidezAgarrar, { pointA: { x: 0, y: 0 }, pointB: localOffset, stiffness: rigidezAgarrar, damping: amortecimentoAgarrar });
@@ -3528,7 +3584,7 @@ function processarGarra(s, p, h, jKey, grab) {
         }
     } else if (!grab && p[jKey]) {
         if (p[jKey]) s.matter.world.remove(p[jKey]);
-        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null; p[jKey + 'PontoPivorMundo'] = null; p[jKey + 'RotatorPai'] = null;
+        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null; p[jKey + 'PontoPivorMundo'] = null; p[jKey + 'RotatorPai'] = null; p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
     }
 }
 
@@ -3967,6 +4023,8 @@ function update(time, delta) {
         if (!p) return;
         // Para objetos filhos de um Pai Giratório, recalculamos primeiro o
         // ponto mundial correspondente ao ponto local onde cada mão agarrou.
+        atualizarPontoGarraGangorra(p, 'leftJoint');
+        atualizarPontoGarraGangorra(p, 'rightJoint');
         atualizarPontoGarraFilhoRotator(p, 'leftJoint');
         atualizarPontoGarraFilhoRotator(p, 'rightJoint');
         if (p.leftJoint && p.leftJointPontoPivorMundo) {
