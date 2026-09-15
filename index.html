@@ -281,6 +281,7 @@ let modoEscolherAlvoTrigger = false;
 let arrastandoDestinoTrigger = false;
 let arrastandoSpawnLauncher = false;
 let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
+let launcherSpawnOverlayGraphics = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002;
 const CHAVE_ARMAZENAMENTO_SESSAO = 'metroidvania_ho_sessao_jogo_v1';
 let estadoSessaoJogo = null;
@@ -2186,6 +2187,7 @@ function create() {
     desenhoGraphicsFrente = this.add.graphics().setDepth(50);
     desenhoPreviewGraphics = this.add.graphics().setDepth(8990);
     previewGraphicsPoligono = this.add.graphics().setDepth(15);
+    launcherSpawnOverlayGraphics = this.add.graphics().setDepth(9998);
     cursorsKeyboard = this.input.keyboard.createCursorKeys();
     carregarEstadoNarrativa();
     inicializarSistemaDeSalas();
@@ -3011,7 +3013,7 @@ function desenharObjetoEditor(obj) {
         const ox = Number(obj.seesawPivotX) || 0, oy = Number(obj.seesawPivotY) || 0;
         g.fillStyle(0x202020, 1); g.fillCircle(ox, oy, Math.max(6, Math.min(12, obj.h * 0.45)));
         if (modoEditorAtivo) { g.lineStyle(2, 0xffd166, 1); g.strokeCircle(ox, oy, Math.max(10, Math.min(16, obj.h * 0.65))); }
-        if(modoEditorAtivo&&obj.shape==='launcherSeesaw'){const lado=Number(obj.launcherSide)<0?-1:1,z=obj.w*Math.max(.2,Math.min(1,(Number(obj.launcherZonePct)||70)/100))/2,cx=lado*(obj.w/2-z/2);g.fillStyle(0xff9f43,.22);g.fillRect(cx-z/2,-obj.h/2-70,z,obj.h+100);g.lineStyle(2,0xff9f43,1);g.strokeRect(cx-z/2,-obj.h/2-70,z,obj.h+100);const qw=pontoPesoGangorraLancadora(obj),ang=-(obj.body?.angle||0),dx=qw.x-posX,dy=qw.y-posY,qx=dx*Math.cos(ang)-dy*Math.sin(ang),qy=dx*Math.sin(ang)+dy*Math.cos(ang);g.lineStyle(2,0x00e5ff,1);g.strokeCircle(qx,qy,16);g.lineBetween(qx-22,qy,qx+22,qy);g.lineBetween(qx,qy-22,qx,qy+22);}
+        if(modoEditorAtivo&&obj.shape==='launcherSeesaw'){const lado=Number(obj.launcherSide)<0?-1:1,z=obj.w*Math.max(.2,Math.min(1,(Number(obj.launcherZonePct)||70)/100))/2,cx=lado*(obj.w/2-z/2);g.fillStyle(0xff9f43,.22);g.fillRect(cx-z/2,-obj.h/2-70,z,obj.h+100);g.lineStyle(2,0xff9f43,1);g.strokeRect(cx-z/2,-obj.h/2-70,z,obj.h+100);}
     }
     else if (obj.shape === 'box') { g.fillRect(-obj.w/2, -obj.h/2, obj.w, obj.h); g.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h); }
     else if (obj.shape === 'circle') { g.fillCircle(0, 0, obj.w); g.strokeCircle(0, 0, obj.w); }
@@ -3019,6 +3021,26 @@ function desenharObjetoEditor(obj) {
         g.beginPath(); g.moveTo(obj.dadosDesenhoVisual[0].x, obj.dadosDesenhoVisual[0].y);
         for (let i = 1; i < obj.dadosDesenhoVisual.length; i++) g.lineTo(obj.dadosDesenhoVisual[i].x, obj.dadosDesenhoVisual[i].y);
         g.closePath(); g.fillPath(); g.strokePath();
+    }
+}
+
+function desenharAlvosSpawnGangorrasLancadoras() {
+    if (!launcherSpawnOverlayGraphics) return;
+    const g = launcherSpawnOverlayGraphics;
+    g.clear();
+    g.setVisible(!!modoEditorAtivo);
+    if (!modoEditorAtivo) return;
+    for (const obj of listaObjetosEditaveis) {
+        if (!obj || obj.shape !== 'launcherSeesaw' || !obj.body) continue;
+        const sp = pontoPesoGangorraLancadora(obj);
+        if (!Number.isFinite(sp.x) || !Number.isFinite(sp.y)) continue;
+        const selecionado = obj === objetoSelecionado;
+        g.lineStyle(selecionado ? 4 : 3, 0x00e5ff, 1);
+        g.strokeCircle(sp.x, sp.y, selecionado ? 18 : 16);
+        g.lineBetween(sp.x - 24, sp.y, sp.x + 24, sp.y);
+        g.lineBetween(sp.x, sp.y - 24, sp.x, sp.y + 24);
+        g.fillStyle(0x00e5ff, selecionado ? 0.20 : 0.10);
+        g.fillCircle(sp.x, sp.y, selecionado ? 8 : 6);
     }
 }
 
@@ -4020,9 +4042,11 @@ function update(time, delta) {
             }
             if (obj) desenharObjetoEditor(obj);
         });
+        desenharAlvosSpawnGangorrasLancadoras();
         atualizarMolduraReferencia16x9();
         return;
     }
+    if (launcherSpawnOverlayGraphics) { launcherSpawnOverlayGraphics.clear(); launcherSpawnOverlayGraphics.setVisible(false); }
     atualizarMolduraReferencia16x9();
     atualizarRotadores(this, Math.min(50, Math.max(0, Number(delta) || 16.6667)) / 1000);
     processarNPCsEMoedas(this);
