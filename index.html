@@ -1603,9 +1603,6 @@ function criarGangorraAPartirDeDados(scene, dados) {
         isStatic: false, label: 'ambiente', ignoreGravity: dados.gravity === false,
         friction: 0.8, frictionStatic: 1.0,
         frictionAir: Math.max(0, Number(dados.air) || 0.02), restitution: Math.max(0, Number(dados.bounce) || 0.1),
-        // Um slop pequeno mantém o contato com a prancha fina mais preciso sem
-        // criar uma região de colisão visualmente maior que a gangorra.
-        slop: 0.02,
         collisionFilter: { category: CAT_AMBIENTE, mask: CAT_PLAYER | CAT_AMBIENTE }
     };
     const body = scene.matter.add.rectangle(x, y, w, h, conf);
@@ -2167,12 +2164,26 @@ function create() {
                 if (limite > 0) {
                     const base = Number(obj.seesawBaseAngle) || 0;
                     const delta = normalizarAnguloRad(obj.body.angle - base);
-                    if (delta > limite) {
-                        this.matter.body.setAngle(obj.body, base + limite);
-                        if (obj.body.angularVelocity > 0) this.matter.body.setAngularVelocity(obj.body, 0);
-                    } else if (delta < -limite) {
-                        this.matter.body.setAngle(obj.body, base - limite);
-                        if (obj.body.angularVelocity < 0) this.matter.body.setAngularVelocity(obj.body, 0);
+                    if (delta > limite || delta < -limite) {
+                        // Ao limitar a rotação, preserve exatamente o pivô no mundo.
+                        // Mudar apenas body.angle deslocava o ponto local do pivô e o
+                        // constraint precisava corrigir isso no frame seguinte, gerando
+                        // saltos/penetração perceptíveis nas colisões com o jogador.
+                        const novoAng = base + Phaser.Math.Clamp(delta, -limite, limite);
+                        const ox = Number(obj.seesawPivotX) || 0;
+                        const oy = Number(obj.seesawPivotY) || 0;
+                        const ancora = obj.seesawConstraint?.pointA;
+                        if (ancora) {
+                            const ca = Math.cos(novoAng), sa = Math.sin(novoAng);
+                            this.matter.body.setPosition(obj.body, {
+                                x: ancora.x - ox * ca + oy * sa,
+                                y: ancora.y - ox * sa - oy * ca
+                            });
+                        }
+                        this.matter.body.setAngle(obj.body, novoAng);
+                        if ((delta > limite && obj.body.angularVelocity > 0) || (delta < -limite && obj.body.angularVelocity < 0)) {
+                            this.matter.body.setAngularVelocity(obj.body, 0);
+                        }
                     }
                 }
             }
@@ -2760,7 +2771,7 @@ function atualizarObjetoExistente() {
             };
             // Reconstrói diretamente no mesmo objeto para manter a seleção atual.
             const w = dados.w, h = dados.h, angle = dados.angle;
-            const conf = { isStatic:false, label:'ambiente', ignoreGravity: dados.gravity === false, friction:0.8, frictionStatic:1.0, frictionAir:Math.max(0,dados.air||0.02), restitution:Math.max(0,dados.bounce||0.1), slop:0.02, collisionFilter:{category:CAT_AMBIENTE, mask:CAT_PLAYER|CAT_AMBIENTE} };
+            const conf = { isStatic:false, label:'ambiente', ignoreGravity: dados.gravity === false, friction:0.8, frictionStatic:1.0, frictionAir:Math.max(0,dados.air||0.02), restitution:Math.max(0,dados.bounce||0.1), collisionFilter:{category:CAT_AMBIENTE, mask:CAT_PLAYER|CAT_AMBIENTE} };
             const body = scene.matter.add.rectangle(px, py, w, h, conf); scene.matter.body.setMass(body, Math.max(0.1,dados.mass||6)); scene.matter.body.setAngle(body, angle);
             body.manuseavel=!!dados.manuseavel; body.naoAgarravel=!!dados.naoAgarravel; body.label='ambiente';
             const ox=dados.seesawPivotX, oy=dados.seesawPivotY, ca=Math.cos(angle), sa=Math.sin(angle);
@@ -3228,22 +3239,23 @@ function maoPodeAgarrarPoligonoCustomizado(obj, handX, handY, alcance = 16) {
 function maoPodeAgarrarGangorra(obj, handX, handY, alcance = 16) {
     if (!obj || obj.shape !== 'seesaw' || !obj.body) return false;
 
-    // A área agarrável deve ser derivada do MESMO polígono que o Matter usa
-    // para colisão. Isso evita qualquer divergência entre a prancha desenhada,
-    // o corpo físico e a região usada pela mão, inclusive durante a rotação.
-    const vertices = Array.isArray(obj.body.vertices) ? obj.body.vertices : [];
-    if (vertices.length < 3) return false;
-
-    const ponto = { x: Number(handX) || 0, y: Number(handY) || 0 };
-    if (Phaser.Physics.Matter.Matter.Vertices.contains(vertices, ponto)) return true;
-
-    const margem = Math.max(0, Number(alcance) || 0);
-    for (let i = 0; i < vertices.length; i++) {
-        const a = vertices[i];
-        const b = vertices[(i + 1) % vertices.length];
-        if (distanciaPontoSegmento(ponto.x, ponto.y, a.x, a.y, b.x, b.y) <= margem) return true;
-    }
-    return false;
+    // Usa a mesma forma retangular que cria o Body da gangorra, transformando
+    // o centro da mão para o referencial LOCAL da prancha. Assim a área de
+    // garra não depende da AABB do Matter nem de body.vertices alterados pelo
+    // solver/constraint: ela acompanha exatamente largura, espessura e rotação.
+    const cx = Number(obj.body.position?.x) || 0;
+    const cy = Number(obj.body.position?.y) || 0;
+    const ang = Number(obj.body.angle) || 0;
+    const dx = (Number(handX) || 0) - cx;
+    const dy = (Number(handY) || 0) - cy;
+    const c = Math.cos(ang), sn = Math.sin(ang);
+    const localX = dx * c + dy * sn;
+    const localY = -dx * sn + dy * c;
+    const hw = Math.max(1, Number(obj.w) || 0) / 2;
+    const hh = Math.max(1, Number(obj.h) || 0) / 2;
+    const foraX = Math.max(Math.abs(localX) - hw, 0);
+    const foraY = Math.max(Math.abs(localY) - hh, 0);
+    return Math.hypot(foraX, foraY) <= Math.max(0, Number(alcance) || 0);
 }
 
 // Teste geométrico exato para esferas.
