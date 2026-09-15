@@ -1609,9 +1609,15 @@ function normalizarAnguloRad(a) {
 // só impede que sua extremidade avance mais que ~9 px em um único passo.
 function limitarVelocidadeAngularGangorra(scene, obj) {
     if (!obj?.body || (obj.shape !== 'seesaw' && obj.shape !== 'launcherSeesaw')) return;
+
+    // Anti-tunneling sem matar o efeito de catapulta. A versão anterior limitava
+    // a ponta da prancha a ~9 px por passo, o que retirava energia demais do
+    // impacto. O corpo principal do jogador tem 44 px de diâmetro; permitir até
+    // ~18 px por passo ainda mantém sobreposição suficiente para o solver de
+    // colisão, mas deixa a gangorra atingir aproximadamente o dobro da velocidade.
     const raioMax = Math.max(20, Number(obj.w) || 240) / 2;
-    const deslocamentoMaxPorPasso = 9;
-    const limiteAngular = Math.min(0.10, deslocamentoMaxPorPasso / raioMax);
+    const deslocamentoMaxPorPasso = 18;
+    const limiteAngular = Math.min(0.18, deslocamentoMaxPorPasso / raioMax);
     const av = Number(obj.body.angularVelocity) || 0;
     if (Math.abs(av) > limiteAngular) {
         scene.matter.body.setAngularVelocity(obj.body, Math.sign(av) * limiteAngular);
