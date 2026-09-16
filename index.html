@@ -1251,6 +1251,13 @@ function executarTransicaoPortalComEstados(scene, portalOrigem, registros) {
             return false;
         }
 
+        // O tempo de reutilização vale nos dois sentidos de uso do sistema:
+        // o portal de origem entra em espera por ter sido usado para SAIR, e
+        // o portal de destino entra em espera por ter sido usado para ENTRAR.
+        // Neste ponto salaEmJogoAtual já é a sala de destino, portanto a chave
+        // gravada por registrarCooldownUsoPortal() pertence corretamente a ela.
+        registrarCooldownUsoPortal(portalDestino);
+
         const aplicarRegistro = (p, reg) => {
             if (!p || !reg) return;
             const destino = mapearPontoEntrePortais(reg.rel, portalDestino);
