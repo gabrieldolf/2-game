@@ -105,7 +105,7 @@
     </div>
     <div class="section">
         <h3 id="status-modo" style="color:#55ff55;">Criando novos objetos</h3>
-        <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option><option value="rope">Corda / Corrente</option><option value="seesaw">Gangorra</option><option value="launcherSeesaw">Gangorra Lançadora</option><option value="rotator">Pai Giratório / Eixo</option><option value="npc">NPC / Evento</option><option value="coin">Moeda</option><option value="triggerArea">Área Invisível / Evento</option><option value="portal">Portal / Conexão</option><option value="respawn1">Respawn Jogador 1</option><option value="respawn2">Respawn Jogador 2</option></select></div>
+        <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option><option value="rope">Corda / Corrente</option><option value="seesaw">Gangorra</option><option value="launcherSeesaw">Gangorra Lançadora</option><option value="rotator">Pai Giratório / Eixo</option><option value="decorImage">Imagem Decorativa</option><option value="decorSprite">Spritesheet Decorativo</option><option value="npc">NPC / Evento</option><option value="coin">Moeda</option><option value="triggerArea">Área Invisível / Evento</option><option value="portal">Portal / Conexão</option><option value="respawn1">Respawn Jogador 1</option><option value="respawn2">Respawn Jogador 2</option></select></div>
         <div id="painel-propriedades-comuns">
             <div class="prop-row" style="background:#27ae60; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Objeto Manuseável:</label><input type="checkbox" id="prop-manuseavel" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" style="background:#e74c3c; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Trava Agarrar (Não Agarrável):</label><input type="checkbox" id="prop-lock-grab" onchange="atualizarObjetoExistente()"></div>
@@ -131,6 +131,8 @@
                 <div style="color:#fff; font-weight:bold; margin-bottom:6px;">Área de Ativação (saída)</div>
                 <div class="prop-row"><label>Largura (px):</label><input type="number" id="prop-portal-area-w" value="100" min="20" step="10" onchange="atualizarObjetoExistente()"></div>
                 <div class="prop-row"><label>Altura (px):</label><input type="number" id="prop-portal-area-h" value="120" min="20" step="10" onchange="atualizarObjetoExistente()"></div>
+                <div class="prop-row"><label>Espera após uso (ms):</label><input type="number" id="prop-portal-reuse-delay" value="0" min="0" step="100" onchange="atualizarObjetoExistente()"></div>
+                <div style="font-size:10px;color:#d8f3f8;">0 = pode ser reutilizado imediatamente. O tempo é contado por portal, mesmo se a sala for descarregada.</div>
                 <div style="height:1px;background:rgba(255,255,255,.25);margin:7px 0;"></div>
                 <div style="color:#b8f5ff; font-weight:bold; margin-bottom:6px;">Área de Entrada (chegada)</div>
                 <div class="prop-row"><label>Centro X (local):</label><input type="number" id="prop-portal-entrada-x" value="0" step="10" onchange="atualizarObjetoExistente()"></div>
@@ -207,10 +209,26 @@
             <div class="prop-row"><label>Rotação ativa:</label><input type="checkbox" id="prop-rotator-active" checked onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row"><label>Sentido:</label><select id="prop-rotator-direction" onchange="atualizarObjetoExistente()"><option value="1">Horário</option><option value="-1">Anti-horário</option></select></div>
             <div class="prop-row"><label>Velocidade (°/s):</label><input type="number" id="prop-rotator-speed" value="30" min="0" max="1080" step="1" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Evento para ativar:</label><input type="text" id="prop-rotator-event-on" value="" placeholder="ex: ligar_eixo_1" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Evento para desativar:</label><input type="text" id="prop-rotator-event-off" value="" placeholder="ex: desligar_eixo_1" onchange="atualizarObjetoExistente()"></div>
             <button id="btn-rotator-link" style="background:#16a085;" onclick="alternarModoVincularFilhosRotator()">Vincular / Desvincular Filhos</button>
             <button style="background:#7f8c8d;" onclick="limparFilhosRotatorSelecionado()">Remover todos os vínculos</button>
             <div id="status-filhos-rotator" style="font-size:10px;color:#d8f3f8;line-height:1.35;">0 objeto(s) vinculado(s).</div>
             <p style="font-size:10px;color:#d8f3f8;margin:2px 0 0;">Selecione este objeto e ative “Vincular / Desvincular Filhos”. Depois clique nos objetos da sala. O eixo permanece fixo e invisível durante a gameplay.</p>
+        </div>
+        <div id="painel-propriedades-decor" style="display:none; background:#273746; padding:9px; border:2px solid #af7ac5; border-radius:6px; margin-top:7px; flex-direction:column; gap:7px;">
+            <h3 style="color:#eadcf2;font-weight:bold;margin:0;">Imagem / Spritesheet Decorativo</h3>
+            <div class="prop-row"><label>Arquivo / URL:</label><input type="text" id="prop-decor-url" value="" placeholder="assets/decoracao.png" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Escala:</label><input type="number" id="prop-decor-scale" value="1" min="0.01" max="20" step="0.1" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Camada:</label><select id="prop-decor-layer" onchange="atualizarObjetoExistente()"><option value="back">Atrás dos objetos</option><option value="front">Na frente dos objetos</option></select></div>
+            <div id="painel-decor-sprite" style="display:none; flex-direction:column; gap:6px;">
+                <div class="prop-row"><label>Largura frame:</label><input type="number" id="prop-decor-frame-w" value="64" min="1" onchange="atualizarObjetoExistente()"></div>
+                <div class="prop-row"><label>Altura frame:</label><input type="number" id="prop-decor-frame-h" value="64" min="1" onchange="atualizarObjetoExistente()"></div>
+                <div class="prop-row"><label>Frame inicial:</label><input type="number" id="prop-decor-start" value="0" min="0" onchange="atualizarObjetoExistente()"></div>
+                <div class="prop-row"><label>Frame final:</label><input type="number" id="prop-decor-end" value="0" min="0" onchange="atualizarObjetoExistente()"></div>
+                <div class="prop-row"><label>FPS:</label><input type="number" id="prop-decor-fps" value="8" min="1" max="120" onchange="atualizarObjetoExistente()"></div>
+            </div>
+            <div style="font-size:10px;color:#d7bde2;">Puramente visual: não possui colisão nem pode ser agarrado. Use caminhos relativos, por exemplo assets/fundo.png.</div>
         </div>
         <div id="painel-propriedades-trigger" style="display:none; background:#3b2f63; padding:9px; border:2px solid #a78bfa; border-radius:6px; margin-top:7px; flex-direction:column; gap:7px;">
             <h3 style="color:#ddd6fe; font-weight:bold; margin:0;">Área Invisível / Evento</h3>
@@ -294,11 +312,13 @@ function salvarEstadoNarrativa(){try{sessionStorage.setItem(CHAVE_ESTADO_NARRATI
 function jogadorPossuiItem(itemId){return !!estadoNarrativa.itens[String(itemId||'')];}
 function darItemAoJogador(itemId,quantidade=1){const id=String(itemId||'').trim();if(!id)return;estadoNarrativa.itens[id]=(Number(estadoNarrativa.itens[id])||0)+Math.max(1,Number(quantidade)||1);salvarEstadoNarrativa();}
 function ativarEventoJogo(eventoId){const id=String(eventoId||'').trim();if(!id)return;estadoNarrativa.eventos[id]=true;salvarEstadoNarrativa();window.dispatchEvent(new CustomEvent('metroidvania-evento',{detail:{id}}));}
+window.addEventListener('metroidvania-evento', ev=>{ const id=String(ev?.detail?.id||'').trim(); if(!id)return; listaObjetosEditaveis.forEach(o=>{ if(!o||o.shape!=='rotator')return; if(String(o.rotatorEventoAtivar||'').trim()===id)o.rotatorAtivo=true; if(String(o.rotatorEventoDesativar||'').trim()===id)o.rotatorAtivo=false; }); });
 
 let modoDebugAtivo = false;
 let transicaoPortalEmAndamento = false;
 let ultimoPortalSemDestinoAvisado = '';
 let estadoTravessiaPortal = null;
+const cooldownPortaisPorChave = {};
 const MARGEM_SAIDA_PORTAL = 28;
 let alcanceGarraTemporarioAte = 0;
 function obterAlcanceGarraAtual() { return performance.now() < alcanceGarraTemporarioAte ? 19 : 16; }
@@ -506,6 +526,7 @@ function serializarObjetoDaSala(obj) {
         maxRot: Number(obj.maxRot) || 0
     };
 
+    if (obj.shape === 'decorImage' || obj.shape === 'decorSprite') { base.x=Number(obj.visualX)||0;base.y=Number(obj.visualY)||0;base.decorUrl=obj.decorUrl||'';base.decorScale=Math.max(.01,Number(obj.decorScale)||1);base.decorLayer=obj.decorLayer==='front'?'front':'back';base.decorFrameW=Math.max(1,Number(obj.decorFrameW)||64);base.decorFrameH=Math.max(1,Number(obj.decorFrameH)||64);base.decorStart=Math.max(0,Number(obj.decorStart)||0);base.decorEnd=Math.max(base.decorStart,Number(obj.decorEnd)||0);base.decorFps=Math.max(1,Number(obj.decorFps)||8);return base; }
     if (obj.shape === 'npc') { base.x=Number(obj.visualX)||0;base.y=Number(obj.visualY)||0;base.npcId=obj.npcId||'';base.npcNome=obj.npcNome||'NPC';base.npcSpritesheetUrl=obj.npcSpritesheetUrl||'';base.npcFrameW=Math.max(1,Number(obj.npcFrameW)||64);base.npcFrameH=Math.max(1,Number(obj.npcFrameH)||64);base.npcEscala=Math.max(.1,Number(obj.npcEscala)||1);base.npcRaioDialogo=Math.max(20,Number(obj.npcRaioDialogo)||180);base.npcEstadoInicial=obj.npcEstadoInicial||'inicial';base.npcEstados=Array.isArray(obj.npcEstados)?JSON.parse(JSON.stringify(obj.npcEstados)):[];return base; }
     if (obj.shape === 'coin') { base.x=obj.body?Number(obj.body.position.x)||0:Number(obj.visualX)||0;base.y=obj.body?Number(obj.body.position.y)||0:Number(obj.visualY)||0;base.coinValue=Math.max(1,Number(obj.coinValue)||1);base.coinId=obj.coinId||garantirIdObjetoCena(obj);return base; }
     if (obj.shape === 'triggerArea') {
@@ -525,6 +546,8 @@ function serializarObjetoDaSala(obj) {
         base.rotatorDirecao = Number(obj.rotatorDirecao) < 0 ? -1 : 1;
         base.rotatorVelocidadeDeg = Math.max(0, Number(obj.rotatorVelocidadeDeg) || 0);
         base.rotatorAnguloAtual = Number(obj.rotatorAnguloAtual) || 0;
+        base.rotatorEventoAtivar = String(obj.rotatorEventoAtivar || '');
+        base.rotatorEventoDesativar = String(obj.rotatorEventoDesativar || '');
         base.filhosIds = Array.isArray(obj.filhosIds) ? [...new Set(obj.filhosIds.filter(Boolean))] : [];
         base.vinculosFilhos = obj.vinculosFilhos && typeof obj.vinculosFilhos === 'object'
             ? JSON.parse(JSON.stringify(obj.vinculosFilhos))
@@ -540,6 +563,7 @@ function serializarObjetoDaSala(obj) {
         base.portalDestinoPonto = obj.portalDestinoPonto || '';
         base.portalAreaW = obj.shape === 'portal' ? Math.max(20, Number(obj.portalAreaW) || 100) : null;
         base.portalAreaH = obj.shape === 'portal' ? Math.max(20, Number(obj.portalAreaH) || 120) : null;
+        base.portalReuseDelayMs = obj.shape === 'portal' ? Math.max(0, Number(obj.portalReuseDelayMs) || 0) : null;
         base.portalEntradaX = obj.shape === 'portal' ? Number(obj.portalEntradaX ?? obj.visualX ?? 0) : null;
         base.portalEntradaY = obj.shape === 'portal' ? Number(obj.portalEntradaY ?? obj.visualY ?? 0) : null;
         base.portalEntradaLocalX = obj.shape === 'portal' ? Number((obj.portalEntradaX ?? obj.visualX ?? 0) - (obj.visualX ?? 0)) : null;
@@ -662,6 +686,7 @@ function objetoNoPontoEditor(x, y, ignorar=null) {
             if (obj.shape==='polygon') hit=maoPodeAgarrarPoligonoCustomizado(obj,x,y,0);
             else if ((obj.shape==='seesaw'||obj.shape==='launcherSeesaw')) hit=maoPodeAgarrarGangorra(obj,x,y,0);
             else hit=Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices,{x,y});
+        } else if (obj.shape==='decorImage'||obj.shape==='decorSprite') { const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0,hw=Math.max(12,(Number(obj.decorFrameW)||64)*(Number(obj.decorScale)||1)/2),hh=Math.max(12,(Number(obj.decorFrameH)||64)*(Number(obj.decorScale)||1)/2);hit=Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh;
         } else if (obj.shape==='npc') {
             const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0,hw=Math.max(20,(Number(obj.npcFrameW)||64)*(Number(obj.npcEscala)||1)/2),hh=Math.max(20,(Number(obj.npcFrameH)||64)*(Number(obj.npcEscala)||1)/2); hit=Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh;
         } else if (obj.shape==='rotator') hit=Math.hypot(x-(Number(obj.visualX)||0),y-(Number(obj.visualY)||0))<=24;
@@ -706,6 +731,7 @@ function moverObjetoCenaPara(scene, obj, x, y) {
         if (obj.shape==='triggerArea') { obj.triggerDestX=Number(obj.triggerDestX ?? atualX)+dx; obj.triggerDestY=Number(obj.triggerDestY ?? atualY)+dy; }
         obj.visualX=x; obj.visualY=y;
         if(obj.npcSprite) obj.npcSprite.setPosition(x,y);
+        if(obj.decorSprite) obj.decorSprite.setPosition(x,y);
     }
     obj.visualX=x; obj.visualY=y; obj.posicaoTravadaX=x; obj.posicaoTravadaY=y;
     atualizarVinculosRotatorAposMoverObjeto(obj);
@@ -1050,6 +1076,9 @@ function resolverPortalDeEntradaRuntime(destinoPonto, contextoOrigem = null) {
     return null;
 }
 
+function chaveCooldownPortal(portal){return String(salaEmJogoAtual||salaAtual?.id||'')+'::'+obterIdRuntimePortal(portal);}
+function portalDisponivelParaUso(portal){const ate=Number(cooldownPortaisPorChave[chaveCooldownPortal(portal)])||0;return performance.now()>=ate;}
+function registrarCooldownUsoPortal(portal){const ms=Math.max(0,Number(portal?.portalReuseDelayMs)||0);if(ms>0)cooldownPortaisPorChave[chaveCooldownPortal(portal)]=performance.now()+ms;}
 function obterIdRuntimePortal(portal) {
     if (!portal) return '';
     return String(portal.idPersistente || portal.nomePonto || `${portal.visualX}:${portal.visualY}`);
@@ -1194,7 +1223,7 @@ function respawnCooperativoPorConflitoDePortal(scene) {
 }
 
 function executarTransicaoPortalComEstados(scene, portalOrigem, registros) {
-    if (!portalOrigem || transicaoPortalEmAndamento) return false;
+    if (!portalOrigem || transicaoPortalEmAndamento || !portalDisponivelParaUso(portalOrigem)) return false;
     const destinoSala = normalizarIdSala(portalOrigem.portalDestinoSala || '');
     const destinoPonto = String(portalOrigem.portalDestinoPonto || '').trim();
     const dadosDestino = bancoDeSalas[destinoSala];
@@ -1205,6 +1234,7 @@ function executarTransicaoPortalComEstados(scene, portalOrigem, registros) {
         return false;
     }
 
+    registrarCooldownUsoPortal(portalOrigem);
     transicaoPortalEmAndamento = true;
     try {
         if (salaEmJogoAtual) capturarEstadoSessaoDaSalaAtual();
@@ -1279,6 +1309,7 @@ function verificarPortaisDaSala(scene) {
     if (jogadoresAtivos.length === 1) {
         const p = jogadoresAtivos[0];
         for (const portal of portais) {
+            if (!portalDisponivelParaUso(portal)) continue;
             if (!jogadorDentroDaAreaPortal(p, portal)) continue;
             const reg = { rel: obterCoordenadaRelativaNoPortal(p, portal), estado: capturarEstadoFisicoJogador(p) };
             const regs = {}; regs[p.id] = reg;
@@ -1303,6 +1334,7 @@ function verificarPortaisDaSala(scene) {
     }
 
     for (const portal of portais) {
+        if (!portalDisponivelParaUso(portal)) continue;
         for (const p of jogadoresAtivos) {
             if (!jogadorDentroDaAreaPortal(p, portal)) continue;
 
@@ -1499,6 +1531,7 @@ function removerCorposDaSalaAtual(scene) {
             scene.matter.world.remove(obj.body);
         }
         if (obj.npcSprite) { obj.npcSprite.destroy(); obj.npcSprite = null; }
+        if (obj.decorSprite) { obj.decorSprite.destroy(); obj.decorSprite = null; }
         if (obj.gfx) obj.gfx.destroy();
     });
     listaObjetosEditaveis = [];
@@ -1509,6 +1542,7 @@ function removerCorposDaSalaAtual(scene) {
 function adicionarObjetoSerializado(scene, dados) {
     if (!dados || !dados.shape) return;
 
+    if (dados.shape === 'decorImage' || dados.shape === 'decorSprite') { const x=Number(dados.x)||0,y=Number(dados.y)||0; const obj={idObjeto:dados.idObjeto||gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(7),shape:dados.shape,w:Math.max(1,Number(dados.decorFrameW)||64),h:Math.max(1,Number(dados.decorFrameH)||64),visualX:x,visualY:y,posicaoTravadaX:x,posicaoTravadaY:y,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,decorUrl:String(dados.decorUrl||''),decorScale:Math.max(.01,Number(dados.decorScale)||1),decorLayer:datosLayer(dados.decorLayer),decorFrameW:Math.max(1,Number(dados.decorFrameW)||64),decorFrameH:Math.max(1,Number(dados.decorFrameH)||64),decorStart:Math.max(0,Number(dados.decorStart)||0),decorEnd:Math.max(0,Number(dados.decorEnd)||0),decorFps:Math.max(1,Number(dados.decorFps)||8),decorSprite:null}; listaObjetosEditaveis.push(obj); prepararDecorativo(scene,obj); return; }
     if (dados.shape === 'npc') { const x=Number(dados.x)||0,y=Number(dados.y)||0;const obj={idObjeto:dados.idObjeto||gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(8),shape:'npc',w:Math.max(1,Number(dados.npcFrameW)||64),h:Math.max(1,Number(dados.npcFrameH)||64),visualX:x,visualY:y,posicaoTravadaX:x,posicaoTravadaY:y,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,npcId:String(dados.npcId||dados.idObjeto||'npc'),npcNome:String(dados.npcNome||'NPC'),npcSpritesheetUrl:String(dados.npcSpritesheetUrl||''),npcFrameW:Math.max(1,Number(dados.npcFrameW)||64),npcFrameH:Math.max(1,Number(dados.npcFrameH)||64),npcEscala:Math.max(.1,Number(dados.npcEscala)||1),npcRaioDialogo:Math.max(20,Number(dados.npcRaioDialogo)||180),npcEstadoInicial:String(dados.npcEstadoInicial||'inicial'),npcEstados:Array.isArray(dados.npcEstados)?JSON.parse(JSON.stringify(dados.npcEstados)):[],npcSprite:null};listaObjetosEditaveis.push(obj);prepararSpriteNPC(scene,obj);return; }
     if (dados.shape === 'coin') { const x=Number(dados.x)||0,y=Number(dados.y)||0,id=String(dados.coinId||dados.idObjeto||gerarIdObjetoCena());const body=scene.matter.add.circle(x,y,16,{isStatic:true,isSensor:true,label:'moeda',collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER}});body.naoAgarravel=true;const obj={idObjeto:dados.idObjeto||gerarIdObjetoCena(),body,gfx:scene.add.graphics().setDepth(5),shape:'coin',w:16,h:32,visualX:x,visualY:y,posicaoTravadaX:x,posicaoTravadaY:y,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,coinValue:Math.max(1,Number(dados.coinValue)||1),coinId:id,coinColetada:!!estadoNarrativa.moedasColetadas[id]};body.objetoEditavelRef=obj;if(obj.coinColetada){scene.matter.world.remove(body);obj.body=null;}listaObjetosEditaveis.push(obj);return; }
 
@@ -1535,6 +1569,7 @@ function adicionarObjetoSerializado(scene, dados) {
             manuseavel: false, naoAgarravel: true, isStatic: true, idPersistente: dados.idPersistente || null, persistirSessao: false,
             rotatorAtivo: dados.rotatorAtivo !== false, rotatorDirecao: Number(dados.rotatorDirecao) < 0 ? -1 : 1,
             rotatorVelocidadeDeg: Math.max(0, Number(dados.rotatorVelocidadeDeg) || 0), rotatorAnguloAtual: Number(dados.rotatorAnguloAtual) || 0,
+            rotatorEventoAtivar:String(dados.rotatorEventoAtivar||''), rotatorEventoDesativar:String(dados.rotatorEventoDesativar||''),
             filhosIds: Array.isArray(dados.filhosIds) ? [...new Set(dados.filhosIds.filter(Boolean))] : [],
             vinculosFilhos: dados.vinculosFilhos && typeof dados.vinculosFilhos === 'object' ? JSON.parse(JSON.stringify(dados.vinculosFilhos)) : {}
         });
@@ -1564,6 +1599,7 @@ function adicionarObjetoSerializado(scene, dados) {
             portalDestinoPonto: dados.portalDestinoPonto || '',
             portalAreaW: dados.shape === 'portal' ? Math.max(20, Number(dados.portalAreaW) || 100) : null,
             portalAreaH: dados.shape === 'portal' ? Math.max(20, Number(dados.portalAreaH) || 120) : null,
+            portalReuseDelayMs: dados.shape === 'portal' ? Math.max(0, Number(dados.portalReuseDelayMs) || 0) : 0,
             portalEntradaX: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaLocalX)) ? x + Number(dados.portalEntradaLocalX) : Number(dados.portalEntradaX ?? x)) : null,
             portalEntradaY: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaLocalY)) ? y + Number(dados.portalEntradaLocalY) : Number(dados.portalEntradaY ?? y)) : null,
             portalEntradaW: dados.shape === 'portal' ? Math.max(20, Number(dados.portalEntradaW) || Number(dados.portalAreaW) || 100) : null,
@@ -2429,6 +2465,7 @@ function atualizarInterfaceForma() {
     document.getElementById('painel-propriedades-gangorra').style.display = gangorra ? 'flex' : 'none';
     document.getElementById('painel-propriedades-launcher').style.display = gangorraLancadora ? 'flex' : 'none';
     document.getElementById('painel-propriedades-rotator').style.display = rotator ? 'flex' : 'none';
+    const decor = shape === 'decorImage' || shape === 'decorSprite'; document.getElementById('painel-propriedades-decor').style.display = decor ? 'flex' : 'none'; document.getElementById('painel-decor-sprite').style.display = shape === 'decorSprite' ? 'flex' : 'none';
     document.getElementById('painel-propriedades-npc').style.display = npc ? 'flex' : 'none';
     document.getElementById('painel-propriedades-moeda').style.display = moeda ? 'flex' : 'none';
     document.getElementById('painel-propriedades-trigger').style.display = triggerArea ? 'flex' : 'none';
@@ -2467,6 +2504,7 @@ function extrairCamposPainel() {
         portalDestinoPonto: document.getElementById('prop-portal-destino-ponto').value.trim(),
         portalAreaW: Math.max(20, parseFloat(document.getElementById('prop-portal-area-w').value) || 100),
         portalAreaH: Math.max(20, parseFloat(document.getElementById('prop-portal-area-h').value) || 120),
+        portalReuseDelayMs: Math.max(0, parseFloat(document.getElementById('prop-portal-reuse-delay')?.value) || 0),
         portalEntradaX: parseFloat(document.getElementById('prop-portal-entrada-x').value),
         portalEntradaY: parseFloat(document.getElementById('prop-portal-entrada-y').value),
         portalEntradaW: Math.max(20, parseFloat(document.getElementById('prop-portal-entrada-w').value) || 100),
@@ -2482,12 +2520,15 @@ function extrairCamposPainel() {
         rotatorAtivo: !!document.getElementById('prop-rotator-active')?.checked,
         rotatorDirecao: Number(document.getElementById('prop-rotator-direction')?.value) < 0 ? -1 : 1,
         rotatorVelocidadeDeg: Math.max(0, parseFloat(document.getElementById('prop-rotator-speed')?.value) || 0),
+        rotatorEventoAtivar:(document.getElementById('prop-rotator-event-on')?.value||'').trim(), rotatorEventoDesativar:(document.getElementById('prop-rotator-event-off')?.value||'').trim(),
+        decorUrl:(document.getElementById('prop-decor-url')?.value||'').trim(),decorScale:Math.max(.01,parseFloat(document.getElementById('prop-decor-scale')?.value)||1),decorLayer:datosLayer(document.getElementById('prop-decor-layer')?.value),decorFrameW:Math.max(1,parseInt(document.getElementById('prop-decor-frame-w')?.value)||64),decorFrameH:Math.max(1,parseInt(document.getElementById('prop-decor-frame-h')?.value)||64),decorStart:Math.max(0,parseInt(document.getElementById('prop-decor-start')?.value)||0),decorEnd:Math.max(0,parseInt(document.getElementById('prop-decor-end')?.value)||0),decorFps:Math.max(1,parseFloat(document.getElementById('prop-decor-fps')?.value)||8),
         npcId:(document.getElementById('prop-npc-id')?.value||'npc').trim(),npcNome:(document.getElementById('prop-npc-name')?.value||'NPC').trim(),npcSpritesheetUrl:(document.getElementById('prop-npc-sheet-url')?.value||'').trim(),npcFrameW:Math.max(1,parseInt(document.getElementById('prop-npc-frame-w')?.value)||64),npcFrameH:Math.max(1,parseInt(document.getElementById('prop-npc-frame-h')?.value)||64),npcEscala:Math.max(.1,parseFloat(document.getElementById('prop-npc-scale')?.value)||1),npcRaioDialogo:Math.max(20,parseFloat(document.getElementById('prop-npc-radius')?.value)||180),npcEstadoInicial:(document.getElementById('prop-npc-initial-state')?.value||'inicial').trim(),npcEstados:parsearEstadosNPCDoPainel(),coinValue:Math.max(1,parseInt(document.getElementById('prop-coin-value')?.value)||1),coinId:(document.getElementById('prop-coin-id')?.value||'').trim(),triggerW:Math.max(20,parseFloat(document.getElementById('prop-trigger-w')?.value)||160),triggerH:Math.max(20,parseFloat(document.getElementById('prop-trigger-h')?.value)||120),triggerTargetId:(document.getElementById('prop-trigger-target')?.value||'').trim(),triggerDestX:parseFloat(document.getElementById('prop-trigger-dest-x')?.value)||0,triggerDestY:parseFloat(document.getElementById('prop-trigger-dest-y')?.value)||0
     };
 }
 
 function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
+    if(c.shape==='decorImage'||c.shape==='decorSprite'){const obj={idObjeto:gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(7),shape:c.shape,w:c.decorFrameW,h:c.decorFrameH,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,decorUrl:c.decorUrl,decorScale:c.decorScale,decorLayer:c.decorLayer,decorFrameW:c.decorFrameW,decorFrameH:c.decorFrameH,decorStart:c.decorStart,decorEnd:c.decorEnd,decorFps:c.decorFps,decorSprite:null};listaObjetosEditaveis.push(obj);prepararDecorativo(scene,obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
     if(c.shape==='triggerArea'){const obj={idObjeto:gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(7),shape:'triggerArea',w:c.triggerW,h:c.triggerH,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,triggerW:c.triggerW,triggerH:c.triggerH,triggerTargetId:'',triggerDestX:ax+220,triggerDestY:ay,triggerPlayersInside:{}};listaObjetosEditaveis.push(obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
     if(c.shape==='npc'){const obj={idObjeto:gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(8),shape:'npc',w:c.npcFrameW,h:c.npcFrameH,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,npcId:c.npcId||('npc_'+Date.now()),npcNome:c.npcNome||'NPC',npcSpritesheetUrl:c.npcSpritesheetUrl,npcFrameW:c.npcFrameW,npcFrameH:c.npcFrameH,npcEscala:c.npcEscala,npcRaioDialogo:c.npcRaioDialogo,npcEstadoInicial:c.npcEstadoInicial||'inicial',npcEstados:c.npcEstados,npcSprite:null};listaObjetosEditaveis.push(obj);prepararSpriteNPC(scene,obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
     if(c.shape==='coin'){const id=c.coinId||('moeda_'+Date.now()+'_'+Math.floor(Math.random()*99999));const body=scene.matter.add.circle(ax,ay,16,{isStatic:true,isSensor:true,label:'moeda',collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER}});body.naoAgarravel=true;const obj={idObjeto:gerarIdObjetoCena(),body,gfx:scene.add.graphics().setDepth(5),shape:'coin',w:16,h:32,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,coinValue:c.coinValue,coinId:id,coinColetada:false};body.objetoEditavelRef=obj;listaObjetosEditaveis.push(obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
@@ -2498,7 +2539,7 @@ function executarCriacaoObjeto(scene, x, y) {
             gravity: false, lockPos: true, lockRot: true, mass: 0, air: 0, bounce: 0, maxVel: 0, maxRot: 0,
             manuseavel: false, naoAgarravel: true, isStatic: true, idPersistente: null, persistirSessao: false,
             rotatorAtivo: c.rotatorAtivo, rotatorDirecao: c.rotatorDirecao, rotatorVelocidadeDeg: c.rotatorVelocidadeDeg,
-            rotatorAnguloAtual: 0, filhosIds: [], vinculosFilhos: {}
+            rotatorAnguloAtual: 0, rotatorEventoAtivar:c.rotatorEventoAtivar, rotatorEventoDesativar:c.rotatorEventoDesativar, filhosIds: [], vinculosFilhos: {}
         };
         listaObjetosEditaveis.push(obj); selecionarObjetoDoEditor(obj); marcarSalaComoAlterada(); return;
     }
@@ -2513,6 +2554,7 @@ function executarCriacaoObjeto(scene, x, y) {
             portalDestinoSala: c.portalDestinoSala, portalDestinoPonto: c.portalDestinoPonto,
             portalAreaW: c.shape === 'portal' ? c.portalAreaW : null,
             portalAreaH: c.shape === 'portal' ? c.portalAreaH : null,
+            portalReuseDelayMs: c.shape === 'portal' ? c.portalReuseDelayMs : 0,
             portalEntradaX: c.shape === 'portal' ? ax + (Number.isFinite(c.portalEntradaX) ? c.portalEntradaX : 0) : null,
             portalEntradaY: c.shape === 'portal' ? ay + (Number.isFinite(c.portalEntradaY) ? c.portalEntradaY : 0) : null,
             portalEntradaW: c.shape === 'portal' ? c.portalEntradaW : null,
@@ -2674,18 +2716,21 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('prop-portal-destino-ponto').value = obj.portalDestinoPonto || '';
     document.getElementById('prop-portal-area-w').value = Math.max(20, Number(obj.portalAreaW) || 100);
     document.getElementById('prop-portal-area-h').value = Math.max(20, Number(obj.portalAreaH) || 120);
+    document.getElementById('prop-portal-reuse-delay').value = Math.max(0, Number(obj.portalReuseDelayMs) || 0);
     document.getElementById('prop-portal-entrada-x').value = Number((obj.portalEntradaX ?? obj.visualX ?? 0) - (obj.visualX ?? 0));
     document.getElementById('prop-portal-entrada-y').value = Number((obj.portalEntradaY ?? obj.visualY ?? 0) - (obj.visualY ?? 0));
     document.getElementById('prop-portal-entrada-w').value = Math.max(20, Number(obj.portalEntradaW) || Number(obj.portalAreaW) || 100);
     document.getElementById('prop-portal-entrada-h').value = Math.max(20, Number(obj.portalEntradaH) || Number(obj.portalAreaH) || 120);
     document.getElementById('prop-nome-ponto').value = obj.nomePonto || '';
-    if(obj.shape==='npc'){document.getElementById('prop-npc-id').value=obj.npcId||'';document.getElementById('prop-npc-name').value=obj.npcNome||'NPC';document.getElementById('prop-npc-sheet-url').value=obj.npcSpritesheetUrl||'';document.getElementById('prop-npc-frame-w').value=obj.npcFrameW||64;document.getElementById('prop-npc-frame-h').value=obj.npcFrameH||64;document.getElementById('prop-npc-scale').value=obj.npcEscala||1;document.getElementById('prop-npc-radius').value=obj.npcRaioDialogo||180;document.getElementById('prop-npc-initial-state').value=obj.npcEstadoInicial||'inicial';document.getElementById('prop-npc-states').value=JSON.stringify(obj.npcEstados||[],null,2);}
+    if(obj.shape==='decorImage'||obj.shape==='decorSprite'){document.getElementById('prop-decor-url').value=obj.decorUrl||'';document.getElementById('prop-decor-scale').value=obj.decorScale||1;document.getElementById('prop-decor-layer').value=datosLayer(obj.decorLayer);document.getElementById('prop-decor-frame-w').value=obj.decorFrameW||64;document.getElementById('prop-decor-frame-h').value=obj.decorFrameH||64;document.getElementById('prop-decor-start').value=obj.decorStart||0;document.getElementById('prop-decor-end').value=obj.decorEnd||0;document.getElementById('prop-decor-fps').value=obj.decorFps||8;}
+    else if(obj.shape==='npc'){document.getElementById('prop-npc-id').value=obj.npcId||'';document.getElementById('prop-npc-name').value=obj.npcNome||'NPC';document.getElementById('prop-npc-sheet-url').value=obj.npcSpritesheetUrl||'';document.getElementById('prop-npc-frame-w').value=obj.npcFrameW||64;document.getElementById('prop-npc-frame-h').value=obj.npcFrameH||64;document.getElementById('prop-npc-scale').value=obj.npcEscala||1;document.getElementById('prop-npc-radius').value=obj.npcRaioDialogo||180;document.getElementById('prop-npc-initial-state').value=obj.npcEstadoInicial||'inicial';document.getElementById('prop-npc-states').value=JSON.stringify(obj.npcEstados||[],null,2);}
     else if(obj.shape==='coin'){document.getElementById('prop-coin-value').value=obj.coinValue||1;document.getElementById('prop-coin-id').value=obj.coinId||'';}
     else if(obj.shape==='triggerArea'){document.getElementById('prop-trigger-w').value=Math.max(20,Number(obj.triggerW)||160);document.getElementById('prop-trigger-h').value=Math.max(20,Number(obj.triggerH)||120);document.getElementById('prop-trigger-target').value=obj.triggerTargetId||'';document.getElementById('prop-trigger-dest-x').value=Number(obj.triggerDestX)||0;document.getElementById('prop-trigger-dest-y').value=Number(obj.triggerDestY)||0;atualizarStatusTrigger();}
     if (obj.shape === 'rotator') {
         document.getElementById('prop-rotator-active').checked = obj.rotatorAtivo !== false;
         document.getElementById('prop-rotator-direction').value = Number(obj.rotatorDirecao) < 0 ? '-1' : '1';
         document.getElementById('prop-rotator-speed').value = Math.max(0, Number(obj.rotatorVelocidadeDeg) || 0);
+        document.getElementById('prop-rotator-event-on').value = obj.rotatorEventoAtivar || ''; document.getElementById('prop-rotator-event-off').value = obj.rotatorEventoDesativar || '';
         atualizarStatusFilhosRotator();
     }
     else if ((obj.shape === 'seesaw' || obj.shape === 'launcherSeesaw')) {
@@ -2728,6 +2773,7 @@ function atualizarObjetoExistente() {
     let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
     let px = obj.body ? obj.body.position.x : obj.visualX; let py = obj.body ? obj.body.position.y : obj.visualY;
     let anguloSalvo = obj.body ? obj.body.angle : 0;
+    if((obj.shape==='decorImage'||obj.shape==='decorSprite')&&c.shape===obj.shape){const reload=String(obj.decorUrl||'')!==String(c.decorUrl||'')||Number(obj.decorFrameW)!==Number(c.decorFrameW)||Number(obj.decorFrameH)!==Number(c.decorFrameH);obj.decorUrl=c.decorUrl;obj.decorScale=c.decorScale;obj.decorLayer=c.decorLayer;obj.decorFrameW=c.decorFrameW;obj.decorFrameH=c.decorFrameH;obj.decorStart=c.decorStart;obj.decorEnd=c.decorEnd;obj.decorFps=c.decorFps;obj.w=c.decorFrameW;obj.h=c.decorFrameH;if(reload)prepararDecorativo(scene,obj,true);else if(obj.decorSprite){obj.decorSprite.setScale(obj.decorScale).setDepth(profundidadeDecor(obj));if(obj.shape==='decorSprite')prepararDecorativo(scene,obj,true);}marcarSalaComoAlterada();return;}
     if(obj.shape==='npc'&&c.shape==='npc'){
         // Alterações puramente visuais (como Escala visual) não devem descarregar
         // a textura que o sprite está usando. Remover uma textura durante o frame
@@ -2750,7 +2796,8 @@ function atualizarObjetoExistente() {
     }
     if(obj.shape==='coin'&&c.shape==='coin'){obj.coinValue=c.coinValue;obj.coinId=c.coinId||obj.coinId||garantirIdObjetoCena(obj);marcarSalaComoAlterada();return;}
     if(obj.shape==='triggerArea'&&c.shape==='triggerArea'){obj.triggerW=c.triggerW;obj.triggerH=c.triggerH;obj.w=c.triggerW;obj.h=c.triggerH;obj.triggerTargetId=c.triggerTargetId||obj.triggerTargetId||'';obj.triggerDestX=c.triggerDestX;obj.triggerDestY=c.triggerDestY;marcarSalaComoAlterada();atualizarStatusTrigger();return;}
-    if((obj.shape==='npc'||obj.shape==='coin'||obj.shape==='triggerArea')&&c.shape!==obj.shape){if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}if(obj.body){scene.matter.world.remove(obj.body);obj.body=null;}}
+    if((obj.shape==='npc'||obj.shape==='coin'||obj.shape==='triggerArea'||obj.shape==='decorImage'||obj.shape==='decorSprite')&&c.shape!==obj.shape){if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}if(obj.decorSprite){obj.decorSprite.destroy();obj.decorSprite=null;}if(obj.body){scene.matter.world.remove(obj.body);obj.body=null;}}
+    if((c.shape==='decorImage'||c.shape==='decorSprite')&&obj.shape!==c.shape){if(obj.body){scene.matter.world.remove(obj.body);obj.body=null;}Object.assign(obj,{shape:c.shape,body:null,w:c.decorFrameW,h:c.decorFrameH,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,decorUrl:c.decorUrl,decorScale:c.decorScale,decorLayer:c.decorLayer,decorFrameW:c.decorFrameW,decorFrameH:c.decorFrameH,decorStart:c.decorStart,decorEnd:c.decorEnd,decorFps:c.decorFps,decorSprite:null});prepararDecorativo(scene,obj,true);marcarSalaComoAlterada();return;}
     if(c.shape==='npc'&&obj.shape!=='npc'){Object.assign(obj,{shape:'npc',body:null,w:c.npcFrameW,h:c.npcFrameH,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,npcId:c.npcId||('npc_'+Date.now()),npcNome:c.npcNome,npcSpritesheetUrl:c.npcSpritesheetUrl,npcFrameW:c.npcFrameW,npcFrameH:c.npcFrameH,npcEscala:c.npcEscala,npcRaioDialogo:c.npcRaioDialogo,npcEstadoInicial:c.npcEstadoInicial,npcEstados:c.npcEstados,npcSprite:null});prepararSpriteNPC(scene,obj,true);marcarSalaComoAlterada();return;}
     if(c.shape==='coin'&&obj.shape!=='coin'){const body=scene.matter.add.circle(px,py,16,{isStatic:true,isSensor:true,label:'moeda',collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER}});body.naoAgarravel=true;Object.assign(obj,{shape:'coin',body,w:16,h:32,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,coinValue:c.coinValue,coinId:c.coinId||('moeda_'+Date.now()),coinColetada:false});body.objetoEditavelRef=obj;marcarSalaComoAlterada();return;}
     if(c.shape==='triggerArea'&&obj.shape!=='triggerArea'){if(obj.seesawConstraint){scene.matter.world.remove(obj.seesawConstraint);obj.seesawConstraint=null;}if(obj.shape==='rope'){obj.ropeConstraints?.forEach(co=>scene.matter.world.remove(co));obj.ropeElos?.forEach(el=>scene.matter.world.remove(el));}else if(obj.body){scene.matter.world.remove(obj.body);}if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}Object.assign(obj,{shape:'triggerArea',body:null,w:c.triggerW,h:c.triggerH,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,triggerW:c.triggerW,triggerH:c.triggerH,triggerTargetId:c.triggerTargetId||'',triggerDestX:Number.isFinite(c.triggerDestX)?c.triggerDestX:px+220,triggerDestY:Number.isFinite(c.triggerDestY)?c.triggerDestY:py,triggerPlayersInside:{}});garantirIdObjetoCena(obj);marcarSalaComoAlterada();atualizarStatusTrigger();return;}
@@ -2764,12 +2811,12 @@ function atualizarObjetoExistente() {
         Object.assign(obj, { shape:'rotator', w:44, h:44, visualX:px, visualY:py, posicaoTravadaX:px, posicaoTravadaY:py,
             gravity:false, lockPos:true, lockRot:true, mass:0, air:0, bounce:0, maxVel:0, maxRot:0,
             manuseavel:false, naoAgarravel:true, isStatic:true, idPersistente:null, persistirSessao:false,
-            rotatorAtivo:c.rotatorAtivo, rotatorDirecao:c.rotatorDirecao, rotatorVelocidadeDeg:c.rotatorVelocidadeDeg,
+            rotatorAtivo:c.rotatorAtivo, rotatorDirecao:c.rotatorDirecao, rotatorVelocidadeDeg:c.rotatorVelocidadeDeg, rotatorEventoAtivar:c.rotatorEventoAtivar, rotatorEventoDesativar:c.rotatorEventoDesativar,
             rotatorAnguloAtual:0, filhosIds:[], vinculosFilhos:{} });
         garantirIdObjetoCena(obj); marcarSalaComoAlterada(); atualizarStatusFilhosRotator(); return;
     }
     if (obj.shape === 'rotator' && c.shape === 'rotator') {
-        obj.rotatorAtivo = c.rotatorAtivo; obj.rotatorDirecao = c.rotatorDirecao; obj.rotatorVelocidadeDeg = c.rotatorVelocidadeDeg;
+        obj.rotatorAtivo = c.rotatorAtivo; obj.rotatorDirecao = c.rotatorDirecao; obj.rotatorVelocidadeDeg = c.rotatorVelocidadeDeg; obj.rotatorEventoAtivar=c.rotatorEventoAtivar; obj.rotatorEventoDesativar=c.rotatorEventoDesativar;
         marcarSalaComoAlterada(); atualizarStatusFilhosRotator(); return;
     }
     if (['portal', 'respawn1', 'respawn2'].includes(obj.shape) || ['portal', 'respawn1', 'respawn2'].includes(c.shape)) {
@@ -2789,6 +2836,7 @@ function atualizarObjetoExistente() {
         if (obj.shape === 'portal') {
             obj.portalAreaW = c.portalAreaW;
             obj.portalAreaH = c.portalAreaH;
+            obj.portalReuseDelayMs = c.portalReuseDelayMs;
             obj.portalEntradaX = px + (Number.isFinite(c.portalEntradaX) ? c.portalEntradaX : 0);
             obj.portalEntradaY = py + (Number.isFinite(c.portalEntradaY) ? c.portalEntradaY : 0);
             obj.portalEntradaW = c.portalEntradaW;
@@ -2875,7 +2923,7 @@ function deletarObjetoSelecionado() {
         if (objetoSelecionado.ropeConstraints) objetoSelecionado.ropeConstraints.forEach(co => scene.matter.world.remove(co));
         if (objetoSelecionado.ropeElos) objetoSelecionado.ropeElos.forEach(el => scene.matter.world.remove(el));
     } else if (objetoSelecionado.body) { scene.matter.world.remove(objetoSelecionado.body); }
-    if(objetoSelecionado.npcSprite){objetoSelecionado.npcSprite.destroy();objetoSelecionado.npcSprite=null;}
+    if(objetoSelecionado.npcSprite){objetoSelecionado.npcSprite.destroy();objetoSelecionado.npcSprite=null;}if(objetoSelecionado.decorSprite){objetoSelecionado.decorSprite.destroy();objetoSelecionado.decorSprite=null;}
     objetoSelecionado.gfx.clear(); objetoSelecionado.gfx.destroy(); listaObjetosEditaveis = listaObjetosEditaveis.filter(o => o !== objetoSelecionado); desmarcarObjetoDoEditor(); marcarSalaComoAlterada();
 }
 
@@ -2905,6 +2953,7 @@ function desenharObjetoEditor(obj) {
     const posX = obj.body ? obj.body.position.x : obj.visualX;
     const posY = obj.body ? obj.body.position.y : obj.visualY;
 
+    if(obj.shape==='decorImage'||obj.shape==='decorSprite'){const sel=obj===objetoSelecionado;g.setVisible(true);g.x=0;g.y=0;g.rotation=0;if(obj.decorSprite){obj.decorSprite.setVisible(true);obj.decorSprite.setPosition(posX,posY);obj.decorSprite.setScale(Math.max(.01,Number(obj.decorScale)||1));obj.decorSprite.setDepth(profundidadeDecor(obj));}if(modoEditorAtivo){const ww=Math.max(20,(Number(obj.decorFrameW)||64)*(Number(obj.decorScale)||1)),hh=Math.max(20,(Number(obj.decorFrameH)||64)*(Number(obj.decorScale)||1));g.lineStyle(sel?4:2,sel?0xffea00:0xaf7ac5,1);g.strokeRect(posX-ww/2,posY-hh/2,ww,hh);}return;}
     if(obj.shape==='npc'){const sel=obj===objetoSelecionado;g.setVisible(true);g.x=0;g.y=0;g.rotation=0;if(obj.npcSprite){obj.npcSprite.setVisible(true);obj.npcSprite.setPosition(posX,posY);obj.npcSprite.setScale(Math.max(.1,Number(obj.npcEscala)||1));}if(modoEditorAtivo){g.lineStyle(sel?4:2,sel?0xffea00:0x5dade2,1);g.strokeRect(posX-obj.npcFrameW*obj.npcEscala/2,posY-obj.npcFrameH*obj.npcEscala/2,obj.npcFrameW*obj.npcEscala,obj.npcFrameH*obj.npcEscala);g.lineStyle(2,0x5dade2,.35);g.strokeCircle(posX,posY,Math.max(20,Number(obj.npcRaioDialogo)||180));}else if(!obj.npcSprite){g.fillStyle(0x5dade2,1);g.fillCircle(posX,posY,24);g.fillStyle(0xffffff,1);g.fillCircle(posX-8,posY-4,3);g.fillCircle(posX+8,posY-4,3);}return;}
     if(obj.shape==='coin'){if(obj.coinColetada&&!modoEditorAtivo){g.setVisible(false);return;}g.setVisible(true);g.x=0;g.y=0;g.rotation=0;const sel=obj===objetoSelecionado;g.fillStyle(0xf9ca24,1);g.fillCircle(posX,posY,14);g.lineStyle(sel?4:2,sel?0xffffff:0xb7950b,1);g.strokeCircle(posX,posY,14);g.fillStyle(0xfff3a0,1);g.fillRect(posX-2,posY-9,4,18);return;}
 
@@ -3906,6 +3955,19 @@ function removerAnimacoesNPC(scene,obj){
     if(scene.anims.anims?.entries) scene.anims.anims.entries.forEach((v,k)=>{if(String(k).startsWith(prefix))keys.push(k);});
     else if(scene.anims.anims instanceof Map) scene.anims.anims.forEach((v,k)=>{if(String(k).startsWith(prefix))keys.push(k);});
     keys.forEach(k=>scene.anims.remove(k));
+}
+function datosLayer(v){return v==='front'?'front':'back';}
+function chaveTextureDecor(obj){return 'decor_tex_'+String(obj?.idObjeto||'x').replace(/\W/g,'_');}
+function chaveAnimDecor(obj){return 'decor_anim_'+String(obj?.idObjeto||'x').replace(/\W/g,'_');}
+function profundidadeDecor(obj){return obj?.decorLayer==='front'?40:-10;}
+function prepararDecorativo(scene,obj,forcar=false){
+    if(!scene||!obj)return; const url=String(obj.decorUrl||'').trim(), key=chaveTextureDecor(obj), animKey=chaveAnimDecor(obj);
+    const limpar=()=>{if(obj.decorSprite){obj.decorSprite.destroy();obj.decorSprite=null;}if(scene.anims.exists(animKey))scene.anims.remove(animKey);if(scene.textures.exists(key))scene.textures.remove(key);};
+    if(!url){limpar();return;}
+    const criar=()=>{if(!scene.textures.exists(key))return;if(obj.decorSprite)obj.decorSprite.destroy();obj.decorSprite=scene.add.sprite(Number(obj.visualX)||0,Number(obj.visualY)||0,key,Math.max(0,Number(obj.decorStart)||0)).setDepth(profundidadeDecor(obj)).setScale(Math.max(.01,Number(obj.decorScale)||1));if(obj.shape==='decorSprite'){const st=Math.max(0,Number(obj.decorStart)||0),en=Math.max(st,Number(obj.decorEnd)||st),fps=Math.max(1,Number(obj.decorFps)||8);if(scene.anims.exists(animKey))scene.anims.remove(animKey);scene.anims.create({key:animKey,frames:scene.anims.generateFrameNumbers(key,{start:st,end:en}),frameRate:fps,repeat:-1});obj.decorSprite.play(animKey,true);}};
+    if(scene.textures.exists(key)&&!forcar){criar();return;} if(forcar)limpar();
+    if(obj.shape==='decorSprite')scene.load.spritesheet(key,url,{frameWidth:Math.max(1,Number(obj.decorFrameW)||64),frameHeight:Math.max(1,Number(obj.decorFrameH)||64)});else scene.load.image(key,url);
+    scene.load.once((obj.shape==='decorSprite'?'filecomplete-spritesheet-':'filecomplete-image-')+key,criar);scene.load.start();
 }
 function prepararSpriteNPC(scene,obj,forcar=false){
     if(!scene||!obj)return;
