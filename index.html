@@ -686,7 +686,7 @@ function objetoNoPontoEditor(x, y, ignorar=null) {
             if (obj.shape==='polygon') hit=maoPodeAgarrarPoligonoCustomizado(obj,x,y,0);
             else if ((obj.shape==='seesaw'||obj.shape==='launcherSeesaw')) hit=maoPodeAgarrarGangorra(obj,x,y,0);
             else hit=Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices,{x,y});
-        } else if (obj.shape==='decorImage'||obj.shape==='decorSprite') { const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0,hw=Math.max(12,(Number(obj.decorFrameW)||64)*(Number(obj.decorScale)||1)/2),hh=Math.max(12,(Number(obj.decorFrameH)||64)*(Number(obj.decorScale)||1)/2);hit=Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh;
+        } else if (obj.shape==='decorImage'||obj.shape==='decorSprite') { const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0,hw=Math.max(12,Number(obj.decorSprite?.displayWidth)||((Number(obj.decorFrameW)||64)*(Number(obj.decorScale)||1)))/2,hh=Math.max(12,Number(obj.decorSprite?.displayHeight)||((Number(obj.decorFrameH)||64)*(Number(obj.decorScale)||1)))/2;hit=Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh;
         } else if (obj.shape==='npc') {
             const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0,hw=Math.max(20,(Number(obj.npcFrameW)||64)*(Number(obj.npcEscala)||1)/2),hh=Math.max(20,(Number(obj.npcFrameH)||64)*(Number(obj.npcEscala)||1)/2); hit=Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh;
         } else if (obj.shape==='rotator') hit=Math.hypot(x-(Number(obj.visualX)||0),y-(Number(obj.visualY)||0))<=24;
@@ -2433,7 +2433,12 @@ function create() {
                     document.getElementById('prop-portal-entrada-x').value = objetoSelecionado.portalEntradaX - pos.x;
                     document.getElementById('prop-portal-entrada-y').value = objetoSelecionado.portalEntradaY - pos.y;
                 }
-                objetoSelecionado.visualX = pos.x; objetoSelecionado.visualY = pos.y; 
+                objetoSelecionado.visualX = pos.x; objetoSelecionado.visualY = pos.y;
+                // Objetos decorativos não têm corpo Matter: mova também o Sprite
+                // imediatamente durante o arraste para acompanhar o mouse quadro a quadro.
+                if ((objetoSelecionado.shape === 'decorImage' || objetoSelecionado.shape === 'decorSprite') && objetoSelecionado.decorSprite) {
+                    objetoSelecionado.decorSprite.setPosition(pos.x, pos.y);
+                }
                 if (objetoSelecionado.shape === 'rope' && objetoSelecionado.ropeElos) {
                     let dx = pos.x - objetoSelecionado.posicaoTravadaX, dy = pos.y - objetoSelecionado.posicaoTravadaY;
                     objetoSelecionado.ropeElos.forEach(elo => { this.matter.body.setPosition(elo, { x: elo.position.x + dx, y: elo.position.y + dy }); this.matter.body.setVelocity(elo, { x:0, y:0 }); });
@@ -2664,6 +2669,7 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
             else if (!colidiu && (obj.shape === 'seesaw' || obj.shape === 'launcherSeesaw')) colidiu = maoPodeAgarrarGangorra(obj, x, y, 0);
             else colidiu = Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices, { x: x, y: y });
         }
+        else if(obj.shape==='decorImage'||obj.shape==='decorSprite'){const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0;const hw=Math.max(12,Number(obj.decorSprite?.displayWidth)||((Number(obj.decorFrameW)||64)*(Number(obj.decorScale)||1)))/2;const hh=Math.max(12,Number(obj.decorSprite?.displayHeight)||((Number(obj.decorFrameH)||64)*(Number(obj.decorScale)||1)))/2;colidiu=Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh;}
         else if(obj.shape==='npc'){const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0,hw=Math.max(20,(Number(obj.npcFrameW)||64)*(Number(obj.npcEscala)||1)/2),hh=Math.max(20,(Number(obj.npcFrameH)||64)*(Number(obj.npcEscala)||1)/2);colidiu=Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh;}
         else if (obj.shape === 'triggerArea') {
             const px=Number(obj.visualX)||0, py=Number(obj.visualY)||0, hw=Math.max(20,Number(obj.triggerW)||160)/2, hh=Math.max(20,Number(obj.triggerH)||120)/2;
@@ -2960,7 +2966,7 @@ function desenharObjetoEditor(obj) {
     const posX = obj.body ? obj.body.position.x : obj.visualX;
     const posY = obj.body ? obj.body.position.y : obj.visualY;
 
-    if(obj.shape==='decorImage'||obj.shape==='decorSprite'){const sel=obj===objetoSelecionado;g.setVisible(true);g.x=0;g.y=0;g.rotation=0;if(obj.decorSprite){obj.decorSprite.setVisible(true);obj.decorSprite.setPosition(posX,posY);obj.decorSprite.setScale(Math.max(.01,Number(obj.decorScale)||1));obj.decorSprite.setDepth(profundidadeDecor(obj));}if(modoEditorAtivo){const ww=Math.max(20,(Number(obj.decorFrameW)||64)*(Number(obj.decorScale)||1)),hh=Math.max(20,(Number(obj.decorFrameH)||64)*(Number(obj.decorScale)||1));g.lineStyle(sel?4:2,sel?0xffea00:0xaf7ac5,1);g.strokeRect(posX-ww/2,posY-hh/2,ww,hh);}return;}
+    if(obj.shape==='decorImage'||obj.shape==='decorSprite'){const sel=obj===objetoSelecionado;g.setVisible(true);g.x=0;g.y=0;g.rotation=0;if(obj.decorSprite){obj.decorSprite.setVisible(true);obj.decorSprite.setPosition(posX,posY);obj.decorSprite.setScale(Math.max(.01,Number(obj.decorScale)||1));obj.decorSprite.setDepth(profundidadeDecor(obj));}if(modoEditorAtivo){const ww=Math.max(20,Number(obj.decorSprite?.displayWidth)||((Number(obj.decorFrameW)||64)*(Number(obj.decorScale)||1))),hh=Math.max(20,Number(obj.decorSprite?.displayHeight)||((Number(obj.decorFrameH)||64)*(Number(obj.decorScale)||1)));g.lineStyle(sel?4:2,sel?0xffea00:0xaf7ac5,1);g.strokeRect(posX-ww/2,posY-hh/2,ww,hh);}return;}
     if(obj.shape==='npc'){const sel=obj===objetoSelecionado;g.setVisible(true);g.x=0;g.y=0;g.rotation=0;if(obj.npcSprite){obj.npcSprite.setVisible(true);obj.npcSprite.setPosition(posX,posY);obj.npcSprite.setScale(Math.max(.1,Number(obj.npcEscala)||1));}if(modoEditorAtivo){g.lineStyle(sel?4:2,sel?0xffea00:0x5dade2,1);g.strokeRect(posX-obj.npcFrameW*obj.npcEscala/2,posY-obj.npcFrameH*obj.npcEscala/2,obj.npcFrameW*obj.npcEscala,obj.npcFrameH*obj.npcEscala);g.lineStyle(2,0x5dade2,.35);g.strokeCircle(posX,posY,Math.max(20,Number(obj.npcRaioDialogo)||180));}else if(!obj.npcSprite){g.fillStyle(0x5dade2,1);g.fillCircle(posX,posY,24);g.fillStyle(0xffffff,1);g.fillCircle(posX-8,posY-4,3);g.fillCircle(posX+8,posY-4,3);}return;}
     if(obj.shape==='coin'){if(obj.coinColetada&&!modoEditorAtivo){g.setVisible(false);return;}g.setVisible(true);g.x=0;g.y=0;g.rotation=0;const sel=obj===objetoSelecionado;g.fillStyle(0xf9ca24,1);g.fillCircle(posX,posY,14);g.lineStyle(sel?4:2,sel?0xffffff:0xb7950b,1);g.strokeCircle(posX,posY,14);g.fillStyle(0xfff3a0,1);g.fillRect(posX-2,posY-9,4,18);return;}
 
