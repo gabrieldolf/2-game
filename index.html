@@ -132,6 +132,7 @@
                 <div class="prop-row"><label>Largura (px):</label><input type="number" id="prop-portal-area-w" value="100" min="20" step="10" onchange="atualizarObjetoExistente()"></div>
                 <div class="prop-row"><label>Altura (px):</label><input type="number" id="prop-portal-area-h" value="120" min="20" step="10" onchange="atualizarObjetoExistente()"></div>
                 <div class="prop-row"><label>Espera após uso (ms):</label><input type="number" id="prop-portal-reuse-delay" value="0" min="0" step="100" onchange="atualizarObjetoExistente()"></div>
+                <div class="prop-row"><label>Entrada espelhada:</label><input type="checkbox" id="prop-portal-mirror" onchange="atualizarObjetoExistente()"><span style="font-size:10px;color:#d8f3f8;">inverte apenas esquerda/direita na chegada</span></div>
                 <div style="font-size:10px;color:#d8f3f8;">0 = pode ser reutilizado imediatamente. O tempo é contado por portal, mesmo se a sala for descarregada.</div>
                 <div style="height:1px;background:rgba(255,255,255,.25);margin:7px 0;"></div>
                 <div style="color:#b8f5ff; font-weight:bold; margin-bottom:6px;">Área de Entrada (chegada)</div>
@@ -564,6 +565,7 @@ function serializarObjetoDaSala(obj) {
         base.portalAreaW = obj.shape === 'portal' ? Math.max(20, Number(obj.portalAreaW) || 100) : null;
         base.portalAreaH = obj.shape === 'portal' ? Math.max(20, Number(obj.portalAreaH) || 120) : null;
         base.portalReuseDelayMs = obj.shape === 'portal' ? Math.max(0, Number(obj.portalReuseDelayMs) || 0) : null;
+        base.portalMirrorEntry = obj.shape === 'portal' ? !!obj.portalMirrorEntry : false;
         base.portalEntradaX = obj.shape === 'portal' ? Number(obj.portalEntradaX ?? obj.visualX ?? 0) : null;
         base.portalEntradaY = obj.shape === 'portal' ? Number(obj.portalEntradaY ?? obj.visualY ?? 0) : null;
         base.portalEntradaLocalX = obj.shape === 'portal' ? Number((obj.portalEntradaX ?? obj.visualX ?? 0) - (obj.visualX ?? 0)) : null;
@@ -1120,10 +1122,14 @@ function obterRetanguloEntradaPortal(portal) {
     return { cx, cy, w, h, minX: cx - w/2, maxX: cx + w/2, minY: cy - h/2, maxY: cy + h/2 };
 }
 
-function mapearPontoEntrePortais(rel, portalDestino) {
+function mapearPontoEntrePortais(rel, portalDestino, portalOrigem = null) {
     const r = obterRetanguloEntradaPortal(portalDestino);
-    const u = rel?.u === undefined ? 0.5 : Phaser.Math.Clamp(Number(rel.u), 0, 1);
-    const v = rel?.v === undefined ? 0.5 : Phaser.Math.Clamp(Number(rel.v), 0, 1);
+    let u = rel?.u === undefined ? 0.5 : Phaser.Math.Clamp(Number(rel.u), 0, 1);
+    let v = rel?.v === undefined ? 0.5 : Phaser.Math.Clamp(Number(rel.v), 0, 1);
+    // Portal especial espelhado: inverte somente a posição horizontal.
+    // A posição vertical continua igual à de um portal comum.
+    // Ex.: 25%/70% na saída -> 75%/70% na chegada.
+    if (portalOrigem?.portalMirrorEntry) { u = 1 - u; }
     return {
         x: r.minX + u * r.w,
         y: r.minY + v * r.h
@@ -1260,7 +1266,7 @@ function executarTransicaoPortalComEstados(scene, portalOrigem, registros) {
 
         const aplicarRegistro = (p, reg) => {
             if (!p || !reg) return;
-            const destino = mapearPontoEntrePortais(reg.rel, portalDestino);
+            const destino = mapearPontoEntrePortais(reg.rel, portalDestino, portalOrigem);
             aplicarEstadoFisicoJogador(scene, p, destino, reg.estado || capturarEstadoFisicoJogador(p));
 
             // O jogador nasce no ponto equivalente dentro da ÁREA DE ENTRADA
@@ -1607,6 +1613,7 @@ function adicionarObjetoSerializado(scene, dados) {
             portalAreaW: dados.shape === 'portal' ? Math.max(20, Number(dados.portalAreaW) || 100) : null,
             portalAreaH: dados.shape === 'portal' ? Math.max(20, Number(dados.portalAreaH) || 120) : null,
             portalReuseDelayMs: dados.shape === 'portal' ? Math.max(0, Number(dados.portalReuseDelayMs) || 0) : 0,
+            portalMirrorEntry: dados.shape === 'portal' ? !!dados.portalMirrorEntry : false,
             portalEntradaX: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaLocalX)) ? x + Number(dados.portalEntradaLocalX) : Number(dados.portalEntradaX ?? x)) : null,
             portalEntradaY: dados.shape === 'portal' ? (Number.isFinite(Number(dados.portalEntradaLocalY)) ? y + Number(dados.portalEntradaLocalY) : Number(dados.portalEntradaY ?? y)) : null,
             portalEntradaW: dados.shape === 'portal' ? Math.max(20, Number(dados.portalEntradaW) || Number(dados.portalAreaW) || 100) : null,
@@ -2517,6 +2524,7 @@ function extrairCamposPainel() {
         portalAreaW: Math.max(20, parseFloat(document.getElementById('prop-portal-area-w').value) || 100),
         portalAreaH: Math.max(20, parseFloat(document.getElementById('prop-portal-area-h').value) || 120),
         portalReuseDelayMs: Math.max(0, parseFloat(document.getElementById('prop-portal-reuse-delay')?.value) || 0),
+        portalMirrorEntry: !!document.getElementById('prop-portal-mirror')?.checked,
         portalEntradaX: parseFloat(document.getElementById('prop-portal-entrada-x').value),
         portalEntradaY: parseFloat(document.getElementById('prop-portal-entrada-y').value),
         portalEntradaW: Math.max(20, parseFloat(document.getElementById('prop-portal-entrada-w').value) || 100),
@@ -2567,6 +2575,7 @@ function executarCriacaoObjeto(scene, x, y) {
             portalAreaW: c.shape === 'portal' ? c.portalAreaW : null,
             portalAreaH: c.shape === 'portal' ? c.portalAreaH : null,
             portalReuseDelayMs: c.shape === 'portal' ? c.portalReuseDelayMs : 0,
+            portalMirrorEntry: c.shape === 'portal' ? !!c.portalMirrorEntry : false,
             portalEntradaX: c.shape === 'portal' ? ax + (Number.isFinite(c.portalEntradaX) ? c.portalEntradaX : 0) : null,
             portalEntradaY: c.shape === 'portal' ? ay + (Number.isFinite(c.portalEntradaY) ? c.portalEntradaY : 0) : null,
             portalEntradaW: c.shape === 'portal' ? c.portalEntradaW : null,
@@ -2730,6 +2739,7 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('prop-portal-area-w').value = Math.max(20, Number(obj.portalAreaW) || 100);
     document.getElementById('prop-portal-area-h').value = Math.max(20, Number(obj.portalAreaH) || 120);
     document.getElementById('prop-portal-reuse-delay').value = Math.max(0, Number(obj.portalReuseDelayMs) || 0);
+    document.getElementById('prop-portal-mirror').checked = !!obj.portalMirrorEntry;
     document.getElementById('prop-portal-entrada-x').value = Number((obj.portalEntradaX ?? obj.visualX ?? 0) - (obj.visualX ?? 0));
     document.getElementById('prop-portal-entrada-y').value = Number((obj.portalEntradaY ?? obj.visualY ?? 0) - (obj.visualY ?? 0));
     document.getElementById('prop-portal-entrada-w').value = Math.max(20, Number(obj.portalEntradaW) || Number(obj.portalAreaW) || 100);
@@ -2850,6 +2860,7 @@ function atualizarObjetoExistente() {
             obj.portalAreaW = c.portalAreaW;
             obj.portalAreaH = c.portalAreaH;
             obj.portalReuseDelayMs = c.portalReuseDelayMs;
+            obj.portalMirrorEntry = !!c.portalMirrorEntry;
             obj.portalEntradaX = px + (Number.isFinite(c.portalEntradaX) ? c.portalEntradaX : 0);
             obj.portalEntradaY = py + (Number.isFinite(c.portalEntradaY) ? c.portalEntradaY : 0);
             obj.portalEntradaW = c.portalEntradaW;
