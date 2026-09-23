@@ -539,8 +539,6 @@ function serializarObjetoDaSala(obj) {
     if (obj.shape === 'decorImage' || obj.shape === 'decorSprite') { base.x=Number(obj.visualX)||0;base.y=Number(obj.visualY)||0;base.decorUrl=obj.decorUrl||'';base.decorScale=Math.max(.01,Number(obj.decorScale)||1);base.decorLayer=obj.decorLayer==='front'?'front':'back';base.decorFrameW=Math.max(1,Number(obj.decorFrameW)||64);base.decorFrameH=Math.max(1,Number(obj.decorFrameH)||64);base.decorStart=Math.max(0,Number(obj.decorStart)||0);base.decorEnd=Math.max(base.decorStart,Number(obj.decorEnd)||0);base.decorFps=Math.max(1,Number(obj.decorFps)||8);return base; }
     if (obj.shape === 'npc') { base.x=Number(obj.visualX)||0;base.y=Number(obj.visualY)||0;base.npcId=obj.npcId||'';base.npcNome=obj.npcNome||'NPC';base.npcSpritesheetUrl=obj.npcSpritesheetUrl||'';base.npcFrameW=Math.max(1,Number(obj.npcFrameW)||64);base.npcFrameH=Math.max(1,Number(obj.npcFrameH)||64);base.npcEscala=Math.max(.1,Number(obj.npcEscala)||1);base.npcRaioDialogo=Math.max(20,Number(obj.npcRaioDialogo)||180);base.npcEstadoInicial=obj.npcEstadoInicial||'inicial';base.npcEstados=Array.isArray(obj.npcEstados)?JSON.parse(JSON.stringify(obj.npcEstados)):[];return base; }
     if (obj.shape === 'coin') { base.x=obj.body?Number(obj.body.position.x)||0:Number(obj.visualX)||0;base.y=obj.body?Number(obj.body.position.y)||0:Number(obj.visualY)||0;base.coinValue=Math.max(1,Number(obj.coinValue)||1);base.coinId=obj.coinId||garantirIdObjetoCena(obj);return base; }
-    if (obj.shape === 'conveyor') {const sel=obj===objetoSelecionado,w=Math.max(40,Number(obj.w)||500),h=Math.max(10,Number(obj.h)||40),dir=Number(obj.conveyorDirection)<0?-1:1;g.setVisible(true);g.x=0;g.y=0;g.rotation=0;const top=posY-h/2;g.fillStyle(0x20252a,1);g.fillRect(posX-w/2,top,w,h);g.lineStyle(sel?4:2,sel?0xffea00:0x9aa4ad,1);g.strokeRect(posX-w/2,top,w,h);const rollers=Math.max(2,Math.floor(w/80));for(let i=0;i<rollers;i++){const rx=posX-w/2+(i+.5)*(w/rollers),rr=Math.max(5,Math.min(h*.38,14));g.fillStyle(0x111418,1);g.fillCircle(rx,posY,rr);g.lineStyle(2,0x606a72,1);g.strokeCircle(rx,posY,rr);}const passo=80,fase=((Number(obj.conveyorPhase)||0)%passo+passo)%passo;g.lineStyle(3,0xffb74d,.9);for(let x0=posX-w/2-fase-80;x0<posX+w/2+80;x0+=passo){g.lineBetween(x0-12*dir,top+8,x0+12*dir,top+8);g.lineBetween(x0+12*dir,top+8,x0+4*dir,top+2);}return;}
-
     if (obj.shape === 'triggerArea') {
         base.x = Number(obj.visualX) || 0; base.y = Number(obj.visualY) || 0;
         base.triggerW = Math.max(20, Number(obj.triggerW) || 160);
@@ -2763,6 +2761,33 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('prop-portal-entrada-w').value = Math.max(20, Number(obj.portalEntradaW) || Number(obj.portalAreaW) || 100);
     document.getElementById('prop-portal-entrada-h').value = Math.max(20, Number(obj.portalEntradaH) || Number(obj.portalAreaH) || 120);
     document.getElementById('prop-nome-ponto').value = obj.nomePonto || '';
+    if (obj.shape === 'conveyor') {
+        const sel = obj === objetoSelecionado;
+        const w = Math.max(40, Number(obj.w) || 500);
+        const h = Math.max(10, Number(obj.h) || 40);
+        const dir = Number(obj.conveyorDirection) < 0 ? -1 : 1;
+        const top = posY - h / 2;
+        const fase = ((Number(obj.conveyorPhase) || 0) % 80 + 80) % 80;
+        g.setVisible(true); g.x = 0; g.y = 0; g.rotation = 0;
+        g.fillStyle(0x20252a, 1);
+        g.fillRect(posX - w / 2, top, w, h);
+        g.lineStyle(sel ? 4 : 2, sel ? 0xffea00 : 0x9aa4ad, 1);
+        g.strokeRect(posX - w / 2, top, w, h);
+        const rollers = Math.max(2, Math.floor(w / 80));
+        for (let i = 0; i < rollers; i++) {
+            const rx = posX - w / 2 + (i + 0.5) * (w / rollers);
+            const rr = Math.max(5, Math.min(h * 0.38, 14));
+            g.fillStyle(0x111418, 1); g.fillCircle(rx, posY, rr);
+            g.lineStyle(2, 0x606a72, 1); g.strokeCircle(rx, posY, rr);
+        }
+        g.lineStyle(3, 0xffb74d, 0.9);
+        for (let x0 = posX - w / 2 - fase - 80; x0 < posX + w / 2 + 80; x0 += 80) {
+            g.lineBetween(x0 - 12 * dir, top + 8, x0 + 12 * dir, top + 8);
+            g.lineBetween(x0 + 12 * dir, top + 8, x0 + 4 * dir, top + 2);
+        }
+        return;
+    }
+
     if(obj.shape==='decorImage'||obj.shape==='decorSprite'){document.getElementById('prop-decor-url').value=obj.decorUrl||'';document.getElementById('prop-decor-scale').value=obj.decorScale||1;document.getElementById('prop-decor-layer').value=datosLayer(obj.decorLayer);document.getElementById('prop-decor-frame-w').value=obj.decorFrameW||64;document.getElementById('prop-decor-frame-h').value=obj.decorFrameH||64;document.getElementById('prop-decor-start').value=obj.decorStart||0;document.getElementById('prop-decor-end').value=obj.decorEnd||0;document.getElementById('prop-decor-fps').value=obj.decorFps||8;}
     else if(obj.shape==='npc'){document.getElementById('prop-npc-id').value=obj.npcId||'';document.getElementById('prop-npc-name').value=obj.npcNome||'NPC';document.getElementById('prop-npc-sheet-url').value=obj.npcSpritesheetUrl||'';document.getElementById('prop-npc-frame-w').value=obj.npcFrameW||64;document.getElementById('prop-npc-frame-h').value=obj.npcFrameH||64;document.getElementById('prop-npc-scale').value=obj.npcEscala||1;document.getElementById('prop-npc-radius').value=obj.npcRaioDialogo||180;document.getElementById('prop-npc-initial-state').value=obj.npcEstadoInicial||'inicial';document.getElementById('prop-npc-states').value=JSON.stringify(obj.npcEstados||[],null,2);}
     else if(obj.shape==='coin'){document.getElementById('prop-coin-value').value=obj.coinValue||1;document.getElementById('prop-coin-id').value=obj.coinId||'';}
@@ -4105,7 +4130,7 @@ function processarGangorrasLancadoras(scene,delta){
     }
 }
 
-function processarEsteirasTransportadoras(scene,delta){if(!scene||modoEditorAtivo)return;const esteiras=listaObjetosEditaveis.filter(o=>o&&o.shape==='conveyor'&&o.body);if(!esteiras.length)return;const dt=Math.max(0,Number(delta)||16.6667)/1000,jogadores=[player1,player2].filter(p=>p?.body&&!p.aguardandoPortal),transportar=(body,velocidade,forca)=>{if(!body||body.isStatic)return;const ganho=Math.max(.01,Math.min(1,forca))*Math.min(1,dt*12);scene.matter.body.setVelocity(body,{x:Phaser.Math.Linear(Number(body.velocity.x)||0,velocidade,ganho),y:body.velocity.y});};for(const esteira of esteiras){const dir=Number(esteira.conveyorDirection)<0?-1:1,speed=Math.max(0,Number(esteira.conveyorSpeed)||0),target=dir*speed,top=esteira.body.bounds.min.y,left=esteira.body.bounds.min.x,right=esteira.body.bounds.max.x,dentro=body=>{if(!body?.bounds)return false;const bottom=body.bounds.max.y,topBody=body.bounds.min.y;return body.position.x>=left-2&&body.position.x<=right+2&&bottom>=top-34&&bottom<=top+Math.max(16,Number(esteira.h)||40)+12&&topBody<top+Math.max(18,Number(esteira.h)||40);};for(const p of jogadores)if(dentro(p.body))transportar(p.body,target,Number(esteira.conveyorStrength)||.22);for(const b of scene.matter.world.localWorld.bodies){if(!b||b.isStatic||b===esteira.body||b.label==='esteira_transportadora'||b.label==='corpo_elo'||b.label==='peso_gangorra_lancadora'||/^p\d+_/.test(String(b.label||'')))continue;if(dentro(b))transportar(b,target,Math.max(.12,Number(esteira.conveyorStrength)||.22));}esteira.conveyorPhase=(Number(esteira.conveyorPhase)||0)+dir*speed*dt;}}
+function processarEsteirasTransportadoras(scene,delta){if(!scene||modoEditorAtivo)return;const esteiras=listaObjetosEditaveis.filter(o=>o&&o.shape==='conveyor'&&o.body);if(!esteiras.length)return;const dt=Math.max(0,Number(delta)||16.6667)/1000,jogadores=[player1,player2].filter(p=>p?.body&&!p.aguardandoPortal),transportar=(body,velocidade,forca)=>{if(!body||body.isStatic)return;const ganho=Math.max(.01,Math.min(1,forca))*Math.min(1,dt*12);scene.matter.body.setVelocity(body,{x:Phaser.Math.Linear(Number(body.velocity.x)||0,velocidade,ganho),y:body.velocity.y});};for(const esteira of esteiras){const dir=Number(esteira.conveyorDirection)<0?-1:1,speed=Math.max(0,Number(esteira.conveyorSpeed)||0),target=dir*speed,top=esteira.body.bounds.min.y,left=esteira.body.bounds.min.x,right=esteira.body.bounds.max.x,dentro=body=>{if(!body?.bounds)return false;const bottom=body.bounds.max.y,topBody=body.bounds.min.y;return body.position.x>=left-2&&body.position.x<=right+2&&bottom>=top-34&&bottom<=top+Math.max(16,Number(esteira.h)||40)+12&&topBody<top+Math.max(18,Number(esteira.h)||40);};for(const p of jogadores)if(dentro(p.body))transportar(p.body,target,Number(esteira.conveyorStrength)||.22);for(const b of scene.matter.world.localWorld.bodies){if(!b||b.isStatic||b===esteira.body||b.label==='esteira_transportadora'||b.label==='ambiente'||b.label==='corpo_elo'||b.label==='peso_gangorra_lancadora'||b.label==='p1_corpo'||b.label==='p2_corpo')continue;if(dentro(b))transportar(b,target,Math.max(.12,Number(esteira.conveyorStrength)||.22));}esteira.conveyorPhase=(Number(esteira.conveyorPhase)||0)+dir*speed*dt;}}
 
 function update(time, delta) {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
