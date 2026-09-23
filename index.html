@@ -2761,33 +2761,6 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('prop-portal-entrada-w').value = Math.max(20, Number(obj.portalEntradaW) || Number(obj.portalAreaW) || 100);
     document.getElementById('prop-portal-entrada-h').value = Math.max(20, Number(obj.portalEntradaH) || Number(obj.portalAreaH) || 120);
     document.getElementById('prop-nome-ponto').value = obj.nomePonto || '';
-    if (obj.shape === 'conveyor') {
-        const sel = obj === objetoSelecionado;
-        const w = Math.max(40, Number(obj.w) || 500);
-        const h = Math.max(10, Number(obj.h) || 40);
-        const dir = Number(obj.conveyorDirection) < 0 ? -1 : 1;
-        const top = posY - h / 2;
-        const fase = ((Number(obj.conveyorPhase) || 0) % 80 + 80) % 80;
-        g.setVisible(true); g.x = 0; g.y = 0; g.rotation = 0;
-        g.fillStyle(0x20252a, 1);
-        g.fillRect(posX - w / 2, top, w, h);
-        g.lineStyle(sel ? 4 : 2, sel ? 0xffea00 : 0x9aa4ad, 1);
-        g.strokeRect(posX - w / 2, top, w, h);
-        const rollers = Math.max(2, Math.floor(w / 80));
-        for (let i = 0; i < rollers; i++) {
-            const rx = posX - w / 2 + (i + 0.5) * (w / rollers);
-            const rr = Math.max(5, Math.min(h * 0.38, 14));
-            g.fillStyle(0x111418, 1); g.fillCircle(rx, posY, rr);
-            g.lineStyle(2, 0x606a72, 1); g.strokeCircle(rx, posY, rr);
-        }
-        g.lineStyle(3, 0xffb74d, 0.9);
-        for (let x0 = posX - w / 2 - fase - 80; x0 < posX + w / 2 + 80; x0 += 80) {
-            g.lineBetween(x0 - 12 * dir, top + 8, x0 + 12 * dir, top + 8);
-            g.lineBetween(x0 + 12 * dir, top + 8, x0 + 4 * dir, top + 2);
-        }
-        return;
-    }
-
     if(obj.shape==='decorImage'||obj.shape==='decorSprite'){document.getElementById('prop-decor-url').value=obj.decorUrl||'';document.getElementById('prop-decor-scale').value=obj.decorScale||1;document.getElementById('prop-decor-layer').value=datosLayer(obj.decorLayer);document.getElementById('prop-decor-frame-w').value=obj.decorFrameW||64;document.getElementById('prop-decor-frame-h').value=obj.decorFrameH||64;document.getElementById('prop-decor-start').value=obj.decorStart||0;document.getElementById('prop-decor-end').value=obj.decorEnd||0;document.getElementById('prop-decor-fps').value=obj.decorFps||8;}
     else if(obj.shape==='npc'){document.getElementById('prop-npc-id').value=obj.npcId||'';document.getElementById('prop-npc-name').value=obj.npcNome||'NPC';document.getElementById('prop-npc-sheet-url').value=obj.npcSpritesheetUrl||'';document.getElementById('prop-npc-frame-w').value=obj.npcFrameW||64;document.getElementById('prop-npc-frame-h').value=obj.npcFrameH||64;document.getElementById('prop-npc-scale').value=obj.npcEscala||1;document.getElementById('prop-npc-radius').value=obj.npcRaioDialogo||180;document.getElementById('prop-npc-initial-state').value=obj.npcEstadoInicial||'inicial';document.getElementById('prop-npc-states').value=JSON.stringify(obj.npcEstados||[],null,2);}
     else if(obj.shape==='coin'){document.getElementById('prop-coin-value').value=obj.coinValue||1;document.getElementById('prop-coin-id').value=obj.coinId||'';}
@@ -3025,6 +2998,33 @@ function desenharObjetoEditor(obj) {
     if(obj.shape==='decorImage'||obj.shape==='decorSprite'){const sel=obj===objetoSelecionado;g.setVisible(true);g.x=0;g.y=0;g.rotation=0;if(obj.decorSprite){obj.decorSprite.setVisible(true);obj.decorSprite.setPosition(posX,posY);obj.decorSprite.setScale(Math.max(.01,Number(obj.decorScale)||1));obj.decorSprite.setDepth(profundidadeDecor(obj));}if(modoEditorAtivo){const ww=Math.max(20,(Number(obj.decorFrameW)||64)*(Number(obj.decorScale)||1)),hh=Math.max(20,(Number(obj.decorFrameH)||64)*(Number(obj.decorScale)||1));g.lineStyle(sel?4:2,sel?0xffea00:0xaf7ac5,1);g.strokeRect(posX-ww/2,posY-hh/2,ww,hh);}return;}
     if(obj.shape==='npc'){const sel=obj===objetoSelecionado;g.setVisible(true);g.x=0;g.y=0;g.rotation=0;if(obj.npcSprite){obj.npcSprite.setVisible(true);obj.npcSprite.setPosition(posX,posY);obj.npcSprite.setScale(Math.max(.1,Number(obj.npcEscala)||1));}if(modoEditorAtivo){g.lineStyle(sel?4:2,sel?0xffea00:0x5dade2,1);g.strokeRect(posX-obj.npcFrameW*obj.npcEscala/2,posY-obj.npcFrameH*obj.npcEscala/2,obj.npcFrameW*obj.npcEscala,obj.npcFrameH*obj.npcEscala);g.lineStyle(2,0x5dade2,.35);g.strokeCircle(posX,posY,Math.max(20,Number(obj.npcRaioDialogo)||180));}else if(!obj.npcSprite){g.fillStyle(0x5dade2,1);g.fillCircle(posX,posY,24);g.fillStyle(0xffffff,1);g.fillCircle(posX-8,posY-4,3);g.fillCircle(posX+8,posY-4,3);}return;}
     if(obj.shape==='coin'){if(obj.coinColetada&&!modoEditorAtivo){g.setVisible(false);return;}g.setVisible(true);g.x=0;g.y=0;g.rotation=0;const sel=obj===objetoSelecionado;g.fillStyle(0xf9ca24,1);g.fillCircle(posX,posY,14);g.lineStyle(sel?4:2,sel?0xffffff:0xb7950b,1);g.strokeCircle(posX,posY,14);g.fillStyle(0xfff3a0,1);g.fillRect(posX-2,posY-9,4,18);return;}
+
+    if (obj.shape === 'conveyor') {
+        const sel = obj === objetoSelecionado;
+        const w = Math.max(40, Number(obj.w) || 500);
+        const h = Math.max(10, Number(obj.h) || 40);
+        const dir = Number(obj.conveyorDirection) < 0 ? -1 : 1;
+        const top = posY - h / 2;
+        const fase = ((Number(obj.conveyorPhase) || 0) % 80 + 80) % 80;
+        g.setVisible(true); g.x = 0; g.y = 0; g.rotation = 0;
+        g.fillStyle(0x20252a, 1);
+        g.fillRect(posX - w / 2, top, w, h);
+        g.lineStyle(sel ? 4 : 2, sel ? 0xffea00 : 0x9aa4ad, 1);
+        g.strokeRect(posX - w / 2, top, w, h);
+        const rollers = Math.max(2, Math.floor(w / 80));
+        for (let i = 0; i < rollers; i++) {
+            const rx = posX - w / 2 + (i + 0.5) * (w / rollers);
+            const rr = Math.max(5, Math.min(h * 0.38, 14));
+            g.fillStyle(0x111418, 1); g.fillCircle(rx, posY, rr);
+            g.lineStyle(2, 0x606a72, 1); g.strokeCircle(rx, posY, rr);
+        }
+        g.lineStyle(3, 0xffb74d, 0.9);
+        for (let x0 = posX - w / 2 - fase - 80; x0 < posX + w / 2 + 80; x0 += 80) {
+            g.lineBetween(x0 - 12 * dir, top + 8, x0 + 12 * dir, top + 8);
+            g.lineBetween(x0 + 12 * dir, top + 8, x0 + 4 * dir, top + 2);
+        }
+        return;
+    }
 
     if (obj.shape === 'triggerArea') {
         if (!modoEditorAtivo) { g.setVisible(false); return; }
