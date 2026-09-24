@@ -4021,6 +4021,11 @@ function processarGarra(s, p, h, jKey, grab) {
             for (let i = 0; i < listaObjetosEditaveis.length; i++) {
                 let obj = listaObjetosEditaveis[i]; if (!obj || obj.naoAgarravel) continue;
                 if (obj.body && !obj.body.naoAgarravel) {
+                    // Depois de soltar uma plataforma, não permita que a mesma
+                    // mão a capture novamente durante a pequena janela de saída.
+                    const bloqueioReagarrar = h._garraPlataformaLiberadaBody === obj.body &&
+                        performance.now() < (Number(h._garraPlataformaLiberadaReagarrarBloqueadoAte) || 0);
+                    if (bloqueioReagarrar) continue;
                     // Polígonos customizados precisam de um teste contra a forma real.
                     // Usar Query.region no body composto faria toda a caixa delimitadora
                     // (inclusive áreas vazias ao redor/entre concavidades) parecer agarrável.
@@ -4074,6 +4079,7 @@ function processarGarra(s, p, h, jKey, grab) {
                     h._garraPlataformaLiberadaBody=null;
                     h._garraPlataformaLiberadaMaskOriginal=null;
                     h._garraPlataformaLiberadaAte=0;
+                    h._garraPlataformaLiberadaReagarrarBloqueadoAte=0;
                 }
                 p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
                 p[jKey + 'RotatorPai'] = null; p[jKey + 'PlataformaMovel'] = objPlataformaMovel;
@@ -4100,7 +4106,26 @@ function processarGarra(s, p, h, jKey, grab) {
             // Para filhos de rotador, portanto, a mão é presa a um PONTO DO MUNDO
             // que acompanha o ponto local exato do objeto agarrado. Assim o jogador é
             // carregado pela plataforma, mas a mão nunca aplica força física no filho.
-            if (objGangorra) {
+            if (objPlataformaMovel) {
+                // Plataforma móvel: a mão fica presa a um PONTO DO MUNDO que é
+                // recalculado a partir do offset local da plataforma. É importante
+                // NÃO cair na constraint corpo<->corpo genérica abaixo: ela faz o
+                // solver puxar a mão para o centro da plataforma e é justamente
+                // o que causava o efeito de "mão colada" e o corpo ficando para trás.
+                p[jKey + 'Gangorra'] = null;
+                p[jKey + 'GangorraNormalLocal'] = null;
+                p[jKey + 'RotatorPai'] = null;
+                p[jKey + 'PontoPivorMundo'] = {
+                    x: objPlataformaMovel.body.position.x + localOffset.x * Math.cos(Number(objPlataformaMovel.body.angle)||0) - localOffset.y * Math.sin(Number(objPlataformaMovel.body.angle)||0),
+                    y: objPlataformaMovel.body.position.y + localOffset.x * Math.sin(Number(objPlataformaMovel.body.angle)||0) + localOffset.y * Math.cos(Number(objPlataformaMovel.body.angle)||0)
+                };
+                p[jKey] = s.matter.add.worldConstraint(h, 0, rigidezAgarrar, {
+                    pointA: { x:p[jKey + 'PontoPivorMundo'].x, y:p[jKey + 'PontoPivorMundo'].y },
+                    pointB: { x:0, y:0 },
+                    stiffness: rigidezAgarrar,
+                    damping: amortecimentoAgarrar
+                });
+            } else if (objGangorra) {
                 // Gangorra: não usamos uma constraint corpo<->corpo. Ela fazia o
                 // solver afastar o centro circular da mão do ponto B na madeira e,
                 // durante rotações bruscas, a garra podia parecer presa no ar.
@@ -4168,10 +4193,16 @@ function processarGarra(s, p, h, jKey, grab) {
         // colisão com o ambiente somente durante a janela necessária para se
         // afastar fisicamente da plataforma. Ela continua com sua velocidade
         // normal e não recebe qualquer velocidade da plataforma.
+        // Ao soltar, a mão deixa imediatamente de estar vinculada à plataforma.
+        // Não aplicamos posição, impulso ou velocidade da plataforma à mão.
+        // Apenas bloqueamos uma nova captura da MESMA plataforma por alguns
+        // frames, para que a detecção de alcance não a agarre de novo no mesmo
+        // instante da soltura.
         h._garraPlataformaLiberadaBody = plataformaLiberada?.body || null;
         h._garraPlataformaLiberadaMaskOriginal = mascaraOriginalMao;
-        h._garraPlataformaLiberadaAte = performance.now() + 260;
-        if(h.collisionFilter) h.collisionFilter.mask = mascaraOriginalMao & ~CAT_AMBIENTE;
+        h._garraPlataformaLiberadaAte = performance.now() + 180;
+        h._garraPlataformaLiberadaReagarrarBloqueadoAte = performance.now() + 180;
+        if(h.collisionFilter) h.collisionFilter.mask = mascaraOriginalMao;
 
         const outraGarraNaMesmaPlataforma =
             p.leftJointPlataformaMovel === plataformaLiberada ||
@@ -4195,6 +4226,7 @@ function atualizarMaoLiberadaDaPlataformaMovel(scene,h){
     h._garraPlataformaLiberadaBody=null;
     h._garraPlataformaLiberadaMaskOriginal=null;
     h._garraPlataformaLiberadaAte=0;
+    h._garraPlataformaLiberadaReagarrarBloqueadoAte=0;
 }
 
 
