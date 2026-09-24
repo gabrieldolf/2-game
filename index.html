@@ -911,18 +911,24 @@ function capturarSuportesDasPlataformasMoveis(){
         p._temGarraEmPlataformaMovel=false;
         const plataformas=[];
         for(const obj of listaObjetosEditaveis){
-            if(!obj||obj.shape!=='movingPlatform'||!obj.body||obj.platformTransportarJogador===false)continue;
-                const apoiado=pontoEstaSobrePlataformaMovel(p,obj);
+            if(!obj||obj.shape!=='movingPlatform'||!obj.body)continue;
+            const apoiado=pontoEstaSobrePlataformaMovel(p,obj);
             const agarrouEsquerda=p.leftJointPlataformaMovel===obj || p.leftJointTarget===obj.body;
             const agarrouDireita=p.rightJointPlataformaMovel===obj || p.rightJointTarget===obj.body;
-            if(apoiado||agarrouEsquerda||agarrouDireita){
+            // Uma garra SEMPRE transporta o jogador, independentemente da
+            // opção "Transportar jogador". Essa opção vale apenas para quem
+            // está simplesmente apoiado sobre a plataforma.
+            if(agarrouEsquerda||agarrouDireita){
+                p._temGarraEmPlataformaMovel=true;
                 plataformas.push(obj);
-                if(agarrouEsquerda||agarrouDireita)p._temGarraEmPlataformaMovel=true;
+            }else if(apoiado&&obj.platformTransportarJogador!==false){
+                plataformas.push(obj);
             }
         }
         if(plataformas.length)suportes.push({p,plataformas});
     }return suportes;
 }
+
 function pontoEstaSobrePlataformaMovel(p,obj,tolerancia=14){
     if(!p?.body||!obj?.body)return false;const pb=p.body.bounds,fb=obj.body.bounds;const centroX=p.body.position.x;const larguraJogador=Math.max(8,(pb.max.x-pb.min.x)*0.35);if(centroX+larguraJogador<fb.min.x||centroX-larguraJogador>fb.max.x)return false;const pe=pb.max.y,topo=fb.min.y;return pe>=topo-tolerancia&&pe<=topo+tolerancia+14;
 }
@@ -936,45 +942,51 @@ function transportarJogadoresSobrePlataformasMoveis(suportes,scene){
     if(modoEditorAtivo)return;
     for(const suporte of suportes||[]){
         const p=suporte.p;if(!p?.body)continue;
+        const agarrado=!!p._temGarraEmPlataformaMovel;
         let dx=0,dy=0,velX=0,velY=0,cont=0;
         for(const obj of suporte.plataformas||[]){
-            dx+=Number(obj.platformDeltaX)||0;dy+=Number(obj.platformDeltaY)||0;
-            velX+=Number(obj.platformVelX)||0;velY+=Number(obj.platformVelY)||0;cont++;
+            dx+=Number(obj.platformDeltaX)||0;
+            dy+=Number(obj.platformDeltaY)||0;
+            velX+=Number(obj.platformVelX)||0;
+            velY+=Number(obj.platformVelY)||0;
+            cont++;
         }
         if(!cont)continue;
-        velX/=cont;velY/=cont;
-        const agarrado=!!p._temGarraEmPlataformaMovel;
-        const corpos=obterCorposFisicosJogador(p);
+        dx/=cont;dy/=cont;velX/=cont;velY/=cont;
 
-        // Uma mão agarrada transforma a plataforma em referencial do RIG.
-        // O deslocamento é aplicado ANTES do input deste frame, evitando que o
-        // corpo fique para trás enquanto a mão continua presa à plataforma.
-        if(Math.abs(dx)>0.0001||Math.abs(dy)>0.0001){
+        // Quando uma mão está agarrada, a plataforma funciona como um
+        // referencial rígido do RIG. O deslocamento é aplicado uma única vez
+        // em todas as partes físicas do jogador. Não usamos a velocidade da
+        // plataforma como impulso acumulativo: apenas o delta real do frame.
+        const corpos=obterCorposFisicosJogador(p);
+        if(agarrado){
+            if(Math.abs(dx)>0.00001||Math.abs(dy)>0.00001){
+                for(const corpo of corpos){
+                    scene.matter.body.setPosition(corpo,{
+                        x:corpo.position.x+dx,
+                        y:corpo.position.y+dy
+                    });
+                }
+            }
             for(const corpo of corpos){
-                scene.matter.body.setPosition(corpo,{x:corpo.position.x+dx,y:corpo.position.y+dy});
-                const vAnterior=corpo._velPlataformaMovelAnterior||{x:0,y:0};
                 scene.matter.body.setVelocity(corpo,{
-                    x:(corpo.velocity?.x||0)-vAnterior.x+velX,
-                    y:(corpo.velocity?.y||0)-vAnterior.y+velY
+                    x:corpo.velocity?.x||0,
+                    y:corpo.velocity?.y||0
                 });
-                corpo._velPlataformaMovelAnterior={x:velX,y:velY};
             }
         }else{
-            for(const corpo of corpos){
-                const vAnterior=corpo._velPlataformaMovelAnterior||{x:0,y:0};
-                scene.matter.body.setVelocity(corpo,{
-                    x:(corpo.velocity?.x||0)-vAnterior.x+velX,
-                    y:(corpo.velocity?.y||0)-vAnterior.y+velY
-                });
-                corpo._velPlataformaMovelAnterior={x:velX,y:velY};
-            }
+            // Apoio sem agarrar: a plataforma transfere apenas sua velocidade
+            // de deslocamento, sem alterar a lógica de controle do jogador.
+            p._velPlataformaMovel={x:velX,y:velY};
         }
+
         for(const obj of suporte.plataformas||[]) definirColisaoPlataformaMovel(obj,agarrado);
         p._apoiadoEmPlataformaMovel=true;
         p._velPlataformaMovel={x:velX,y:velY};
         p._plataformaMovelTransportadaNoFrame=true;
     }
 }
+
 function transportarCorpoAgarradoAPlataformaMovel(suportes,scene){
     // O transporte do RIG agarrado acontece antes do input, em
     // transportarJogadoresSobrePlataformasMoveis(). Não transportar novamente
@@ -4055,6 +4067,14 @@ function processarGarra(s, p, h, jKey, grab) {
             const objGangorra = listaObjetosEditaveis.find(o => o?.body === alvoValido && (o.shape === 'seesaw' || o.shape === 'launcherSeesaw'));
             const objPlataformaMovel = listaObjetosEditaveis.find(o => o?.body === alvoValido && o.shape === 'movingPlatform');
             if (objPlataformaMovel) {
+                // Se esta mão tinha acabado de ser liberada, restaura sua
+                // máscara original antes de iniciar uma nova garra.
+                if(h._garraPlataformaLiberadaMaskOriginal!==undefined && h.collisionFilter){
+                    h.collisionFilter.mask=Number(h._garraPlataformaLiberadaMaskOriginal)||(CAT_AMBIENTE|CAT_PLAYER);
+                    h._garraPlataformaLiberadaBody=null;
+                    h._garraPlataformaLiberadaMaskOriginal=null;
+                    h._garraPlataformaLiberadaAte=0;
+                }
                 p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
                 p[jKey + 'RotatorPai'] = null; p[jKey + 'PlataformaMovel'] = objPlataformaMovel;
                 p[jKey + '_FoiLiberadaPlataformaMovel'] = false;
@@ -4127,18 +4147,54 @@ function processarGarra(s, p, h, jKey, grab) {
         }
     } else if (!grab && p[jKey]) {
         const plataformaLiberada=p[jKey+'PlataformaMovel'];
-        // Soltura limpa a constraint e todas as referências da plataforma ANTES
-        // de qualquer outra atualização. A mão conserva a velocidade que tinha
-        // naquele instante; não recebe a velocidade da plataforma e não é
-        // reposicionada artificialmente.
+        const mascaraOriginalMao = h.collisionFilter ? h.collisionFilter.mask : (CAT_AMBIENTE|CAT_PLAYER);
+
+        // Primeiro removemos a constraint e TODAS as referências que faziam
+        // a mão acompanhar a plataforma.
         if (p[jKey]) s.matter.world.remove(p[jKey]);
-        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null; p[jKey + 'PontoPivorMundo'] = null; p[jKey + 'RotatorPai'] = null; p[jKey + 'PlataformaMovel'] = null; p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
-        h._garraPlataformaLiberadaBody=null;
-        h._garraPlataformaLiberadaAte=0;
-        const outraGarraNaMesmaPlataforma = p.leftJointPlataformaMovel === plataformaLiberada || p.rightJointPlataformaMovel === plataformaLiberada;
+        p[jKey] = null;
+        p[jKey + 'Target'] = null;
+        p[jKey + 'PivotBody'] = null;
+        p[jKey + 'LocalOffset'] = null;
+        p[jKey + 'PontoPivorMundo'] = null;
+        p[jKey + 'RotatorPai'] = null;
+        p[jKey + 'PlataformaMovel'] = null;
+        p[jKey + 'Gangorra'] = null;
+        p[jKey + 'GangorraNormalLocal'] = null;
+
+        // O erro que aparecia no vídeo após soltar vinha da colisão: a mão
+        // continuava tocando a plataforma e, como a plataforma se move, a
+        // própria colisão fazia a mão parecer ainda presa. A mão fica sem
+        // colisão com o ambiente somente durante a janela necessária para se
+        // afastar fisicamente da plataforma. Ela continua com sua velocidade
+        // normal e não recebe qualquer velocidade da plataforma.
+        h._garraPlataformaLiberadaBody = plataformaLiberada?.body || null;
+        h._garraPlataformaLiberadaMaskOriginal = mascaraOriginalMao;
+        h._garraPlataformaLiberadaAte = performance.now() + 260;
+        if(h.collisionFilter) h.collisionFilter.mask = mascaraOriginalMao & ~CAT_AMBIENTE;
+
+        const outraGarraNaMesmaPlataforma =
+            p.leftJointPlataformaMovel === plataformaLiberada ||
+            p.rightJointPlataformaMovel === plataformaLiberada;
+
         if(!outraGarraNaMesmaPlataforma) definirColisaoPlataformaMovel(plataformaLiberada, false);
         p[jKey+'_FoiLiberadaPlataformaMovel']=true;
     }
+}
+
+
+
+function atualizarMaoLiberadaDaPlataformaMovel(scene,h){
+    if(!h||!h._garraPlataformaLiberadaBody)return;
+    const fim=Number(h._garraPlataformaLiberadaAte)||0;
+    const agora=performance.now();
+    if(agora<fim)return;
+
+    const original=h._garraPlataformaLiberadaMaskOriginal;
+    if(h.collisionFilter) h.collisionFilter.mask=Number.isFinite(original)?original:(CAT_AMBIENTE|CAT_PLAYER);
+    h._garraPlataformaLiberadaBody=null;
+    h._garraPlataformaLiberadaMaskOriginal=null;
+    h._garraPlataformaLiberadaAte=0;
 }
 
 
@@ -4593,6 +4649,10 @@ function update(time, delta) {
     processarAreasInvisiveis(this);
     processarGangorrasLancadoras(this, delta);
     if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2);
+    atualizarMaoLiberadaDaPlataformaMovel(this, player1?.leftHand);
+    atualizarMaoLiberadaDaPlataformaMovel(this, player1?.rightHand);
+    atualizarMaoLiberadaDaPlataformaMovel(this, player2?.leftHand);
+    atualizarMaoLiberadaDaPlataformaMovel(this, player2?.rightHand);
     aplicarVelocidadeRelativaPlataformaMovel(suportesPlataformasMoveis, this);
     verificarPortaisDaSala(this);
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10); });
