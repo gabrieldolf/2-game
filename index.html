@@ -4006,6 +4006,8 @@ function encontrarRotatorPaiDoCorpo(corpo) {
 }
 
 function atualizarPontoGarraPlataformaMovel(p,jKey){
+    const h = jKey==='leftJoint' ? p?.leftHand : p?.rightHand;
+    if(h?._garraPlataformaSoltaNesteFrame)return;
     if(!p||!p[jKey]||!p[jKey+'PlataformaMovel'])return;
     const obj=p[jKey+'PlataformaMovel'], alvo=obj.body, local=p[jKey+'LocalOffset'];
     if(!alvo?.position||!local)return;
@@ -4053,6 +4055,10 @@ function liberarGarraPlataformaMovel(scene,p,h,jKey){
     p[jKey+'PontoPivorMundo']=null;
     p[jKey+'RotatorPai']=null;
     p[jKey+'PlataformaMovel']=null;
+    // Marca explicitamente esta mão como LIVRE neste frame. Nenhuma rotina de
+    // ancoragem/posicionamento de garra pode voltar a usá-la até o próximo frame.
+    h._garraPlataformaSoltaNesteFrame = true;
+    h._garraPlataformaPontoAntigo = null;
     p[jKey+'Gangorra']=null;
     p[jKey+'GangorraNormalLocal']=null;
 
@@ -4791,14 +4797,19 @@ function update(time, delta) {
         atualizarPontoGarraPlataformaMovel(p, 'rightJoint');
         atualizarPontoGarraFilhoRotator(p, 'leftJoint');
         atualizarPontoGarraFilhoRotator(p, 'rightJoint');
-        if (p.leftJoint && p.leftJointPontoPivorMundo) {
+        if (p.leftJoint && p.leftJointPontoPivorMundo && !p.leftHand?._garraPlataformaSoltaNesteFrame) {
             sAct.matter.body.setPosition(p.leftHand, { x: p.leftJointPontoPivorMundo.x, y: p.leftJointPontoPivorMundo.y });
             sAct.matter.body.setVelocity(p.leftHand, { x: 0, y: 0 });
         }
-        if (p.rightJoint && p.rightJointPontoPivorMundo) {
+        if (p.rightJoint && p.rightJointPontoPivorMundo && !p.rightHand?._garraPlataformaSoltaNesteFrame) {
             sAct.matter.body.setPosition(p.rightHand, { x: p.rightJointPontoPivorMundo.x, y: p.rightJointPontoPivorMundo.y });
             sAct.matter.body.setVelocity(p.rightHand, { x: 0, y: 0 });
         }
+        // A partir deste ponto a mão liberada não possui mais qualquer ponto
+        // mundial associado à plataforma. Limpar a flag no fim do frame evita
+        // que ela interfira no controle normal no frame seguinte.
+        if (p.leftHand) p.leftHand._garraPlataformaSoltaNesteFrame = false;
+        if (p.rightHand) p.rightHand._garraPlataformaSoltaNesteFrame = false;
     });
 
     if (player1) { player1.gfx.clear(); desenharJogador(player1); } if (player2) { player2.gfx.clear(); desenharJogador(player2); }
