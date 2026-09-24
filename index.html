@@ -4226,8 +4226,28 @@ function processarGarra(s, p, h, jKey, grab) {
         if(h.collisionFilter) h.collisionFilter.mask = mascaraOriginalMao;
 
         const outraGarraNaMesmaPlataforma =
-            p.leftJointPlataformaMovel === plataformaLiberada ||
-            p.rightJointPlataformaMovel === plataformaLiberada;
+            (p.leftJoint && p.leftJointTarget === plataformaLiberada?.body) ||
+            (p.rightJoint && p.rightJointTarget === plataformaLiberada?.body);
+
+        // A constraint mundial pode deixar a mão em estado de sono no Matter.
+        // Enquanto estava agarrada, a mão tinha sua velocidade zerada a cada
+        // frame; ao remover a constraint, apenas remover a constraint não é
+        // suficiente para reativar o corpo em todas as situações. Acordamos
+        // explicitamente a mão e todos os elos do mesmo braço para que o
+        // analógico volte a controlar a mão imediatamente.
+        const acordar = (corpo) => {
+            if(!corpo) return;
+            try { Phaser.Physics.Matter.Matter.Sleeping.set(corpo, false); } catch(e) {}
+            corpo.isSleeping = false;
+            corpo.sleepCounter = 0;
+            corpo.force.x = 0; corpo.force.y = 0; corpo.torque = 0;
+        };
+        acordar(h);
+        if(jKey === 'leftJoint') p.leftElos?.forEach(acordar);
+        if(jKey === 'rightJoint') p.rightElos?.forEach(acordar);
+        acordar(p.body);
+        h.corpoTocadoAgora = null;
+        h.pontoDeContatoGlobal = null;
 
         if(!outraGarraNaMesmaPlataforma && plataformaLiberada?.body){
             plataformaLiberada._plataformaColisaoBloqueadaAte = Math.max(
