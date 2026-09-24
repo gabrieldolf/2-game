@@ -4005,6 +4005,10 @@ function processarGarra(s, p, h, jKey, grab) {
             // Para gangorras, o alcance da mão serve apenas para ENCONTRAR a prancha.
             // O ponto efetivamente agarrado é sempre projetado sobre a superfície
             // física, impedindo a mão de permanecer presa em uma região de ar.
+            // A rigidez precisa ser calculada ANTES de criar qualquer constraint;
+            // a plataforma móvel usa uma worldConstraint especial abaixo.
+            let rigidezAgarrar = (alvoValido.label === 'corpo_elo') ? 0.2 : 1.0;
+            let amortecimentoAgarrar = (alvoValido.label === 'corpo_elo') ? 0.1 : 0;
             const objGangorra = listaObjetosEditaveis.find(o => o?.body === alvoValido && (o.shape === 'seesaw' || o.shape === 'launcherSeesaw'));
             const objPlataformaMovel = listaObjetosEditaveis.find(o => o?.body === alvoValido && o.shape === 'movingPlatform');
             if (objPlataformaMovel) {
@@ -4017,8 +4021,6 @@ function processarGarra(s, p, h, jKey, grab) {
                 if (pontoSuperficie) localOffset = pontoSuperficie;
             }
 
-            let rigidezAgarrar = (alvoValido.label === 'corpo_elo') ? 0.2 : 1.0;
-            let amortecimentoAgarrar = (alvoValido.label === 'corpo_elo') ? 0.1 : 0;
             const rotatorPai = encontrarRotatorPaiDoCorpo(alvoValido);
 
             // IMPORTANTE: filhos do Pai Giratório são reposicionados cinematicamente
