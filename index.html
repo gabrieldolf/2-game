@@ -223,6 +223,8 @@
             <div class="prop-row"><label>Deslocamento Y:</label><input type="number" id="prop-mover-dest-y" value="0" step="10" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row"><label>Velocidade (px/s):</label><input type="number" id="prop-mover-speed" value="120" min="0" max="3000" step="5" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row"><label>Ao chegar:</label><select id="prop-mover-arrival" onchange="atualizarObjetoExistente()"><option value="teleport">Teleportar para a origem</option><option value="return">Voltar pela trajetória</option></select></div>
+            <div class="prop-row"><label>Esperar no destino (ms):</label><input type="number" id="prop-mover-wait" value="0" min="0" max="60000" step="100" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Soltar jogador no destino:</label><input type="checkbox" id="prop-mover-release" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row"><label>Repetir em loop:</label><input type="checkbox" id="prop-mover-loop" checked onchange="atualizarObjetoExistente()"></div>
             <button id="btn-mover-link" style="background:#16a085;" onclick="alternarModoVincularFilhosMover()">Vincular / Desvincular Filhos</button>
             <button style="background:#7f8c8d;" onclick="limparFilhosMoverSelecionado()">Remover todos os vínculos</button>
@@ -553,7 +555,7 @@ function serializarObjetoDaSala(obj) {
     }
 
     if (obj.shape === 'mover') {
-        base.x=Number(obj.visualX)||0;base.y=Number(obj.visualY)||0;base.moverOrigemX=Number(obj.moverOrigemX??obj.visualX)||0;base.moverOrigemY=Number(obj.moverOrigemY??obj.visualY)||0;base.moverDestinoX=Number(obj.moverDestinoX??obj.visualX)||0;base.moverDestinoY=Number(obj.moverDestinoY??obj.visualY)||0;base.moverAtivo=obj.moverAtivo!==false;base.moverVelocidade=Math.max(0,Number(obj.moverVelocidade)||120);base.moverAoChegar=obj.moverAoChegar==='return'?'return':'teleport';base.moverLoop=obj.moverLoop!==false;base.moverEstado=obj.moverEstado||'indo';base.filhosIds=Array.isArray(obj.filhosIds)?[...new Set(obj.filhosIds.filter(Boolean))]:[];base.vinculosFilhos=obj.vinculosFilhos&&typeof obj.vinculosFilhos==='object'?JSON.parse(JSON.stringify(obj.vinculosFilhos)):{};return base;
+        base.x=Number(obj.visualX)||0;base.y=Number(obj.visualY)||0;base.moverOrigemX=Number(obj.moverOrigemX??obj.visualX)||0;base.moverOrigemY=Number(obj.moverOrigemY??obj.visualY)||0;base.moverDestinoX=Number(obj.moverDestinoX??obj.visualX)||0;base.moverDestinoY=Number(obj.moverDestinoY??obj.visualY)||0;base.moverAtivo=obj.moverAtivo!==false;base.moverVelocidade=Math.max(0,Number(obj.moverVelocidade)||120);base.moverAoChegar=obj.moverAoChegar==='return'?'return':'teleport';base.moverEsperaDestinoMs=Math.max(0,Number(obj.moverEsperaDestinoMs)||0);base.moverSoltarJogadorNoDestino=obj.moverSoltarJogadorNoDestino===true;base.moverEsperandoAte=0;base.moverLoop=obj.moverLoop!==false;base.moverEstado=obj.moverEstado||'indo';base.filhosIds=Array.isArray(obj.filhosIds)?[...new Set(obj.filhosIds.filter(Boolean))]:[];base.vinculosFilhos=obj.vinculosFilhos&&typeof obj.vinculosFilhos==='object'?JSON.parse(JSON.stringify(obj.vinculosFilhos)):{};return base;
     }
 
     if (obj.shape === 'rotator') {
@@ -781,7 +783,97 @@ function capturarTransformacaoRelativaFilhoMover(m,f){if(!m||!f||f===m||f.shape=
 function alternarVinculoFilhoMover(m,f){if(!m||m.shape!=='mover'||!f||f===m||f.shape==='mover'||f.shape==='rotator')return false;const id=garantirIdObjetoCena(f);m.filhosIds ||= [];m.vinculosFilhos ||= {};const i=m.filhosIds.indexOf(id);if(i>=0){m.filhosIds.splice(i,1);delete m.vinculosFilhos[id];}else{m.filhosIds.push(id);const v=capturarTransformacaoRelativaFilhoMover(m,f);if(v)m.vinculosFilhos[id]=v;}atualizarStatusFilhosMover();marcarSalaComoAlterada();return true;}
 function aplicarTransformacaoRelativaFilhoMover(scene,m,f,v,velX=0,velY=0){const cx=Number(m.visualX)||0,cy=Number(m.visualY)||0;if(f.body){const np={x:cx+(Number(v.localX)||0),y:cy+(Number(v.localY)||0)};const corpo=f.body;scene.matter.body.setPosition(corpo,np);scene.matter.body.setAngle(corpo,Number(v.angle)||0);/* O filho recebe a velocidade do Pai Movedor. Assim, no passo de física seguinte, o Matter pode resolver colisões normalmente e transmitir o movimento para jogador/outros corpos. Não zeramos a velocidade depois da colisão. */scene.matter.body.setVelocity(corpo,{x:velX,y:velY});scene.matter.body.setAngularVelocity(corpo,0);f.visualX=f.posicaoTravadaX=np.x;f.visualY=f.posicaoTravadaY=np.y;return;}if(f.shape==='rope'&&f.ropeElos){(v.elos||[]).forEach((d,i)=>{const e=f.ropeElos[i];if(!e)return;const np={x:cx+d.x,y:cy+d.y};scene.matter.body.setPosition(e,np);scene.matter.body.setAngle(e,d.angle||0);scene.matter.body.setVelocity(e,{x:velX,y:velY});scene.matter.body.setAngularVelocity(e,0);});}f.visualX=f.posicaoTravadaX=cx+(Number(v.localX)||0);f.visualY=f.posicaoTravadaY=cy+(Number(v.localY)||0);if(f.npcSprite)f.npcSprite.setPosition(f.visualX,f.visualY);if(f.decorSprite)f.decorSprite.setPosition(f.visualX,f.visualY);if(f.shape==='portal'){f.portalEntradaX=cx+(Number(v.portalEntradaLocalX)||0);f.portalEntradaY=cy+(Number(v.portalEntradaLocalY)||0);}if(f.shape==='triggerArea'){f.triggerDestX=cx+(Number(v.triggerDestLocalX)||0);f.triggerDestY=cy+(Number(v.triggerDestLocalY)||0);}}
 function garantirVinculosRelativosMover(m){if(!m||m.shape!=='mover')return;m.vinculosFilhos ||= {};for(const id of m.filhosIds||[]){if(m.vinculosFilhos[id])continue;const f=encontrarObjetoCenaPorId(id),v=capturarTransformacaoRelativaFilhoMover(m,f);if(v)m.vinculosFilhos[id]=v;}}
-function atualizarMovers(scene,dt){if(modoEditorAtivo)return;for(const m of listaObjetosEditaveis){if(!m||m.shape!=='mover')continue;garantirVinculosRelativosMover(m);const antesX=Number(m.visualX)||Number(m.moverOrigemX)||0,antesY=Number(m.visualY)||Number(m.moverOrigemY)||0;if(m.moverAtivo!==false){const ox=Number(m.moverOrigemX)||0,oy=Number(m.moverOrigemY)||0,dx=Number(m.moverDestinoX)||ox,dy=Number(m.moverDestinoY)||oy,px=antesX,py=antesY,voltando=m.moverEstado==='voltando',tx=voltando?ox:dx,ty=voltando?oy:dy,dist=Math.hypot(tx-px,ty-py),passo=Math.max(0,Number(m.moverVelocidade)||0)*dt;if(dist<=Math.max(.001,passo)){m.visualX=tx;m.visualY=ty;if(!voltando){if(m.moverAoChegar==='teleport'){m.visualX=ox;m.visualY=oy;if(!m.moverLoop)m.moverAtivo=false;}else m.moverEstado='voltando';}else{if(m.moverLoop)m.moverEstado='indo';else m.moverAtivo=false;}}else if(dist>0){m.visualX=px+(tx-px)/dist*passo;m.visualY=py+(ty-py)/dist*passo;}m.posicaoTravadaX=m.visualX;m.posicaoTravadaY=m.visualY;}const velX=dt>0?(Number(m.visualX||0)-antesX)/dt:0,velY=dt>0?(Number(m.visualY||0)-antesY)/dt:0;m.moverDeltaX=Number(m.visualX||0)-antesX;m.moverDeltaY=Number(m.visualY||0)-antesY;for(const id of m.filhosIds||[]){const f=encontrarObjetoCenaPorId(id),v=m.vinculosFilhos?.[id];if(f&&v)aplicarTransformacaoRelativaFilhoMover(scene,m,f,v,velX,velY);}}}
+function liberarJogadoresDoMoverAoChegar(scene, mover){
+    if(!scene || !mover || mover.moverSoltarJogadorNoDestino!==true) return;
+    const ids=new Set((mover.filhosIds||[]).map(id=>String(id)));
+    const jogadores=[player1,player2].filter(Boolean);
+    for(const p of jogadores){
+        for(const jKey of ['leftJoint','rightJoint']){
+            const alvo=p[jKey+'Target'];
+            if(!alvo) continue;
+            const filho=listaObjetosEditaveis.find(o=>o&&o.body===alvo);
+            if(!filho || !ids.has(String(garantirIdObjetoCena(filho)))) continue;
+            if(p[jKey]) scene.matter.world.remove(p[jKey]);
+            p[jKey]=null;
+            p[jKey+'Target']=null;
+            p[jKey+'PivotBody']=null;
+            p[jKey+'LocalOffset']=null;
+            p[jKey+'PontoPivorMundo']=null;
+            p[jKey+'RotatorPai']=null;
+            p[jKey+'Gangorra']=null;
+            p[jKey+'GangorraNormalLocal']=null;
+        }
+    }
+}
+
+function atualizarMovers(scene,dt){
+    if(modoEditorAtivo)return;
+    const agora=performance.now();
+    for(const m of listaObjetosEditaveis){
+        if(!m||m.shape!=='mover')continue;
+        garantirVinculosRelativosMover(m);
+        const antesX=Number(m.visualX)||Number(m.moverOrigemX)||0,
+              antesY=Number(m.visualY)||Number(m.moverOrigemY)||0;
+        m.moverDeltaX=0;
+        m.moverDeltaY=0;
+        if(m.moverAtivo!==false){
+            const ox=Number(m.moverOrigemX)||0,oy=Number(m.moverOrigemY)||0,
+                  dx=Number(m.moverDestinoX)||ox,dy=Number(m.moverDestinoY)||oy,
+                  px=antesX,py=antesY,voltando=m.moverEstado==='voltando',
+                  tx=voltando?ox:dx,ty=voltando?oy:dy;
+
+            if(m.moverEsperandoAte && agora < m.moverEsperandoAte){
+                // O Pai Movedor permanece parado no destino durante a espera.
+            }else if(m.moverEsperandoAte){
+                m.moverEsperandoAte=0;
+                if(!voltando){
+                    if(m.moverAoChegar==='teleport'){
+                        m.visualX=ox;m.visualY=oy;
+                        if(!m.moverLoop)m.moverAtivo=false;
+                    }else{
+                        m.moverEstado='voltando';
+                    }
+                }else{
+                    if(m.moverLoop)m.moverEstado='indo';
+                    else m.moverAtivo=false;
+                }
+            }else{
+                const dist=Math.hypot(tx-px,ty-py),passo=Math.max(0,Number(m.moverVelocidade)||0)*dt;
+                if(dist<=Math.max(.001,passo)){
+                    m.visualX=tx;m.visualY=ty;
+                    if(!voltando){
+                        if(m.moverSoltarJogadorNoDestino===true) liberarJogadoresDoMoverAoChegar(scene,m);
+                        const espera=Math.max(0,Number(m.moverEsperaDestinoMs)||0);
+                        if(espera>0){
+                            m.moverEsperandoAte=agora+espera;
+                        }else if(m.moverAoChegar==='teleport'){
+                            m.visualX=ox;m.visualY=oy;
+                            if(!m.moverLoop)m.moverAtivo=false;
+                        }else{
+                            m.moverEstado='voltando';
+                        }
+                    }else{
+                        if(m.moverLoop)m.moverEstado='indo';
+                        else m.moverAtivo=false;
+                    }
+                }else if(dist>0){
+                    m.visualX=px+(tx-px)/dist*passo;
+                    m.visualY=py+(ty-py)/dist*passo;
+                }
+            }
+            m.posicaoTravadaX=m.visualX;
+            m.posicaoTravadaY=m.visualY;
+        }
+        const velX=dt>0?(Number(m.visualX||0)-antesX)/dt:0,
+              velY=dt>0?(Number(m.visualY||0)-antesY)/dt:0;
+        m.moverDeltaX=Number(m.visualX||0)-antesX;
+        m.moverDeltaY=Number(m.visualY||0)-antesY;
+        for(const id of m.filhosIds||[]){
+            const f=encontrarObjetoCenaPorId(id),v=m.vinculosFilhos?.[id];
+            if(f&&v)aplicarTransformacaoRelativaFilhoMover(scene,m,f,v,velX,velY);
+        }
+    }
+}
 function transportarJogadoresPresosAoMover(scene){if(modoEditorAtivo)return;const jogadores=[player1,player2].filter(Boolean);for(const p of jogadores){if(!p?.body)continue;const alvos=[p.leftJointTarget,p.rightJointTarget].filter(Boolean);let dx=0,dy=0,temMover=false;for(const alvo of alvos){const f=listaObjetosEditaveis.find(o=>o&&o.body===alvo);if(!f)continue;for(const m of listaObjetosEditaveis){if(!m||m.shape!=='mover'||!Array.isArray(m.filhosIds))continue;if(m.filhosIds.includes(garantirIdObjetoCena(f))){const mdx=Number(m.moverDeltaX)||0,mdy=Number(m.moverDeltaY)||0;dx+=mdx;dy+=mdy;temMover=true;break;}}if(temMover)break;}if(!temMover||(Math.abs(dx)<0.0001&&Math.abs(dy)<0.0001))continue;const corpos=[p.body,p.leftHand,p.rightHand].filter(Boolean);for(const corpo of corpos){scene.matter.body.setPosition(corpo,{x:corpo.position.x+dx,y:corpo.position.y+dy});}}}
 function transladarFilhosDoMover(scene,m,dx,dy){m.moverOrigemX+=dx;m.moverOrigemY+=dy;m.moverDestinoX+=dx;m.moverDestinoY+=dy;for(const id of m.filhosIds||[]){const f=encontrarObjetoCenaPorId(id);if(!f)continue;if(f.body){scene.matter.body.setPosition(f.body,{x:f.body.position.x+dx,y:f.body.position.y+dy});f.visualX=f.posicaoTravadaX=f.body.position.x;f.visualY=f.posicaoTravadaY=f.body.position.y;}else{f.visualX=f.posicaoTravadaX=(Number(f.visualX)||0)+dx;f.visualY=f.posicaoTravadaY=(Number(f.visualY)||0)+dy;if(f.npcSprite)f.npcSprite.setPosition(f.visualX,f.visualY);if(f.decorSprite)f.decorSprite.setPosition(f.visualX,f.visualY);if(f.shape==='portal'){f.portalEntradaX+=dx;f.portalEntradaY+=dy;}if(f.shape==='triggerArea'){f.triggerDestX+=dx;f.triggerDestY+=dy;}}}}
 
@@ -1599,7 +1691,7 @@ function adicionarObjetoSerializado(scene, dados) {
 
     if (dados.shape === 'mover') {
         const x=Number(dados.x)||0,y=Number(dados.y)||0;
-        listaObjetosEditaveis.push({idObjeto:dados.idObjeto||gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(7),shape:'mover',w:44,h:44,visualX:x,visualY:y,posicaoTravadaX:x,posicaoTravadaY:y,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,idPersistente:dados.idPersistente||null,persistirSessao:false,moverOrigemX:Number(dados.moverOrigemX??x)||0,moverOrigemY:Number(dados.moverOrigemY??y)||0,moverDestinoX:Number(dados.moverDestinoX??x)||0,moverDestinoY:Number(dados.moverDestinoY??y)||0,moverAtivo:dados.moverAtivo!==false,moverVelocidade:Math.max(0,Number(dados.moverVelocidade)||120),moverAoChegar:dados.moverAoChegar==='return'?'return':'teleport',moverLoop:dados.moverLoop!==false,moverEstado:dados.moverEstado||'indo',filhosIds:Array.isArray(dados.filhosIds)?[...new Set(dados.filhosIds.filter(Boolean))]:[],vinculosFilhos:dados.vinculosFilhos&&typeof dados.vinculosFilhos==='object'?JSON.parse(JSON.stringify(dados.vinculosFilhos)):{} });return;
+        listaObjetosEditaveis.push({idObjeto:dados.idObjeto||gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(7),shape:'mover',w:44,h:44,visualX:x,visualY:y,posicaoTravadaX:x,posicaoTravadaY:y,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,idPersistente:dados.idPersistente||null,persistirSessao:false,moverOrigemX:Number(dados.moverOrigemX??x)||0,moverOrigemY:Number(dados.moverOrigemY??y)||0,moverDestinoX:Number(dados.moverDestinoX??x)||0,moverDestinoY:Number(dados.moverDestinoY??y)||0,moverAtivo:dados.moverAtivo!==false,moverVelocidade:Math.max(0,Number(dados.moverVelocidade)||120),moverAoChegar:dados.moverAoChegar==='return'?'return':'teleport',moverEsperaDestinoMs:Math.max(0,Number(dados.moverEsperaDestinoMs)||0),moverSoltarJogadorNoDestino:dados.moverSoltarJogadorNoDestino===true,moverEsperandoAte:0,moverLoop:dados.moverLoop!==false,moverEstado:dados.moverEstado||'indo',filhosIds:Array.isArray(dados.filhosIds)?[...new Set(dados.filhosIds.filter(Boolean))]:[],vinculosFilhos:dados.vinculosFilhos&&typeof dados.vinculosFilhos==='object'?JSON.parse(JSON.stringify(dados.vinculosFilhos)):{} });return;
     }
     if (dados.shape === 'rotator') {
         const x = Number(dados.x) || 0, y = Number(dados.y) || 0;
@@ -2567,7 +2659,7 @@ function extrairCamposPainel() {
         rotatorDirecao: Number(document.getElementById('prop-rotator-direction')?.value) < 0 ? -1 : 1,
         rotatorVelocidadeDeg: Math.max(0, parseFloat(document.getElementById('prop-rotator-speed')?.value) || 0),
         rotatorEventoAtivar:(document.getElementById('prop-rotator-event-on')?.value||'').trim(), rotatorEventoDesativar:(document.getElementById('prop-rotator-event-off')?.value||'').trim(),
-        moverAtivo: !!document.getElementById('prop-mover-active')?.checked, moverDestinoX: parseFloat(document.getElementById('prop-mover-dest-x')?.value)||300, moverDestinoY: parseFloat(document.getElementById('prop-mover-dest-y')?.value)||0, moverVelocidade: Math.max(0,parseFloat(document.getElementById('prop-mover-speed')?.value)||120), moverAoChegar: document.getElementById('prop-mover-arrival')?.value==='return'?'return':'teleport', moverLoop: !!document.getElementById('prop-mover-loop')?.checked,
+        moverAtivo: !!document.getElementById('prop-mover-active')?.checked, moverDestinoX: parseFloat(document.getElementById('prop-mover-dest-x')?.value)||300, moverDestinoY: parseFloat(document.getElementById('prop-mover-dest-y')?.value)||0, moverVelocidade: Math.max(0,parseFloat(document.getElementById('prop-mover-speed')?.value)||120), moverAoChegar: document.getElementById('prop-mover-arrival')?.value==='return'?'return':'teleport', moverEsperaDestinoMs: Math.max(0,parseFloat(document.getElementById('prop-mover-wait')?.value)||0), moverSoltarJogadorNoDestino: !!document.getElementById('prop-mover-release')?.checked, moverLoop: !!document.getElementById('prop-mover-loop')?.checked,
         decorUrl:(document.getElementById('prop-decor-url')?.value||'').trim(),decorScale:Math.max(.01,parseFloat(document.getElementById('prop-decor-scale')?.value)||1),decorLayer:datosLayer(document.getElementById('prop-decor-layer')?.value),decorFrameW:Math.max(1,parseInt(document.getElementById('prop-decor-frame-w')?.value)||64),decorFrameH:Math.max(1,parseInt(document.getElementById('prop-decor-frame-h')?.value)||64),decorStart:Math.max(0,parseInt(document.getElementById('prop-decor-start')?.value)||0),decorEnd:Math.max(0,parseInt(document.getElementById('prop-decor-end')?.value)||0),decorFps:Math.max(1,parseFloat(document.getElementById('prop-decor-fps')?.value)||8),
         npcId:(document.getElementById('prop-npc-id')?.value||'npc').trim(),npcNome:(document.getElementById('prop-npc-name')?.value||'NPC').trim(),npcSpritesheetUrl:(document.getElementById('prop-npc-sheet-url')?.value||'').trim(),npcFrameW:Math.max(1,parseInt(document.getElementById('prop-npc-frame-w')?.value)||64),npcFrameH:Math.max(1,parseInt(document.getElementById('prop-npc-frame-h')?.value)||64),npcEscala:Math.max(.1,parseFloat(document.getElementById('prop-npc-scale')?.value)||1),npcRaioDialogo:Math.max(20,parseFloat(document.getElementById('prop-npc-radius')?.value)||180),npcEstadoInicial:(document.getElementById('prop-npc-initial-state')?.value||'inicial').trim(),npcEstados:parsearEstadosNPCDoPainel(),coinValue:Math.max(1,parseInt(document.getElementById('prop-coin-value')?.value)||1),coinId:(document.getElementById('prop-coin-id')?.value||'').trim(),triggerW:Math.max(20,parseFloat(document.getElementById('prop-trigger-w')?.value)||160),triggerH:Math.max(20,parseFloat(document.getElementById('prop-trigger-h')?.value)||120),triggerTargetId:(document.getElementById('prop-trigger-target')?.value||'').trim(),triggerDestX:parseFloat(document.getElementById('prop-trigger-dest-x')?.value)||0,triggerDestY:parseFloat(document.getElementById('prop-trigger-dest-y')?.value)||0
     };
@@ -2579,7 +2671,7 @@ function executarCriacaoObjeto(scene, x, y) {
     if(c.shape==='triggerArea'){const obj={idObjeto:gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(7),shape:'triggerArea',w:c.triggerW,h:c.triggerH,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,triggerW:c.triggerW,triggerH:c.triggerH,triggerTargetId:'',triggerDestX:ax+220,triggerDestY:ay,triggerPlayersInside:{}};listaObjetosEditaveis.push(obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
     if(c.shape==='npc'){const obj={idObjeto:gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(8),shape:'npc',w:c.npcFrameW,h:c.npcFrameH,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,npcId:c.npcId||('npc_'+Date.now()),npcNome:c.npcNome||'NPC',npcSpritesheetUrl:c.npcSpritesheetUrl,npcFrameW:c.npcFrameW,npcFrameH:c.npcFrameH,npcEscala:c.npcEscala,npcRaioDialogo:c.npcRaioDialogo,npcEstadoInicial:c.npcEstadoInicial||'inicial',npcEstados:c.npcEstados,npcSprite:null};listaObjetosEditaveis.push(obj);prepararSpriteNPC(scene,obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
     if(c.shape==='coin'){const id=c.coinId||('moeda_'+Date.now()+'_'+Math.floor(Math.random()*99999));const body=scene.matter.add.circle(ax,ay,16,{isStatic:true,isSensor:true,label:'moeda',collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER}});body.naoAgarravel=true;const obj={idObjeto:gerarIdObjetoCena(),body,gfx:scene.add.graphics().setDepth(5),shape:'coin',w:16,h:32,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,coinValue:c.coinValue,coinId:id,coinColetada:false};body.objetoEditavelRef=obj;listaObjetosEditaveis.push(obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
-    if(c.shape==='mover'){const obj={idObjeto:gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(7),shape:'mover',w:44,h:44,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,posicaoTravadaX:ax,posicaoTravadaY:ay,visualX:ax,visualY:ay,manuseavel:false,naoAgarravel:true,isStatic:true,idPersistente:null,persistirSessao:false,moverOrigemX:ax,moverOrigemY:ay,moverDestinoX:ax+(Number(c.moverDestinoX)||300),moverDestinoY:ay+(Number(c.moverDestinoY)||0),moverAtivo:c.moverAtivo,moverVelocidade:c.moverVelocidade,moverAoChegar:c.moverAoChegar,moverLoop:c.moverLoop,moverEstado:'indo',filhosIds:[],vinculosFilhos:{}};listaObjetosEditaveis.push(obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
+    if(c.shape==='mover'){const obj={idObjeto:gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(7),shape:'mover',w:44,h:44,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,posicaoTravadaX:ax,posicaoTravadaY:ay,visualX:ax,visualY:ay,manuseavel:false,naoAgarravel:true,isStatic:true,idPersistente:null,persistirSessao:false,moverOrigemX:ax,moverOrigemY:ay,moverDestinoX:ax+(Number(c.moverDestinoX)||300),moverDestinoY:ay+(Number(c.moverDestinoY)||0),moverAtivo:c.moverAtivo,moverVelocidade:c.moverVelocidade,moverAoChegar:c.moverAoChegar,moverEsperaDestinoMs:c.moverEsperaDestinoMs,moverSoltarJogadorNoDestino:c.moverSoltarJogadorNoDestino,moverEsperandoAte:0,moverLoop:c.moverLoop,moverEstado:'indo',filhosIds:[],vinculosFilhos:{}};listaObjetosEditaveis.push(obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
     if (c.shape === 'rotator') {
         const obj = {
             idObjeto: gerarIdObjetoCena(), body: null, gfx: scene.add.graphics().setDepth(7), shape: 'rotator',
@@ -2792,7 +2884,7 @@ function selecionarObjetoDoEditor(obj) {
     else if(obj.shape==='coin'){document.getElementById('prop-coin-value').value=obj.coinValue||1;document.getElementById('prop-coin-id').value=obj.coinId||'';}
     else if(obj.shape==='triggerArea'){document.getElementById('prop-trigger-w').value=Math.max(20,Number(obj.triggerW)||160);document.getElementById('prop-trigger-h').value=Math.max(20,Number(obj.triggerH)||120);document.getElementById('prop-trigger-target').value=obj.triggerTargetId||'';document.getElementById('prop-trigger-dest-x').value=Number(obj.triggerDestX)||0;document.getElementById('prop-trigger-dest-y').value=Number(obj.triggerDestY)||0;atualizarStatusTrigger();}
     if (obj.shape === 'mover') {
-        document.getElementById('prop-mover-active').checked=obj.moverAtivo!==false;document.getElementById('prop-mover-dest-x').value=(Number(obj.moverDestinoX)||0)-(Number(obj.moverOrigemX)||0);document.getElementById('prop-mover-dest-y').value=(Number(obj.moverDestinoY)||0)-(Number(obj.moverOrigemY)||0);document.getElementById('prop-mover-speed').value=Math.max(0,Number(obj.moverVelocidade)||120);document.getElementById('prop-mover-arrival').value=obj.moverAoChegar==='return'?'return':'teleport';document.getElementById('prop-mover-loop').checked=obj.moverLoop!==false;atualizarStatusFilhosMover();
+        document.getElementById('prop-mover-active').checked=obj.moverAtivo!==false;document.getElementById('prop-mover-dest-x').value=(Number(obj.moverDestinoX)||0)-(Number(obj.moverOrigemX)||0);document.getElementById('prop-mover-dest-y').value=(Number(obj.moverDestinoY)||0)-(Number(obj.moverOrigemY)||0);document.getElementById('prop-mover-speed').value=Math.max(0,Number(obj.moverVelocidade)||120);document.getElementById('prop-mover-arrival').value=obj.moverAoChegar==='return'?'return':'teleport';document.getElementById('prop-mover-wait').value=Math.max(0,Number(obj.moverEsperaDestinoMs)||0);document.getElementById('prop-mover-release').checked=obj.moverSoltarJogadorNoDestino===true;document.getElementById('prop-mover-loop').checked=obj.moverLoop!==false;atualizarStatusFilhosMover();
     } else     if (obj.shape === 'rotator') {
         document.getElementById('prop-rotator-active').checked = obj.rotatorAtivo !== false;
         document.getElementById('prop-rotator-direction').value = Number(obj.rotatorDirecao) < 0 ? '-1' : '1';
@@ -2868,8 +2960,8 @@ function atualizarObjetoExistente() {
     if(c.shape==='npc'&&obj.shape!=='npc'){Object.assign(obj,{shape:'npc',body:null,w:c.npcFrameW,h:c.npcFrameH,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,npcId:c.npcId||('npc_'+Date.now()),npcNome:c.npcNome,npcSpritesheetUrl:c.npcSpritesheetUrl,npcFrameW:c.npcFrameW,npcFrameH:c.npcFrameH,npcEscala:c.npcEscala,npcRaioDialogo:c.npcRaioDialogo,npcEstadoInicial:c.npcEstadoInicial,npcEstados:c.npcEstados,npcSprite:null});prepararSpriteNPC(scene,obj,true);marcarSalaComoAlterada();return;}
     if(c.shape==='coin'&&obj.shape!=='coin'){const body=scene.matter.add.circle(px,py,16,{isStatic:true,isSensor:true,label:'moeda',collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER}});body.naoAgarravel=true;Object.assign(obj,{shape:'coin',body,w:16,h:32,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,coinValue:c.coinValue,coinId:c.coinId||('moeda_'+Date.now()),coinColetada:false});body.objetoEditavelRef=obj;marcarSalaComoAlterada();return;}
     if(c.shape==='triggerArea'&&obj.shape!=='triggerArea'){if(obj.seesawConstraint){scene.matter.world.remove(obj.seesawConstraint);obj.seesawConstraint=null;}if(obj.shape==='rope'){obj.ropeConstraints?.forEach(co=>scene.matter.world.remove(co));obj.ropeElos?.forEach(el=>scene.matter.world.remove(el));}else if(obj.body){scene.matter.world.remove(obj.body);}if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}Object.assign(obj,{shape:'triggerArea',body:null,w:c.triggerW,h:c.triggerH,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,triggerW:c.triggerW,triggerH:c.triggerH,triggerTargetId:c.triggerTargetId||'',triggerDestX:Number.isFinite(c.triggerDestX)?c.triggerDestX:px+220,triggerDestY:Number.isFinite(c.triggerDestY)?c.triggerDestY:py,triggerPlayersInside:{}});garantirIdObjetoCena(obj);marcarSalaComoAlterada();atualizarStatusTrigger();return;}
-    if(c.shape==='mover'&&obj.shape!=='mover'){if(obj.body)scene.matter.world.remove(obj.body);Object.assign(obj,{shape:'mover',body:null,w:44,h:44,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,manuseavel:false,naoAgarravel:true,isStatic:true,idPersistente:null,persistirSessao:false,moverOrigemX:px,moverOrigemY:py,moverDestinoX:px+(Number(c.moverDestinoX)||300),moverDestinoY:py+(Number(c.moverDestinoY)||0),moverAtivo:c.moverAtivo,moverVelocidade:c.moverVelocidade,moverAoChegar:c.moverAoChegar,moverLoop:c.moverLoop,moverEstado:'indo',filhosIds:[],vinculosFilhos:{}});marcarSalaComoAlterada();return;}
-    if(obj.shape==='mover'&&c.shape==='mover'){obj.moverDestinoX=(Number(obj.moverOrigemX)||px)+(Number(c.moverDestinoX)||0);obj.moverDestinoY=(Number(obj.moverOrigemY)||py)+(Number(c.moverDestinoY)||0);obj.moverAtivo=c.moverAtivo;obj.moverVelocidade=c.moverVelocidade;obj.moverAoChegar=c.moverAoChegar;obj.moverLoop=c.moverLoop;marcarSalaComoAlterada();return;}
+    if(c.shape==='mover'&&obj.shape!=='mover'){if(obj.body)scene.matter.world.remove(obj.body);Object.assign(obj,{shape:'mover',body:null,w:44,h:44,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,manuseavel:false,naoAgarravel:true,isStatic:true,idPersistente:null,persistirSessao:false,moverOrigemX:px,moverOrigemY:py,moverDestinoX:px+(Number(c.moverDestinoX)||300),moverDestinoY:py+(Number(c.moverDestinoY)||0),moverAtivo:c.moverAtivo,moverVelocidade:c.moverVelocidade,moverAoChegar:c.moverAoChegar,moverEsperaDestinoMs:c.moverEsperaDestinoMs,moverSoltarJogadorNoDestino:c.moverSoltarJogadorNoDestino,moverEsperandoAte:0,moverLoop:c.moverLoop,moverEstado:'indo',filhosIds:[],vinculosFilhos:{}});marcarSalaComoAlterada();return;}
+    if(obj.shape==='mover'&&c.shape==='mover'){obj.moverDestinoX=(Number(obj.moverOrigemX)||px)+(Number(c.moverDestinoX)||0);obj.moverDestinoY=(Number(obj.moverOrigemY)||py)+(Number(c.moverDestinoY)||0);obj.moverAtivo=c.moverAtivo;obj.moverVelocidade=c.moverVelocidade;obj.moverAoChegar=c.moverAoChegar;obj.moverEsperaDestinoMs=c.moverEsperaDestinoMs;obj.moverSoltarJogadorNoDestino=c.moverSoltarJogadorNoDestino;obj.moverEsperandoAte=0;obj.moverLoop=c.moverLoop;marcarSalaComoAlterada();return;}
     if (c.shape === 'rotator' && obj.shape !== 'rotator') {
         if (obj.seesawConstraint) { scene.matter.world.remove(obj.seesawConstraint); obj.seesawConstraint = null; } if(obj.launcherWeightBody){scene.matter.world.remove(obj.launcherWeightBody);obj.launcherWeightBody=null;if(obj.launcherWeightGfx){obj.launcherWeightGfx.destroy();obj.launcherWeightGfx=null;}}
         if (obj.shape === 'rope') {
