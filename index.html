@@ -4172,8 +4172,10 @@ function processarGarra(s, p, h, jKey, grab) {
             const objGangorra = listaObjetosEditaveis.find(o => o?.body === alvoValido && (o.shape === 'seesaw' || o.shape === 'launcherSeesaw'));
             const objPlataformaMovel = listaObjetosEditaveis.find(o => o?.body === alvoValido && o.shape === 'movingPlatform');
             if (objPlataformaMovel) {
-                // Se esta mão tinha acabado de ser liberada, restaura sua
-                // máscara original antes de iniciar uma nova garra.
+                // A plataforma móvel usa UMA ÚNICA worldConstraint, criada no
+                // bloco específico logo abaixo. Não criamos uma constraint aqui,
+                // porque ela seria sobrescrita pela segunda e ficaria órfã no
+                // Matter, mantendo a mão presa ao ponto inicial depois da soltura.
                 if(h._garraPlataformaLiberadaMaskOriginal!==undefined && h.collisionFilter){
                     h.collisionFilter.mask=Number(h._garraPlataformaLiberadaMaskOriginal)||(CAT_AMBIENTE|CAT_PLAYER);
                     h._garraPlataformaLiberadaBody=null;
@@ -4184,12 +4186,7 @@ function processarGarra(s, p, h, jKey, grab) {
                 p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
                 p[jKey + 'RotatorPai'] = null; p[jKey + 'PlataformaMovel'] = objPlataformaMovel;
                 p[jKey + '_FoiLiberadaPlataformaMovel'] = false;
-                // Enquanto uma mão estiver presa, a plataforma não colide com
-                // nenhuma parte do jogador. O transporte passa a ser cinemático
-                // e evita que o solver empurre o corpo para longe da mão.
                 definirColisaoPlataformaMovel(objPlataformaMovel, true);
-                p[jKey + 'PontoPivorMundo'] = { x:h.position.x, y:h.position.y };
-                p[jKey] = s.matter.add.worldConstraint(h, 0, rigidezAgarrar, { pointA:{x:h.position.x,y:h.position.y}, pointB:{x:0,y:0}, stiffness:rigidezAgarrar, damping:amortecimentoAgarrar });
             } else if (objGangorra) {
                 const pontoSuperficie = obterPontoLocalGarraGangorra(objGangorra, h.position.x, h.position.y);
                 if (pontoSuperficie) localOffset = pontoSuperficie;
