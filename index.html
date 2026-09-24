@@ -243,7 +243,7 @@
             <div class="prop-row"><label>Esperar nos extremos (ms):</label><input type="number" id="prop-platform-wait" value="0" min="0" max="60000" step="100" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row"><label>Repetir em loop:</label><input type="checkbox" id="prop-platform-loop" checked onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row"><label>Transportar jogador:</label><input type="checkbox" id="prop-platform-carry" checked onchange="atualizarObjetoExistente()"></div>
-            <p style="font-size:10px;color:#bbf7d0;margin:2px 0 0;">Plataforma sólida e não agarrável. Quando o jogador está apoiado sobre ela, o movimento da plataforma é aplicado ao conjunto físico do jogador para evitar escorregões e arremessos.</p>
+            <p style="font-size:10px;color:#bbf7d0;margin:2px 0 0;">Plataforma sólida e agarrável. A garra acompanha a plataforma sem aplicar força física nela. Quando o jogador está apoiado, ele é transportado pela trajetória da plataforma sem ser arremessado.</p>
         </div>
         <div id="painel-propriedades-decor" style="display:none; background:#273746; padding:9px; border:2px solid #af7ac5; border-radius:6px; margin-top:7px; flex-direction:column; gap:7px;">
             <h3 style="color:#eadcf2;font-weight:bold;margin:0;">Imagem / Spritesheet Decorativo</h3>
@@ -895,12 +895,13 @@ function criarCorpoPlataformaMovel(scene,obj){
     if(!scene||!obj)return null;
     const x=Number(obj.visualX)||Number(obj.platformOrigemX)||0,y=Number(obj.visualY)||Number(obj.platformOrigemY)||0;
     const w=Math.max(30,Number(obj.w)||180),h=Math.max(8,Number(obj.h)||24);
-    const body=scene.matter.add.rectangle(x,y,w,h,{isStatic:true,label:'plataforma_movel',friction:1,frictionStatic:1,restitution:0,collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER|CAT_AMBIENTE}});
-    body.manuseavel=false;body.naoAgarravel=true;obj.body=body;obj.visualX=x;obj.visualY=y;obj.posicaoTravadaX=x;obj.posicaoTravadaY=y;obj.platformDeltaX=0;obj.platformDeltaY=0;obj.platformVelX=0;obj.platformVelY=0;return body;
+    const body=scene.matter.add.rectangle(x,y,w,h,{isStatic:false,label:'plataforma_movel',mass:1000000,friction:1,frictionStatic:1,restitution:0,frictionAir:0.9,ignoreGravity:true,collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER|CAT_AMBIENTE}});
+    scene.matter.body.setInertia(body,Infinity);
+    body.manuseavel=false;body.naoAgarravel=false;obj.body=body;obj.visualX=x;obj.visualY=y;obj.posicaoTravadaX=x;obj.posicaoTravadaY=y;obj.platformDeltaX=0;obj.platformDeltaY=0;obj.platformVelX=0;obj.platformVelY=0;return body;
 }
 function criarPlataformaMovelAPartirDeDados(scene,dados){
     const x=Number(dados.x)||0,y=Number(dados.y)||0;
-    const obj={idObjeto:dados.idObjeto||gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(3),shape:'movingPlatform',w:Math.max(30,Number(dados.platformW??dados.w)||180),h:Math.max(8,Number(dados.platformH??dados.h)||24),visualX:x,visualY:y,posicaoTravadaX:x,posicaoTravadaY:y,gravity:false,lockPos:false,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,idPersistente:dados.idPersistente||null,persistirSessao:false,platformOrigemX:Number(dados.platformOrigemX??x)||0,platformOrigemY:Number(dados.platformOrigemY??y)||0,platformDestinoX:Number(dados.platformDestinoX??x)||0,platformDestinoY:Number(dados.platformDestinoY??y)||0,platformAtivo:dados.platformAtivo!==false,platformVelocidade:Math.max(1,Number(dados.platformVelocidade)||120),platformAoChegar:['return','teleport','stop'].includes(dados.platformAoChegar)?dados.platformAoChegar:'return',platformEsperaMs:Math.max(0,Number(dados.platformEsperaMs)||0),platformEsperandoAte:0,platformLoop:dados.platformLoop!==false,platformTransportarJogador:dados.platformTransportarJogador!==false,platformEstado:dados.platformEstado||'indo',platformDeltaX:0,platformDeltaY:0,platformVelX:0,platformVelY:0};
+    const obj={idObjeto:dados.idObjeto||gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(3),shape:'movingPlatform',w:Math.max(30,Number(dados.platformW??dados.w)||180),h:Math.max(8,Number(dados.platformH??dados.h)||24),visualX:x,visualY:y,posicaoTravadaX:x,posicaoTravadaY:y,gravity:false,lockPos:false,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:false,isStatic:false,idPersistente:dados.idPersistente||null,persistirSessao:false,platformOrigemX:Number(dados.platformOrigemX??x)||0,platformOrigemY:Number(dados.platformOrigemY??y)||0,platformDestinoX:Number(dados.platformDestinoX??x)||0,platformDestinoY:Number(dados.platformDestinoY??y)||0,platformAtivo:dados.platformAtivo!==false,platformVelocidade:Math.max(1,Number(dados.platformVelocidade)||120),platformAoChegar:['return','teleport','stop'].includes(dados.platformAoChegar)?dados.platformAoChegar:'return',platformEsperaMs:Math.max(0,Number(dados.platformEsperaMs)||0),platformEsperandoAte:0,platformLoop:dados.platformLoop!==false,platformTransportarJogador:dados.platformTransportarJogador!==false,platformEstado:dados.platformEstado||'indo',platformDeltaX:0,platformDeltaY:0,platformVelX:0,platformVelY:0};
     listaObjetosEditaveis.push(obj);criarCorpoPlataformaMovel(scene,obj);return obj;
 }
 function capturarSuportesDasPlataformasMoveis(){
@@ -916,7 +917,35 @@ function pontoEstaSobrePlataformaMovel(p,obj,tolerancia=14){
 }
 function transportarJogadoresSobrePlataformasMoveis(suportes,scene){
     if(modoEditorAtivo)return;
-    for(const suporte of suportes||[]){const p=suporte.p;if(!p?.body)continue;let dx=0,dy=0,velX=0,velY=0,cont=0;for(const obj of suporte.plataformas||[]){dx+=Number(obj.platformDeltaX)||0;dy+=Number(obj.platformDeltaY)||0;velX+=Number(obj.platformVelX)||0;velY+=Number(obj.platformVelY)||0;cont++;}if(!cont)continue;const corpos=obterCorposFisicosJogador(p);if(Math.abs(dx)>0.0001||Math.abs(dy)>0.0001){for(const corpo of corpos)scene.matter.body.setPosition(corpo,{x:corpo.position.x+dx,y:corpo.position.y+dy});}for(const corpo of corpos){scene.matter.body.setVelocity(corpo,{x:velX/cont,y:velY/cont});}p._apoiadoEmPlataformaMovel=true;}
+    for(const suporte of suportes||[]){
+        const p=suporte.p;if(!p?.body)continue;
+        let dx=0,dy=0,velX=0,velY=0,cont=0;
+        for(const obj of suporte.plataformas||[]){dx+=Number(obj.platformDeltaX)||0;dy+=Number(obj.platformDeltaY)||0;velX+=Number(obj.platformVelX)||0;velY+=Number(obj.platformVelY)||0;cont++;}
+        if(!cont)continue;
+        velX/=cont;velY/=cont;
+        const corpos=obterCorposFisicosJogador(p);
+        // O jogador é carregado por deslocamento geométrico. Removemos apenas a
+        // velocidade que pertencia à plataforma; a velocidade relativa do jogador
+        // continua intacta e será somada novamente depois do input.
+        if(Math.abs(dx)>0.0001||Math.abs(dy)>0.0001){
+            for(const corpo of corpos){
+                scene.matter.body.setPosition(corpo,{x:corpo.position.x+dx,y:corpo.position.y+dy});
+                scene.matter.body.setVelocity(corpo,{x:(corpo.velocity?.x||0)-velX,y:(corpo.velocity?.y||0)-velY});
+            }
+        }
+        p._apoiadoEmPlataformaMovel=true;
+        p._velPlataformaMovel={x:velX,y:velY};
+    }
+}
+function aplicarVelocidadeRelativaPlataformaMovel(suportes,scene){
+    if(modoEditorAtivo)return;
+    for(const suporte of suportes||[]){
+        const p=suporte.p;if(!p?.body||!p._apoiadoEmPlataformaMovel)continue;
+        const v=p._velPlataformaMovel||{x:0,y:0};
+        for(const corpo of obterCorposFisicosJogador(p)){
+            scene.matter.body.setVelocity(corpo,{x:(corpo.velocity?.x||0)+v.x,y:(corpo.velocity?.y||0)+v.y});
+        }
+    }
 }
 function atualizarPlataformasMoveis(scene,dt){
     if(modoEditorAtivo)return;const agora=performance.now();
@@ -3135,7 +3164,7 @@ function atualizarObjetoExistente() {
     if(c.shape==='mover'&&obj.shape!=='mover'){if(obj.body)scene.matter.world.remove(obj.body);Object.assign(obj,{shape:'mover',body:null,w:44,h:44,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,manuseavel:false,naoAgarravel:true,isStatic:true,idPersistente:null,persistirSessao:false,moverOrigemX:px,moverOrigemY:py,moverDestinoX:px+(Number(c.moverDestinoX)||300),moverDestinoY:py+(Number(c.moverDestinoY)||0),moverAtivo:c.moverAtivo,moverVelocidade:c.moverVelocidade,moverAoChegar:c.moverAoChegar,moverEsperaDestinoMs:c.moverEsperaDestinoMs,moverSoltarJogadorNoDestino:c.moverSoltarJogadorNoDestino,moverEsperandoAte:0,moverLoop:c.moverLoop,moverEstado:'indo',filhosIds:[],vinculosFilhos:{}});marcarSalaComoAlterada();return;}
     if(obj.shape==='movingPlatform'&&c.shape==='movingPlatform'){
         const ox=Number(obj.platformOrigemX)||px,oy=Number(obj.platformOrigemY)||py;
-        obj.w=c.platformW;obj.h=c.platformH;obj.platformOrigemX=ox;obj.platformOrigemY=oy;obj.platformDestinoX=ox+(Number(c.platformDestinoX)||0);obj.platformDestinoY=oy+(Number(c.platformDestinoY)||0);obj.platformAtivo=c.platformAtivo;obj.platformVelocidade=c.platformVelocidade;obj.platformAoChegar=c.platformAoChegar;obj.platformEsperaMs=c.platformEsperaMs;obj.platformEsperandoAte=0;obj.platformLoop=c.platformLoop;obj.platformTransportarJogador=c.platformTransportarJogador;
+        obj.w=c.platformW;obj.h=c.platformH;obj.platformOrigemX=ox;obj.platformOrigemY=oy;obj.platformDestinoX=ox+(Number(c.platformDestinoX)||0);obj.platformDestinoY=oy+(Number(c.platformDestinoY)||0);obj.platformAtivo=c.platformAtivo;obj.platformVelocidade=c.platformVelocidade;obj.platformAoChegar=c.platformAoChegar;obj.platformEsperaMs=c.platformEsperaMs;obj.platformEsperandoAte=0;obj.platformLoop=c.platformLoop;obj.platformTransportarJogador=c.platformTransportarJogador;obj.naoAgarravel=false;obj.isStatic=false;
         if(obj.body){scene.matter.world.remove(obj.body);obj.body=null;}
         criarCorpoPlataformaMovel(scene,obj);marcarSalaComoAlterada();return;
     }
@@ -3146,7 +3175,7 @@ function atualizarObjetoExistente() {
         if(obj.ropeElos)obj.ropeElos.forEach(el=>scene.matter.world.remove(el));
         if(obj.body)scene.matter.world.remove(obj.body);
         obj.body=null;obj.ropeElos=null;obj.ropeConstraints=null;obj.seesawConstraint=null;
-        obj.shape='movingPlatform';obj.w=c.platformW;obj.h=c.platformH;obj.visualX=px;obj.visualY=py;obj.posicaoTravadaX=px;obj.posicaoTravadaY=py;obj.gravity=false;obj.lockPos=false;obj.lockRot=true;obj.mass=0;obj.air=0;obj.bounce=0;obj.maxVel=0;obj.maxRot=0;obj.manuseavel=false;obj.naoAgarravel=true;obj.isStatic=true;obj.platformOrigemX=px;obj.platformOrigemY=py;obj.platformDestinoX=px+(Number(c.platformDestinoX)||0);obj.platformDestinoY=py+(Number(c.platformDestinoY)||0);obj.platformAtivo=c.platformAtivo;obj.platformVelocidade=c.platformVelocidade;obj.platformAoChegar=c.platformAoChegar;obj.platformEsperaMs=c.platformEsperaMs;obj.platformEsperandoAte=0;obj.platformLoop=c.platformLoop;obj.platformTransportarJogador=c.platformTransportarJogador;obj.platformEstado='indo';criarCorpoPlataformaMovel(scene,obj);marcarSalaComoAlterada();return;
+        obj.shape='movingPlatform';obj.w=c.platformW;obj.h=c.platformH;obj.visualX=px;obj.visualY=py;obj.posicaoTravadaX=px;obj.posicaoTravadaY=py;obj.gravity=false;obj.lockPos=false;obj.lockRot=true;obj.mass=1000000;obj.air=0;obj.bounce=0;obj.maxVel=0;obj.maxRot=0;obj.manuseavel=false;obj.naoAgarravel=false;obj.isStatic=false;obj.platformOrigemX=px;obj.platformOrigemY=py;obj.platformDestinoX=px+(Number(c.platformDestinoX)||0);obj.platformDestinoY=py+(Number(c.platformDestinoY)||0);obj.platformAtivo=c.platformAtivo;obj.platformVelocidade=c.platformVelocidade;obj.platformAoChegar=c.platformAoChegar;obj.platformEsperaMs=c.platformEsperaMs;obj.platformEsperandoAte=0;obj.platformLoop=c.platformLoop;obj.platformTransportarJogador=c.platformTransportarJogador;obj.platformEstado='indo';criarCorpoPlataformaMovel(scene,obj);marcarSalaComoAlterada();return;
     }
     if(obj.shape==='mover'&&c.shape==='mover'){obj.moverDestinoX=(Number(obj.moverOrigemX)||px)+(Number(c.moverDestinoX)||0);obj.moverDestinoY=(Number(obj.moverOrigemY)||py)+(Number(c.moverDestinoY)||0);obj.moverAtivo=c.moverAtivo;obj.moverVelocidade=c.moverVelocidade;obj.moverAoChegar=c.moverAoChegar;obj.moverEsperaDestinoMs=c.moverEsperaDestinoMs;obj.moverSoltarJogadorNoDestino=c.moverSoltarJogadorNoDestino;obj.moverEsperandoAte=0;obj.moverLoop=c.moverLoop;marcarSalaComoAlterada();return;}
     if (c.shape === 'rotator' && obj.shape !== 'rotator') {
@@ -3905,6 +3934,15 @@ function encontrarRotatorPaiDoCorpo(corpo) {
     return null;
 }
 
+function atualizarPontoGarraPlataformaMovel(p,jKey){
+    if(!p||!p[jKey]||!p[jKey+'PlataformaMovel'])return;
+    const obj=p[jKey+'PlataformaMovel'], alvo=obj.body, local=p[jKey+'LocalOffset'];
+    if(!alvo?.position||!local)return;
+    const ang=Number(alvo.angle)||0, c=Math.cos(ang), sn=Math.sin(ang);
+    p[jKey+'PontoPivorMundo']={x:alvo.position.x+local.x*c-local.y*sn,y:alvo.position.y+local.x*sn+local.y*c};
+    if(p[jKey].pointA){p[jKey].pointA.x=p[jKey+'PontoPivorMundo'].x;p[jKey].pointA.y=p[jKey+'PontoPivorMundo'].y;}
+}
+
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         const alcanceGarra = obterAlcanceGarraAtual();
@@ -3968,7 +4006,13 @@ function processarGarra(s, p, h, jKey, grab) {
             // O ponto efetivamente agarrado é sempre projetado sobre a superfície
             // física, impedindo a mão de permanecer presa em uma região de ar.
             const objGangorra = listaObjetosEditaveis.find(o => o?.body === alvoValido && (o.shape === 'seesaw' || o.shape === 'launcherSeesaw'));
-            if (objGangorra) {
+            const objPlataformaMovel = listaObjetosEditaveis.find(o => o?.body === alvoValido && o.shape === 'movingPlatform');
+            if (objPlataformaMovel) {
+                p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
+                p[jKey + 'RotatorPai'] = null; p[jKey + 'PlataformaMovel'] = objPlataformaMovel;
+                p[jKey + 'PontoPivorMundo'] = { x:h.position.x, y:h.position.y };
+                p[jKey] = s.matter.add.worldConstraint(h, 0, rigidezAgarrar, { pointA:{x:h.position.x,y:h.position.y}, pointB:{x:0,y:0}, stiffness:rigidezAgarrar, damping:amortecimentoAgarrar });
+            } else if (objGangorra) {
                 const pontoSuperficie = obterPontoLocalGarraGangorra(objGangorra, h.position.x, h.position.y);
                 if (pontoSuperficie) localOffset = pontoSuperficie;
             }
@@ -4019,12 +4063,12 @@ function processarGarra(s, p, h, jKey, grab) {
                 });
             } else if (alvoValido.isStatic) {
                 p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
-                p[jKey + 'RotatorPai'] = null;
+                p[jKey + 'RotatorPai'] = null; p[jKey + 'PlataformaMovel'] = null;
                 p[jKey + 'PontoPivorMundo'] = { x: h.position.x, y: h.position.y };
                 p[jKey] = s.matter.add.worldConstraint(h, 0, rigidezAgarrar, { pointA: { x: h.position.x, y: h.position.y }, pointB: { x: 0, y: 0 }, stiffness: rigidezAgarrar, damping: amortecimentoAgarrar });
             } else {
                 p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
-                p[jKey + 'RotatorPai'] = null;
+                p[jKey + 'RotatorPai'] = null; p[jKey + 'PlataformaMovel'] = null;
                 p[jKey + 'PontoPivorMundo'] = null;
                 p[jKey] = s.matter.add.constraint(h, alvoValido, 0, rigidezAgarrar, { pointA: { x: 0, y: 0 }, pointB: localOffset, stiffness: rigidezAgarrar, damping: amortecimentoAgarrar });
             }
@@ -4033,7 +4077,7 @@ function processarGarra(s, p, h, jKey, grab) {
         }
     } else if (!grab && p[jKey]) {
         if (p[jKey]) s.matter.world.remove(p[jKey]);
-        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null; p[jKey + 'PontoPivorMundo'] = null; p[jKey + 'RotatorPai'] = null; p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
+        p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null; p[jKey + 'PontoPivorMundo'] = null; p[jKey + 'RotatorPai'] = null; p[jKey + 'PlataformaMovel'] = null; p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
     }
 }
 
@@ -4489,6 +4533,7 @@ function update(time, delta) {
     processarAreasInvisiveis(this);
     processarGangorrasLancadoras(this, delta);
     if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2);
+    aplicarVelocidadeRelativaPlataformaMovel(suportesPlataformasMoveis, this);
     verificarPortaisDaSala(this);
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10); });
     
@@ -4498,6 +4543,8 @@ function update(time, delta) {
         // ponto mundial correspondente ao ponto local onde cada mão agarrou.
         atualizarPontoGarraGangorra(p, 'leftJoint');
         atualizarPontoGarraGangorra(p, 'rightJoint');
+        atualizarPontoGarraPlataformaMovel(p, 'leftJoint');
+        atualizarPontoGarraPlataformaMovel(p, 'rightJoint');
         atualizarPontoGarraFilhoRotator(p, 'leftJoint');
         atualizarPontoGarraFilhoRotator(p, 'rightJoint');
         if (p.leftJoint && p.leftJointPontoPivorMundo) {
