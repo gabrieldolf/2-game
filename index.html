@@ -514,8 +514,82 @@ function obterDadosSalaAtual() {
     return dados;
 }
 
-function destruirComponentesEsteira(scene,obj){if(!scene||!obj)return;(obj.esteiraSuportes||[]).forEach(b=>{if(b)scene.matter.world.remove(b);});(obj.esteiraBlocos||[]).forEach(b=>{if(b)scene.matter.world.remove(b);});obj.esteiraSuportes=[];obj.esteiraBlocos=[];}
-function criarComponentesEsteira(scene,obj){if(!scene||!obj||obj.shape!=='conveyor')return;destruirComponentesEsteira(scene,obj);const x=Number(obj.visualX)||0,y=Number(obj.visualY)||0,w=Math.max(40,Number(obj.w)||500),h=Math.max(10,Number(obj.h)||40),suporteW=Math.max(20,Math.min(54,h*1.15)),blocoW=Math.max(18,Math.min(70,h*1.55)),dir=Number(obj.conveyorDirection)<0?-1:1,grupo=-Math.max(1,Number(obj.esteiraGrupoColisao)||((Date.now()%100000)+1));const suporte=sx=>{const b=scene.matter.add.rectangle(sx,y,suporteW,h,{isStatic:true,isSensor:false,label:'esteira_suporte',friction:.95,frictionStatic:1,restitution:0,collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER|CAT_AMBIENTE}});b.manuseavel=true;b.naoAgarravel=false;b.esteiraComponente=true;b.esteiraObjeto=obj;return b;};obj.esteiraSuportes=[suporte(x-w/2+suporteW/2),suporte(x+w/2-suporteW/2)];const inicio=dir>0?x-w/2+suporteW+blocoW/2:x+w/2-suporteW-blocoW/2,fim=dir>0?x+w/2-suporteW-blocoW/2:x-w/2+suporteW+blocoW/2,passo=blocoW+Math.max(2,h*.12),qtd=Math.max(2,Math.ceil(Math.abs(fim-inicio)/passo)+1);obj.esteiraBlocos=[];for(let i=0;i<qtd;i++){const bx=inicio+(fim-inicio)*(i/(qtd-1)),b=scene.matter.add.rectangle(bx,y,blocoW,h*.88,{isStatic:false,isSensor:false,ignoreGravity:true,mass:Math.max(.8,h*.08),friction:.9,frictionAir:.02,restitution:0,label:'esteira_bloco',collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER|CAT_AMBIENTE,group:grupo}});b.manuseavel=true;b.naoAgarravel=false;b.esteiraComponente=true;b.esteiraObjeto=obj;b.esteiraBlocoW=blocoW;b.esteiraBlocoH=h*.88;obj.esteiraBlocos.push(b);}obj.esteiraSuporteW=suporteW;obj.esteiraBlocoW=blocoW;obj.esteiraBlocoH=h*.88;obj.esteiraGrupoColisao=grupo;}
+function destruirComponentesEsteira(scene,obj){
+    if(!scene||!obj)return;
+    (obj.esteiraSuportes||[]).forEach(b=>{if(b)scene.matter.world.remove(b);});
+    (obj.esteiraBlocos||[]).forEach(b=>{if(b)scene.matter.world.remove(b);});
+    obj.esteiraSuportes=[];
+    obj.esteiraBlocos=[];
+}
+
+function criarComponentesEsteira(scene,obj){
+    if(!scene||!obj||obj.shape!=='conveyor')return;
+    destruirComponentesEsteira(scene,obj);
+    const x=Number(obj.visualX)||0, y=Number(obj.visualY)||0;
+    const w=Math.max(40,Number(obj.w)||500), h=Math.max(10,Number(obj.h)||40);
+    const suporteW=Math.max(20,Math.min(54,h*1.15));
+    const blocoW=Math.max(18,Math.min(70,h*1.55));
+    const blocoH=Math.max(8,h*.88);
+    const dir=Number(obj.conveyorDirection)<0?-1:1;
+    const grupo=-Math.max(1,Number(obj.esteiraGrupoColisao)||((Date.now()%100000)+1));
+    const esquerda=x-w/2, direita=x+w/2;
+    const centroSuporteEsq=esquerda+suporteW/2;
+    const centroSuporteDir=direita-suporteW/2;
+
+    const suporte=sx=>{
+        const b=scene.matter.add.rectangle(sx,y,suporteW,h,{
+            isStatic:true,isSensor:false,label:'esteira_suporte',
+            friction:.95,frictionStatic:1,restitution:0,
+            collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER|CAT_AMBIENTE,group:grupo}
+        });
+        b.manuseavel=true; b.naoAgarravel=false; b.esteiraComponente=true; b.esteiraSuporte=true; b.esteiraObjeto=obj;
+        return b;
+    };
+    obj.esteiraSuportes=[suporte(centroSuporteEsq),suporte(centroSuporteDir)];
+
+    // Os blocos nascem no centro do suporte de origem e terminam no centro
+    // do suporte de destino. Assim ficam literalmente escondidos atrás dos
+    // blocos pretos antes de aparecerem e depois de chegarem ao destino.
+    const inicio=dir>0?centroSuporteEsq:centroSuporteDir;
+    const fim=dir>0?centroSuporteDir:centroSuporteEsq;
+    const passo=Math.max(10,blocoW+Math.max(2,h*.12));
+    const distancia=Math.abs(fim-inicio);
+    const qtd=Math.max(3,Math.ceil(distancia/passo)+2);
+    obj.esteiraBlocos=[];
+    for(let i=0;i<qtd;i++){
+        const t=qtd<=1?0:i/(qtd-1);
+        const bx=inicio+(fim-inicio)*t;
+        const b=scene.matter.add.rectangle(bx,y,blocoW,blocoH,{
+            isStatic:false,isSensor:false,ignoreGravity:true,
+            mass:Math.max(.8,h*.08),friction:.9,frictionAir:.02,restitution:0,
+            label:'esteira_bloco',
+            collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER,group:grupo}
+        });
+        b.manuseavel=true; b.naoAgarravel=false; b.esteiraComponente=true; b.esteiraObjeto=obj;
+        b.esteiraBloco=true; b.esteiraBlocoW=blocoW; b.esteiraBlocoH=blocoH;
+        obj.esteiraBlocos.push(b);
+    }
+    obj.esteiraSuporteW=suporteW; obj.esteiraBlocoW=blocoW; obj.esteiraBlocoH=blocoH; obj.esteiraGrupoColisao=grupo;
+}
+
+function esteiraBlocoEstaVisivelParaGarra(esteira,bloco){
+    if(!esteira||!bloco||!bloco.position)return false;
+    const w=Math.max(40,Number(esteira.w)||500);
+    const h=Math.max(10,Number(esteira.h)||40);
+    const sw=Math.max(20,Math.min(54,h*1.15));
+    const bw=Number(bloco.esteiraBlocoW)||Math.max(18,Math.min(70,h*1.55));
+    const x=Number(esteira.visualX)||0, bx=Number(bloco.position.x)||0;
+    const left=x-w/2+sw+bw/2;
+    const right=x+w/2-sw-bw/2;
+    return bx>=Math.min(left,right)-0.5 && bx<=Math.max(left,right)+0.5;
+}
+
+function moverComponentesEsteira(scene,esteira,dx,dy){
+    if(!scene||!esteira)return;
+    (esteira.esteiraSuportes||[]).forEach(b=>{if(b)scene.matter.body.setPosition(b,{x:b.position.x+dx,y:b.position.y+dy});});
+    (esteira.esteiraBlocos||[]).forEach(b=>{if(b)scene.matter.body.setPosition(b,{x:b.position.x+dx,y:b.position.y+dy});});
+}
+
 function corpoEsteiraEstaAgarrado(body){return !!body&&!!((player1&&(player1.leftJointTarget===body||player1.rightJointTarget===body))||(player2&&(player2.leftJointTarget===body||player2.rightJointTarget===body)));}
 
 function serializarObjetoDaSala(obj) {
@@ -2459,6 +2533,11 @@ function create() {
                     document.getElementById('prop-portal-entrada-x').value = objetoSelecionado.portalEntradaX - pos.x;
                     document.getElementById('prop-portal-entrada-y').value = objetoSelecionado.portalEntradaY - pos.y;
                 }
+                if (objetoSelecionado.shape === 'conveyor') {
+                    const dxEsteira = pos.x - (Number(objetoSelecionado.visualX) || 0);
+                    const dyEsteira = pos.y - (Number(objetoSelecionado.visualY) || 0);
+                    moverComponentesEsteira(this, objetoSelecionado, dxEsteira, dyEsteira);
+                }
                 objetoSelecionado.visualX = pos.x; objetoSelecionado.visualY = pos.y; 
                 if (objetoSelecionado.shape === 'rope' && objetoSelecionado.ropeElos) {
                     let dx = pos.x - objetoSelecionado.posicaoTravadaX, dy = pos.y - objetoSelecionado.posicaoTravadaY;
@@ -2693,6 +2772,11 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
             else if (!colidiu && (obj.shape === 'seesaw' || obj.shape === 'launcherSeesaw')) colidiu = maoPodeAgarrarGangorra(obj, x, y, 0);
             else colidiu = Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices, { x: x, y: y });
         }
+        else if(obj.shape==='conveyor'){
+            const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0;
+            const w=Math.max(40,Number(obj.w)||500),h=Math.max(10,Number(obj.h)||40);
+            colidiu=Math.abs(x-px)<=w/2 && Math.abs(y-py)<=h/2;
+        }
         else if(obj.shape==='npc'){const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0,hw=Math.max(20,(Number(obj.npcFrameW)||64)*(Number(obj.npcEscala)||1)/2),hh=Math.max(20,(Number(obj.npcFrameH)||64)*(Number(obj.npcEscala)||1)/2);colidiu=Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh;}
         else if (obj.shape === 'triggerArea') {
             const px=Number(obj.visualX)||0, py=Number(obj.visualY)||0, hw=Math.max(20,Number(obj.triggerW)||160)/2, hh=Math.max(20,Number(obj.triggerH)||120)/2;
@@ -2758,32 +2842,6 @@ function selecionarObjetoDoEditor(obj) {
     document.getElementById('prop-portal-entrada-w').value = Math.max(20, Number(obj.portalEntradaW) || Number(obj.portalAreaW) || 100);
     document.getElementById('prop-portal-entrada-h').value = Math.max(20, Number(obj.portalEntradaH) || Number(obj.portalAreaH) || 120);
     document.getElementById('prop-nome-ponto').value = obj.nomePonto || '';
-    if (obj.shape === 'conveyor') {
-        const sel = obj === objetoSelecionado;
-        const w = Math.max(40, Number(obj.w) || 500);
-        const h = Math.max(10, Number(obj.h) || 40);
-        const dir = Number(obj.conveyorDirection) < 0 ? -1 : 1;
-        const top = posY - h / 2;
-        const fase = ((Number(obj.conveyorPhase) || 0) % 80 + 80) % 80;
-        g.setVisible(true); g.x = 0; g.y = 0; g.rotation = 0;
-        g.fillStyle(0x20252a, 1);
-        g.fillRect(posX - w / 2, top, w, h);
-        g.lineStyle(sel ? 4 : 2, sel ? 0xffea00 : 0x9aa4ad, 1);
-        g.strokeRect(posX - w / 2, top, w, h);
-        const rollers = Math.max(2, Math.floor(w / 80));
-        for (let i = 0; i < rollers; i++) {
-            const rx = posX - w / 2 + (i + 0.5) * (w / rollers);
-            const rr = Math.max(5, Math.min(h * 0.38, 14));
-            g.fillStyle(0x111418, 1); g.fillCircle(rx, posY, rr);
-            g.lineStyle(2, 0x606a72, 1); g.strokeCircle(rx, posY, rr);
-        }
-        g.lineStyle(3, 0xffb74d, 0.9);
-        for (let x0 = posX - w / 2 - fase - 80; x0 < posX + w / 2 + 80; x0 += 80) {
-            g.lineBetween(x0 - 12 * dir, top + 8, x0 + 12 * dir, top + 8);
-            g.lineBetween(x0 + 12 * dir, top + 8, x0 + 4 * dir, top + 2);
-        }
-        return;
-    }
 
     if(obj.shape==='decorImage'||obj.shape==='decorSprite'){document.getElementById('prop-decor-url').value=obj.decorUrl||'';document.getElementById('prop-decor-scale').value=obj.decorScale||1;document.getElementById('prop-decor-layer').value=datosLayer(obj.decorLayer);document.getElementById('prop-decor-frame-w').value=obj.decorFrameW||64;document.getElementById('prop-decor-frame-h').value=obj.decorFrameH||64;document.getElementById('prop-decor-start').value=obj.decorStart||0;document.getElementById('prop-decor-end').value=obj.decorEnd||0;document.getElementById('prop-decor-fps').value=obj.decorFps||8;}
     else if(obj.shape==='npc'){document.getElementById('prop-npc-id').value=obj.npcId||'';document.getElementById('prop-npc-name').value=obj.npcNome||'NPC';document.getElementById('prop-npc-sheet-url').value=obj.npcSpritesheetUrl||'';document.getElementById('prop-npc-frame-w').value=obj.npcFrameW||64;document.getElementById('prop-npc-frame-h').value=obj.npcFrameH||64;document.getElementById('prop-npc-scale').value=obj.npcEscala||1;document.getElementById('prop-npc-radius').value=obj.npcRaioDialogo||180;document.getElementById('prop-npc-initial-state').value=obj.npcEstadoInicial||'inicial';document.getElementById('prop-npc-states').value=JSON.stringify(obj.npcEstados||[],null,2);}
@@ -3002,7 +3060,28 @@ function desenharObjetoEditor(obj) {
     if(obj.shape==='npc'){const sel=obj===objetoSelecionado;g.setVisible(true);g.x=0;g.y=0;g.rotation=0;if(obj.npcSprite){obj.npcSprite.setVisible(true);obj.npcSprite.setPosition(posX,posY);obj.npcSprite.setScale(Math.max(.1,Number(obj.npcEscala)||1));}if(modoEditorAtivo){g.lineStyle(sel?4:2,sel?0xffea00:0x5dade2,1);g.strokeRect(posX-obj.npcFrameW*obj.npcEscala/2,posY-obj.npcFrameH*obj.npcEscala/2,obj.npcFrameW*obj.npcEscala,obj.npcFrameH*obj.npcEscala);g.lineStyle(2,0x5dade2,.35);g.strokeCircle(posX,posY,Math.max(20,Number(obj.npcRaioDialogo)||180));}else if(!obj.npcSprite){g.fillStyle(0x5dade2,1);g.fillCircle(posX,posY,24);g.fillStyle(0xffffff,1);g.fillCircle(posX-8,posY-4,3);g.fillCircle(posX+8,posY-4,3);}return;}
     if(obj.shape==='coin'){if(obj.coinColetada&&!modoEditorAtivo){g.setVisible(false);return;}g.setVisible(true);g.x=0;g.y=0;g.rotation=0;const sel=obj===objetoSelecionado;g.fillStyle(0xf9ca24,1);g.fillCircle(posX,posY,14);g.lineStyle(sel?4:2,sel?0xffffff:0xb7950b,1);g.strokeCircle(posX,posY,14);g.fillStyle(0xfff3a0,1);g.fillRect(posX-2,posY-9,4,18);return;}
 
-    if (obj.shape === 'conveyor') { const sel=obj===objetoSelecionado,w=Math.max(40,Number(obj.w)||500),h=Math.max(10,Number(obj.h)||40),sw=Math.max(20,Math.min(54,h*1.15)),dir=Number(obj.conveyorDirection)<0?-1:1,bw=Math.max(18,Math.min(70,h*1.55));g.setVisible(true);g.x=0;g.y=0;g.rotation=0;g.fillStyle(0x050505,1);g.fillRect(posX-w/2,posY-h/2,sw,h);g.fillRect(posX+w/2-sw,posY-h/2,sw,h);g.lineStyle(sel?4:2,sel?0xffea00:0x777777,1);g.strokeRect(posX-w/2,posY-h/2,sw,h);g.strokeRect(posX+w/2-sw,posY-h/2,sw,h);const ini=dir>0?posX-w/2+sw+bw/2:posX+w/2-sw-bw/2,fim=dir>0?posX+w/2-sw-bw/2:posX-w/2+sw+bw/2,q=Math.max(2,Math.ceil(Math.abs(fim-ini)/(bw+Math.max(2,h*.12)))+1);for(let i=0;i<q;i++){const bx=ini+(fim-ini)*(i/(q-1));g.fillStyle(0x1455ff,1);g.fillRect(bx-bw/2,posY-h*.44,bw,h*.88);}return;}
+    if (obj.shape === 'conveyor') {
+        const sel=obj===objetoSelecionado,w=Math.max(40,Number(obj.w)||500),h=Math.max(10,Number(obj.h)||40),sw=Math.max(20,Math.min(54,h*1.15));
+        g.setVisible(true);g.x=0;g.y=0;g.rotation=0;g.clear();
+        // Primeiro desenhamos os blocos azuis. Os dois blocos pretos são
+        // desenhados por cima para esconder as partes que estão entrando/saindo.
+        if(Array.isArray(obj.esteiraBlocos)){
+            for(const bloco of obj.esteiraBlocos){
+                if(!bloco?.position)continue;
+                const bw=Number(bloco.esteiraBlocoW)||Math.max(18,Math.min(70,h*1.55));
+                const bh=Number(bloco.esteiraBlocoH)||h*.88;
+                g.fillStyle(0x1455ff,1);g.fillRect(bloco.position.x-bw/2,bloco.position.y-bh/2,bw,bh);
+                g.lineStyle(1,0x6f94ff,.85);g.strokeRect(bloco.position.x-bw/2,bloco.position.y-bh/2,bw,bh);
+            }
+        }
+        g.fillStyle(0x050505,1);
+        g.fillRect(posX-w/2,posY-h/2,sw,h);
+        g.fillRect(posX+w/2-sw,posY-h/2,sw,h);
+        g.lineStyle(sel?4:2,sel?0xffea00:0x777777,1);
+        g.strokeRect(posX-w/2,posY-h/2,sw,h);
+        g.strokeRect(posX+w/2-sw,posY-h/2,sw,h);
+        return;
+    }
 
     if (obj.shape === 'triggerArea') {
         if (!modoEditorAtivo) { g.setVisible(false); return; }
@@ -3606,6 +3685,30 @@ function processarGarra(s, p, h, jKey, grab) {
             }
         }
         if (!alvoCorpo) {
+            // Componentes da esteira não ficam na lista principal de objetos,
+            // então são procurados separadamente. Suportes pretos têm prioridade.
+            for (const esteira of listaObjetosEditaveis) {
+                if (!esteira || esteira.shape !== 'conveyor') continue;
+                for (const suporte of (esteira.esteiraSuportes || [])) {
+                    if (suporte && !suporte.naoAgarravel && s.matter.query.region([suporte], caixaDeteccao).length > 0) {
+                        alvoCorpo = suporte; break;
+                    }
+                }
+                if (alvoCorpo) break;
+            }
+        }
+        if (!alvoCorpo) {
+            for (const esteira of listaObjetosEditaveis) {
+                if (!esteira || esteira.shape !== 'conveyor') continue;
+                for (const bloco of (esteira.esteiraBlocos || [])) {
+                    if (bloco && !bloco.naoAgarravel && esteiraBlocoEstaVisivelParaGarra(esteira,bloco) && s.matter.query.region([bloco], caixaDeteccao).length > 0) {
+                        alvoCorpo = bloco; break;
+                    }
+                }
+                if (alvoCorpo) break;
+            }
+        }
+        if (!alvoCorpo) {
             for (let i = 0; i < listaObjetosEditaveis.length; i++) {
                 let obj = listaObjetosEditaveis[i]; if (!obj || obj.naoAgarravel) continue;
                 if (obj.body && !obj.body.naoAgarravel) {
@@ -4108,7 +4211,53 @@ function processarGangorrasLancadoras(scene,delta){
     }
 }
 
-function processarEsteirasTransportadoras(scene,delta){if(!scene||modoEditorAtivo)return;const esteiras=listaObjetosEditaveis.filter(o=>o&&o.shape==='conveyor');if(!esteiras.length)return;for(const esteira of esteiras){if(!esteira.esteiraBlocos?.length||!esteira.esteiraSuportes?.length)criarComponentesEsteira(scene,esteira);const dir=Number(esteira.conveyorDirection)<0?-1:1,speed=Math.max(0,Number(esteira.conveyorSpeed)||0),target=dir*speed,w=Math.max(40,Number(esteira.w)||500),h=Math.max(10,Number(esteira.h)||40),sw=Math.max(20,Math.min(54,h*1.15)),bw=Math.max(18,Math.min(70,h*1.55)),x=Number(esteira.visualX)||0,y=Number(esteira.visualY)||0,left=x-w/2,right=x+w/2,dest=dir>0?right-sw-bw/2:left+sw+bw/2,spawn=dir>0?left+sw+bw/2:right-sw-bw/2;for(const bloco of esteira.esteiraBlocos){if(!bloco||bloco.isStatic||corpoEsteiraEstaAgarrado(bloco))continue;scene.matter.body.setVelocity(bloco,{x:target,y:0});scene.matter.body.setAngularVelocity(bloco,0);if(dir>0?bloco.position.x>=dest:bloco.position.x<=dest){scene.matter.body.setPosition(bloco,{x:spawn,y});scene.matter.body.setVelocity(bloco,{x:target,y:0});}}esteira.conveyorPhase=(Number(esteira.conveyorPhase)||0)+dir*speed*(Math.max(0,Number(delta)||16.6667)/1000);const g=esteira.gfx;g.setVisible(true);g.clear();g.x=0;g.y=0;g.rotation=0;g.fillStyle(0x050505,1);g.fillRect(x-w/2,y-h/2,sw,h);g.fillRect(x+w/2-sw,y-h/2,sw,h);for(const bloco of esteira.esteiraBlocos){if(!bloco?.position)continue;const bwb=Number(bloco.esteiraBlocoW)||bw,bhb=Number(bloco.esteiraBlocoH)||h*.88;g.fillStyle(0x1455ff,1);g.fillRect(bloco.position.x-bwb/2,bloco.position.y-bhb/2,bwb,bhb);g.lineStyle(1,0x6f94ff,.8);g.strokeRect(bloco.position.x-bwb/2,bloco.position.y-bhb/2,bwb,bhb);}}}
+function processarEsteirasTransportadoras(scene,delta){
+    if(!scene||modoEditorAtivo)return;
+    const esteiras=listaObjetosEditaveis.filter(o=>o&&o.shape==='conveyor');
+    if(!esteiras.length)return;
+    for(const esteira of esteiras){
+        if(!esteira.esteiraBlocos?.length||!esteira.esteiraSuportes?.length)criarComponentesEsteira(scene,esteira);
+        const dir=Number(esteira.conveyorDirection)<0?-1:1;
+        const speed=Math.max(0,Number(esteira.conveyorSpeed)||0);
+        const target=dir*speed;
+        const w=Math.max(40,Number(esteira.w)||500),h=Math.max(10,Number(esteira.h)||40);
+        const x=Number(esteira.visualX)||0,y=Number(esteira.visualY)||0;
+        const sw=Math.max(20,Math.min(54,h*1.15));
+        const esquerda=x-w/2,direita=x+w/2;
+        const origem=dir>0?esquerda+sw/2:direita-sw/2;
+        const destino=dir>0?direita-sw/2:esquerda+sw/2;
+        const dt=Math.max(0,Number(delta)||16.6667)/1000;
+        for(const bloco of esteira.esteiraBlocos){
+            if(!bloco||!bloco.position)continue;
+            // Enquanto estiver agarrado, o jogador assume o controle do bloco.
+            if(corpoEsteiraEstaAgarrado(bloco))continue;
+            scene.matter.body.setVelocity(bloco,{x:target,y:0});
+            scene.matter.body.setAngularVelocity(bloco,0);
+            if(dir>0?bloco.position.x>=destino:bloco.position.x<=destino){
+                scene.matter.body.setPosition(bloco,{x:origem,y});
+                scene.matter.body.setVelocity(bloco,{x:target,y:0});
+            }
+        }
+        esteira.conveyorPhase=(Number(esteira.conveyorPhase)||0)+dir*speed*dt;
+        const g=esteira.gfx;
+        g.setVisible(true);g.clear();g.x=0;g.y=0;g.rotation=0;
+        // A ordem é importante: os blocos azuis ficam atrás dos dois suportes pretos.
+        for(const bloco of esteira.esteiraBlocos){
+            if(!bloco?.position)continue;
+            const bw=Number(bloco.esteiraBlocoW)||Math.max(18,Math.min(70,h*1.55));
+            const bh=Number(bloco.esteiraBlocoH)||h*.88;
+            g.fillStyle(0x1455ff,1);g.fillRect(bloco.position.x-bw/2,bloco.position.y-bh/2,bw,bh);
+            g.lineStyle(1,0x6f94ff,.8);g.strokeRect(bloco.position.x-bw/2,bloco.position.y-bh/2,bw,bh);
+        }
+        g.fillStyle(0x050505,1);
+        g.fillRect(esquerda,y-h/2,sw,h);
+        g.fillRect(direita-sw,y-h/2,sw,h);
+        g.lineStyle(2,0x777777,1);
+        g.strokeRect(esquerda,y-h/2,sw,h);
+        g.strokeRect(direita-sw,y-h/2,sw,h);
+    }
+}
+
 function update(time, delta) {
     let sAct = game.scene.getScene('default'); if (!sAct) return;
     aplicarModoDebug(this);
