@@ -907,13 +907,18 @@ function criarPlataformaMovelAPartirDeDados(scene,dados){
 function capturarSuportesDasPlataformasMoveis(){
     const suportes=[];if(modoEditorAtivo)return suportes;
     for(const p of [player1,player2]){
-        if(!p?.body)continue;const plataformas=[];
+        if(!p?.body)continue;
+        p._temGarraEmPlataformaMovel=false;
+        const plataformas=[];
         for(const obj of listaObjetosEditaveis){
             if(!obj||obj.shape!=='movingPlatform'||!obj.body||obj.platformTransportarJogador===false)continue;
-            const apoiado=pontoEstaSobrePlataformaMovel(p,obj);
+                const apoiado=pontoEstaSobrePlataformaMovel(p,obj);
             const agarrouEsquerda=p.leftJointPlataformaMovel===obj || p.leftJointTarget===obj.body;
             const agarrouDireita=p.rightJointPlataformaMovel===obj || p.rightJointTarget===obj.body;
-            if(apoiado||agarrouEsquerda||agarrouDireita)plataformas.push(obj);
+            if(apoiado||agarrouEsquerda||agarrouDireita){
+                plataformas.push(obj);
+                if(agarrouEsquerda||agarrouDireita)p._temGarraEmPlataformaMovel=true;
+            }
         }
         if(plataformas.length)suportes.push({p,plataformas});
     }return suportes;
@@ -930,11 +935,16 @@ function transportarJogadoresSobrePlataformasMoveis(suportes,scene){
         if(!cont)continue;
         velX/=cont;velY/=cont;
         const corpos=obterCorposFisicosJogador(p);
+        // Quando a mão está agarrada à plataforma, o transporte do torso é feito
+        // depois do input do jogador. Assim uma força aplicada pela garra neste
+        // frame não consegue deixar o corpo para trás do deslocamento da plataforma.
+        const moverCorpoDepoisDoInput=!!p._temGarraEmPlataformaMovel;
         // O jogador é carregado por deslocamento geométrico. Removemos apenas a
         // velocidade que pertencia à plataforma; a velocidade relativa do jogador
         // continua intacta e será somada novamente depois do input.
         if(Math.abs(dx)>0.0001||Math.abs(dy)>0.0001){
             for(const corpo of corpos){
+                if(moverCorpoDepoisDoInput && corpo===p.body)continue;
                 scene.matter.body.setPosition(corpo,{x:corpo.position.x+dx,y:corpo.position.y+dy});
                 scene.matter.body.setVelocity(corpo,{x:(corpo.velocity?.x||0)-velX,y:(corpo.velocity?.y||0)-velY});
             }
@@ -944,6 +954,29 @@ function transportarJogadoresSobrePlataformasMoveis(suportes,scene){
         p._plataformaMovelTransportadaNoFrame=true;
     }
 }
+function transportarCorpoAgarradoAPlataformaMovel(suportes,scene){
+    if(modoEditorAtivo)return;
+    for(const suporte of suportes||[]){
+        const p=suporte.p;if(!p?.body||!p._temGarraEmPlataformaMovel)continue;
+        let dx=0,dy=0,cont=0;
+        for(const obj of suporte.plataformas||[]){
+            const agarrada=(p.leftJointPlataformaMovel===obj||p.leftJointTarget===obj.body||p.rightJointPlataformaMovel===obj||p.rightJointTarget===obj.body);
+            if(!agarrada)continue;
+            dx+=Number(obj.platformDeltaX)||0;dy+=Number(obj.platformDeltaY)||0;cont++;
+        }
+        if(!cont)continue;
+        scene.matter.body.setPosition(p.body,{x:p.body.position.x+dx/cont,y:p.body.position.y+dy/cont});
+        // A velocidade do corpo passa a ser relativa à plataforma + movimento próprio.
+        let vx=0,vy=0;
+        for(const obj of suporte.plataformas||[]){
+            const agarrada=(p.leftJointPlataformaMovel===obj||p.leftJointTarget===obj.body||p.rightJointPlataformaMovel===obj||p.rightJointTarget===obj.body);
+            if(!agarrada)continue;
+            vx+=Number(obj.platformVelX)||0;vy+=Number(obj.platformVelY)||0;
+        }
+        scene.matter.body.setVelocity(p.body,{x:p.body.velocity.x+vx/cont,y:p.body.velocity.y+vy/cont});
+    }
+}
+
 function aplicarVelocidadeRelativaPlataformaMovel(suportes,scene){
     if(modoEditorAtivo)return;
     for(const suporte of suportes||[]){
@@ -4087,20 +4120,24 @@ function processarGarra(s, p, h, jKey, grab) {
         }
     } else if (!grab && p[jKey]) {
         const plataformaLiberada=p[jKey+'PlataformaMovel'];
+        // Primeiro removemos completamente a âncora. É importante limpar TODOS os
+        // estados antes de posicionar a mão, pois o bloco final do update só deve
+        // reposicionar mãos que ainda possuem uma garra ativa.
         if (p[jKey]) s.matter.world.remove(p[jKey]);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null; p[jKey + 'PontoPivorMundo'] = null; p[jKey + 'RotatorPai'] = null; p[jKey + 'PlataformaMovel'] = null; p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
-        // A mão volta imediatamente ao regime de mão livre. Em especial, não
-        // deixamos a velocidade zero usada pela âncora da plataforma congelá-la.
-        // Ela recebe apenas a velocidade instantânea da plataforma no momento
-        // da soltura, e no próximo frame o controle normal da mão assume.
-        if(plataformaLiberada?.body){
-            const vx=Number(plataformaLiberada.platformVelX)||0, vy=Number(plataformaLiberada.platformVelY)||0;
-            s.matter.body.setVelocity(h,{x:vx,y:vy});
-            s.matter.body.setAngularVelocity(h,0);
-        }else{
-            s.matter.body.setVelocity(h,{x:Number(p.body?.velocity?.x)||0,y:Number(p.body?.velocity?.y)||0});
-            s.matter.body.setAngularVelocity(h,0);
-        }
+        // Soltura: tira a mão alguns pixels da superfície para impedir que a
+        // colisão mantenha o círculo encostado no mesmo ponto e dá a ela uma
+        // pequena velocidade de separação. Depois disso ela é 100% mão livre.
+        const pvx=Number(plataformaLiberada?.platformVelX)||0, pvy=Number(plataformaLiberada?.platformVelY)||0;
+        let nx=Number(h.position.x)-(Number(plataformaLiberada?.body?.position?.x)||Number(h.position.x));
+        let ny=Number(h.position.y)-(Number(plataformaLiberada?.body?.position?.y)||Number(h.position.y));
+        const nd=Math.hypot(nx,ny);
+        if(nd>0.001){nx/=nd;ny/=nd;}else{nx=0;ny=-1;}
+        const afastamento=3;
+        s.matter.body.setPosition(h,{x:h.position.x+nx*afastamento,y:h.position.y+ny*afastamento});
+        s.matter.body.setVelocity(h,{x:pvx+nx*2,y:pvy+ny*2});
+        s.matter.body.setAngularVelocity(h,0);
+        h._garraPlataformaLiberadaAte=performance.now()+120;
         p[jKey+'_FoiLiberadaPlataformaMovel']=true;
     }
 }
@@ -4557,6 +4594,7 @@ function update(time, delta) {
     processarAreasInvisiveis(this);
     processarGangorrasLancadoras(this, delta);
     if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2);
+    transportarCorpoAgarradoAPlataformaMovel(suportesPlataformasMoveis, this);
     aplicarVelocidadeRelativaPlataformaMovel(suportesPlataformasMoveis, this);
     verificarPortaisDaSala(this);
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10); });
