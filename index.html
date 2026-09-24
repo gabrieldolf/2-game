@@ -4014,6 +4014,84 @@ function atualizarPontoGarraPlataformaMovel(p,jKey){
     if(p[jKey].pointA){p[jKey].pointA.x=p[jKey+'PontoPivorMundo'].x;p[jKey].pointA.y=p[jKey+'PontoPivorMundo'].y;}
 }
 
+function removerConstraintDeGarraFisica(scene, constraint){
+    if(!scene || !constraint) return;
+    // Phaser normalmente remove a constraint pelo world.remove(). Como esta
+    // garra usa worldConstraint (bodyB = null), fazemos também a remoção
+    // diretamente do Composite do Matter para garantir que nenhuma constraint
+    // residual continue prendendo a mão no ponto onde ela foi solta.
+    try { scene.matter.world.remove(constraint); } catch(e) {}
+    try {
+        const mundo = scene.matter?.world?.engine?.world;
+        if(mundo?.constraints && mundo.constraints.includes(constraint)){
+            Phaser.Physics.Matter.Matter.Composite.remove(mundo, constraint, true);
+        }
+    } catch(e) {}
+    try {
+        const engine = scene.matter?.world?.engine;
+        if(engine?.world?.constraints){
+            engine.world.constraints = engine.world.constraints.filter(c=>c!==constraint);
+        }
+    } catch(e) {}
+}
+
+function liberarGarraPlataformaMovel(scene,p,h,jKey){
+    if(!scene || !p || !h || !p[jKey]) return false;
+    const plataforma = p[jKey+'PlataformaMovel'] || null;
+    const constraint = p[jKey];
+    const agora = performance.now();
+    const mascaraOriginal = h.collisionFilter?.mask ?? (CAT_AMBIENTE|CAT_PLAYER);
+
+    removerConstraintDeGarraFisica(scene,constraint);
+
+    // Limpa primeiro o estado da garra. A partir daqui nenhuma rotina de
+    // atualização deve considerar esta mão agarrada.
+    p[jKey]=null;
+    p[jKey+'Target']=null;
+    p[jKey+'PivotBody']=null;
+    p[jKey+'LocalOffset']=null;
+    p[jKey+'PontoPivorMundo']=null;
+    p[jKey+'RotatorPai']=null;
+    p[jKey+'PlataformaMovel']=null;
+    p[jKey+'Gangorra']=null;
+    p[jKey+'GangorraNormalLocal']=null;
+
+    if(plataforma?.body){
+        plataforma._plataformaColisaoBloqueadaAte=Math.max(
+            Number(plataforma._plataformaColisaoBloqueadaAte)||0,
+            agora+220
+        );
+        definirColisaoPlataformaMovel(plataforma,true);
+        h._garraPlataformaLiberadaBody=plataforma.body;
+    }else{
+        h._garraPlataformaLiberadaBody=null;
+    }
+    h._garraPlataformaLiberadaMaskOriginal=mascaraOriginal;
+    h._garraPlataformaLiberadaAte=agora+220;
+    h._garraPlataformaLiberadaReagarrarBloqueadoAte=agora+220;
+
+    // A mão precisa continuar sendo um corpo físico completamente livre.
+    try { Phaser.Physics.Matter.Matter.Sleeping.set(h,false); } catch(e) {}
+    h.isSleeping=false;
+    h.sleepCounter=0;
+    if(h.force){h.force.x=0;h.force.y=0;}
+    h.torque=0;
+    h.corpoTocadoAgora=null;
+    h.pontoDeContatoGlobal=null;
+
+    // Não apagamos velocidade/posição da mão: o próximo frame deve continuar
+    // exatamente do ponto em que ela foi liberada e voltar a responder ao stick.
+    if(jKey==='leftJoint'){
+        for(const elo of p.leftElos||[]){try{Phaser.Physics.Matter.Matter.Sleeping.set(elo,false);}catch(e){} elo.isSleeping=false;elo.sleepCounter=0;}
+    }else{
+        for(const elo of p.rightElos||[]){try{Phaser.Physics.Matter.Matter.Sleeping.set(elo,false);}catch(e){} elo.isSleeping=false;elo.sleepCounter=0;}
+    }
+    try { Phaser.Physics.Matter.Matter.Sleeping.set(p.body,false); } catch(e) {}
+    p.body.isSleeping=false;p.body.sleepCounter=0;
+    p[jKey+'_FoiLiberadaPlataformaMovel']=true;
+    return true;
+}
+
 function processarGarra(s, p, h, jKey, grab) {
     if (grab && !p[jKey]) {
         const alcanceGarra = obterAlcanceGarraAtual();
@@ -4188,75 +4266,22 @@ function processarGarra(s, p, h, jKey, grab) {
         }
     } else if (!grab && p[jKey]) {
         const plataformaLiberada=p[jKey+'PlataformaMovel'];
-        const mascaraOriginalMao = h.collisionFilter ? h.collisionFilter.mask : (CAT_AMBIENTE|CAT_PLAYER);
-
-        // Primeiro removemos a constraint e TODAS as referências que faziam
-        // a mão acompanhar a plataforma.
-        if (p[jKey]) s.matter.world.remove(p[jKey]);
-        p[jKey] = null;
-        p[jKey + 'Target'] = null;
-        p[jKey + 'PivotBody'] = null;
-        p[jKey + 'LocalOffset'] = null;
-        p[jKey + 'PontoPivorMundo'] = null;
-        p[jKey + 'RotatorPai'] = null;
-        p[jKey + 'PlataformaMovel'] = null;
-        p[jKey + 'Gangorra'] = null;
-        p[jKey + 'GangorraNormalLocal'] = null;
-
-        // O erro que aparecia no vídeo após soltar vinha da colisão: a mão
-        // continuava tocando a plataforma e, como a plataforma se move, a
-        // própria colisão fazia a mão parecer ainda presa. A mão fica sem
-        // colisão com o ambiente somente durante a janela necessária para se
-        // afastar fisicamente da plataforma. Ela continua com sua velocidade
-        // normal e não recebe qualquer velocidade da plataforma.
-        // Ao soltar, a mão deixa imediatamente de estar vinculada à plataforma.
-        // Não aplicamos posição, impulso ou velocidade da plataforma à mão.
-        // Apenas bloqueamos uma nova captura da MESMA plataforma por alguns
-        // frames, para que a detecção de alcance não a agarre de novo no mesmo
-        // instante da soltura.
-        const agoraLiberacao=performance.now();
-        h._garraPlataformaLiberadaBody = plataformaLiberada?.body || null;
-        h._garraPlataformaLiberadaMaskOriginal = mascaraOriginalMao;
-        h._garraPlataformaLiberadaAte = agoraLiberacao + 220;
-        h._garraPlataformaLiberadaReagarrarBloqueadoAte = agoraLiberacao + 220;
-        // A mão volta imediatamente à máscara normal. A separação temporária
-        // é feita no CORPO DA PLATAFORMA, e não na mão, porque assim a mão
-        // continua sendo uma mão física normal (gravidade + corrente) e não
-        // pode ficar suspensa por uma máscara de colisão alterada.
-        if(h.collisionFilter) h.collisionFilter.mask = mascaraOriginalMao;
-
-        const outraGarraNaMesmaPlataforma =
-            (p.leftJoint && p.leftJointTarget === plataformaLiberada?.body) ||
-            (p.rightJoint && p.rightJointTarget === plataformaLiberada?.body);
-
-        // A constraint mundial pode deixar a mão em estado de sono no Matter.
-        // Enquanto estava agarrada, a mão tinha sua velocidade zerada a cada
-        // frame; ao remover a constraint, apenas remover a constraint não é
-        // suficiente para reativar o corpo em todas as situações. Acordamos
-        // explicitamente a mão e todos os elos do mesmo braço para que o
-        // analógico volte a controlar a mão imediatamente.
-        const acordar = (corpo) => {
-            if(!corpo) return;
-            try { Phaser.Physics.Matter.Matter.Sleeping.set(corpo, false); } catch(e) {}
-            corpo.isSleeping = false;
-            corpo.sleepCounter = 0;
-            corpo.force.x = 0; corpo.force.y = 0; corpo.torque = 0;
-        };
-        acordar(h);
-        if(jKey === 'leftJoint') p.leftElos?.forEach(acordar);
-        if(jKey === 'rightJoint') p.rightElos?.forEach(acordar);
-        acordar(p.body);
-        h.corpoTocadoAgora = null;
-        h.pontoDeContatoGlobal = null;
-
-        if(!outraGarraNaMesmaPlataforma && plataformaLiberada?.body){
-            plataformaLiberada._plataformaColisaoBloqueadaAte = Math.max(
-                Number(plataformaLiberada._plataformaColisaoBloqueadaAte)||0,
-                agoraLiberacao + 220
-            );
-            definirColisaoPlataformaMovel(plataformaLiberada, true);
+        if(plataformaLiberada){
+            liberarGarraPlataformaMovel(s,p,h,jKey);
+            return;
         }
-        p[jKey+'_FoiLiberadaPlataformaMovel']=true;
+
+        // Garras que não são plataformas seguem o comportamento original.
+        removerConstraintDeGarraFisica(s,p[jKey]);
+        p[jKey]=null;
+        p[jKey+'Target']=null;
+        p[jKey+'PivotBody']=null;
+        p[jKey+'LocalOffset']=null;
+        p[jKey+'PontoPivorMundo']=null;
+        p[jKey+'RotatorPai']=null;
+        p[jKey+'PlataformaMovel']=null;
+        p[jKey+'Gangorra']=null;
+        p[jKey+'GangorraNormalLocal']=null;
     }
 }
 
@@ -4738,6 +4763,16 @@ function update(time, delta) {
     processarAreasInvisiveis(this);
     processarGangorrasLancadoras(this, delta);
     if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2);
+    // Segurança extra: se o botão já foi solto, uma garra de plataforma não
+    // pode sobreviver por nenhum frame apenas porque uma referência antiga de
+    // constraint ainda ficou no Composite do Matter.
+    for(const p of [player1,player2]){
+        if(!p?.pad)continue;
+        const gEsq=isButtonPressed(p.pad,6)||isButtonPressed(p.pad,4);
+        const gDir=isButtonPressed(p.pad,7)||isButtonPressed(p.pad,5);
+        if(!gEsq && p.leftJoint && p.leftJointPlataformaMovel) liberarGarraPlataformaMovel(this,p,p.leftHand,'leftJoint');
+        if(!gDir && p.rightJoint && p.rightJointPlataformaMovel) liberarGarraPlataformaMovel(this,p,p.rightHand,'rightJoint');
+    }
     atualizarMaoLiberadaDaPlataformaMovel(this, player1?.leftHand);
     atualizarMaoLiberadaDaPlataformaMovel(this, player1?.rightHand);
     atualizarMaoLiberadaDaPlataformaMovel(this, player2?.leftHand);
