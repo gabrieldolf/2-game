@@ -934,8 +934,17 @@ function pontoEstaSobrePlataformaMovel(p,obj,tolerancia=14){
 }
 function definirColisaoPlataformaMovel(obj, ignorar){
     if(!obj?.body)return;
+    const agora=performance.now();
+    // Depois que uma mão solta a plataforma, mantemos a plataforma sem
+    // colisão com o jogador por uma pequena janela. Isso é necessário porque
+    // a mão pode ainda estar encostando fisicamente nela no mesmo instante
+    // em que a constraint é removida. Se a colisão voltar imediatamente, o
+    // solver prende a mão na plataforma e ela fica parada no ar enquanto o
+    // restante do braço se move.
+    if(!ignorar && Number(obj._plataformaColisaoBloqueadaAte||0)>agora)return;
     const mascara=ignorar ? CAT_AMBIENTE : (CAT_PLAYER|CAT_AMBIENTE);
     if(obj.body.collisionFilter) obj.body.collisionFilter.mask=mascara;
+    if(!ignorar)obj._plataformaColisaoBloqueadaAte=0;
 }
 
 function transportarJogadoresSobrePlataformasMoveis(suportes,scene){
@@ -980,7 +989,14 @@ function transportarJogadoresSobrePlataformasMoveis(suportes,scene){
             p._velPlataformaMovel={x:velX,y:velY};
         }
 
-        for(const obj of suporte.plataformas||[]) definirColisaoPlataformaMovel(obj,agarrado);
+        for(const obj of suporte.plataformas||[]){
+            // Uma plataforma que acabou de ser liberada continua sem colisão
+            // com o jogador até a janela de soltura terminar. Não restaure a
+            // máscara aqui só porque o corpo ainda está apoiado nela.
+            const bloqueada=Number(obj?._plataformaColisaoBloqueadaAte||0)>performance.now();
+            if(bloqueada) definirColisaoPlataformaMovel(obj,true);
+            else definirColisaoPlataformaMovel(obj,agarrado);
+        }
         p._apoiadoEmPlataformaMovel=true;
         p._velPlataformaMovel={x:velX,y:velY};
         p._plataformaMovelTransportadaNoFrame=true;
@@ -4198,17 +4214,28 @@ function processarGarra(s, p, h, jKey, grab) {
         // Apenas bloqueamos uma nova captura da MESMA plataforma por alguns
         // frames, para que a detecção de alcance não a agarre de novo no mesmo
         // instante da soltura.
+        const agoraLiberacao=performance.now();
         h._garraPlataformaLiberadaBody = plataformaLiberada?.body || null;
         h._garraPlataformaLiberadaMaskOriginal = mascaraOriginalMao;
-        h._garraPlataformaLiberadaAte = performance.now() + 180;
-        h._garraPlataformaLiberadaReagarrarBloqueadoAte = performance.now() + 180;
+        h._garraPlataformaLiberadaAte = agoraLiberacao + 220;
+        h._garraPlataformaLiberadaReagarrarBloqueadoAte = agoraLiberacao + 220;
+        // A mão volta imediatamente à máscara normal. A separação temporária
+        // é feita no CORPO DA PLATAFORMA, e não na mão, porque assim a mão
+        // continua sendo uma mão física normal (gravidade + corrente) e não
+        // pode ficar suspensa por uma máscara de colisão alterada.
         if(h.collisionFilter) h.collisionFilter.mask = mascaraOriginalMao;
 
         const outraGarraNaMesmaPlataforma =
             p.leftJointPlataformaMovel === plataformaLiberada ||
             p.rightJointPlataformaMovel === plataformaLiberada;
 
-        if(!outraGarraNaMesmaPlataforma) definirColisaoPlataformaMovel(plataformaLiberada, false);
+        if(!outraGarraNaMesmaPlataforma && plataformaLiberada?.body){
+            plataformaLiberada._plataformaColisaoBloqueadaAte = Math.max(
+                Number(plataformaLiberada._plataformaColisaoBloqueadaAte)||0,
+                agoraLiberacao + 220
+            );
+            definirColisaoPlataformaMovel(plataformaLiberada, true);
+        }
         p[jKey+'_FoiLiberadaPlataformaMovel']=true;
     }
 }
@@ -4223,10 +4250,20 @@ function atualizarMaoLiberadaDaPlataformaMovel(scene,h){
 
     const original=h._garraPlataformaLiberadaMaskOriginal;
     if(h.collisionFilter) h.collisionFilter.mask=Number.isFinite(original)?original:(CAT_AMBIENTE|CAT_PLAYER);
+    const plataforma=h._garraPlataformaLiberadaBody ? listaObjetosEditaveis.find(o=>o?.body===h._garraPlataformaLiberadaBody&&o.shape==='movingPlatform') : null;
     h._garraPlataformaLiberadaBody=null;
     h._garraPlataformaLiberadaMaskOriginal=null;
     h._garraPlataformaLiberadaAte=0;
     h._garraPlataformaLiberadaReagarrarBloqueadoAte=0;
+    // Só devolve a colisão normal quando nenhuma das mãos ainda está
+    // agarrando essa plataforma.
+    if(plataforma){
+        const agarradaPorAlgumaMao=[player1,player2].some(j=>j&&(j.leftJointPlataformaMovel===plataforma||j.rightJointPlataformaMovel===plataforma));
+        if(!agarradaPorAlgumaMao){
+            plataforma._plataformaColisaoBloqueadaAte=0;
+            definirColisaoPlataformaMovel(plataforma,false);
+        }
+    }
 }
 
 
