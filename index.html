@@ -926,6 +926,12 @@ function capturarSuportesDasPlataformasMoveis(){
 function pontoEstaSobrePlataformaMovel(p,obj,tolerancia=14){
     if(!p?.body||!obj?.body)return false;const pb=p.body.bounds,fb=obj.body.bounds;const centroX=p.body.position.x;const larguraJogador=Math.max(8,(pb.max.x-pb.min.x)*0.35);if(centroX+larguraJogador<fb.min.x||centroX-larguraJogador>fb.max.x)return false;const pe=pb.max.y,topo=fb.min.y;return pe>=topo-tolerancia&&pe<=topo+tolerancia+14;
 }
+function definirColisaoPlataformaMovel(obj, ignorar){
+    if(!obj?.body)return;
+    const mascara=ignorar ? CAT_AMBIENTE : (CAT_PLAYER|CAT_AMBIENTE);
+    if(obj.body.collisionFilter) obj.body.collisionFilter.mask=mascara;
+}
+
 function transportarJogadoresSobrePlataformasMoveis(suportes,scene){
     if(modoEditorAtivo)return;
     for(const suporte of suportes||[]){
@@ -937,43 +943,42 @@ function transportarJogadoresSobrePlataformasMoveis(suportes,scene){
         }
         if(!cont)continue;
         velX/=cont;velY/=cont;
-        const corpos=obterCorposFisicosJogador(p);
         const agarrado=!!p._temGarraEmPlataformaMovel;
-        // Quando uma mão está agarrada, o rig inteiro é transportado somente
-        // depois do input. Assim corpo, elos e mão avançam juntos e o braço
-        // não fica artificialmente esticado.
-        if(!agarrado && (Math.abs(dx)>0.0001||Math.abs(dy)>0.0001)){
+        const corpos=obterCorposFisicosJogador(p);
+
+        // Uma mão agarrada transforma a plataforma em referencial do RIG.
+        // O deslocamento é aplicado ANTES do input deste frame, evitando que o
+        // corpo fique para trás enquanto a mão continua presa à plataforma.
+        if(Math.abs(dx)>0.0001||Math.abs(dy)>0.0001){
             for(const corpo of corpos){
                 scene.matter.body.setPosition(corpo,{x:corpo.position.x+dx,y:corpo.position.y+dy});
-                scene.matter.body.setVelocity(corpo,{x:(corpo.velocity?.x||0)-velX,y:(corpo.velocity?.y||0)-velY});
+                const vAnterior=corpo._velPlataformaMovelAnterior||{x:0,y:0};
+                scene.matter.body.setVelocity(corpo,{
+                    x:(corpo.velocity?.x||0)-vAnterior.x+velX,
+                    y:(corpo.velocity?.y||0)-vAnterior.y+velY
+                });
+                corpo._velPlataformaMovelAnterior={x:velX,y:velY};
+            }
+        }else{
+            for(const corpo of corpos){
+                const vAnterior=corpo._velPlataformaMovelAnterior||{x:0,y:0};
+                scene.matter.body.setVelocity(corpo,{
+                    x:(corpo.velocity?.x||0)-vAnterior.x+velX,
+                    y:(corpo.velocity?.y||0)-vAnterior.y+velY
+                });
+                corpo._velPlataformaMovelAnterior={x:velX,y:velY};
             }
         }
+        for(const obj of suporte.plataformas||[]) definirColisaoPlataformaMovel(obj,agarrado);
         p._apoiadoEmPlataformaMovel=true;
         p._velPlataformaMovel={x:velX,y:velY};
         p._plataformaMovelTransportadaNoFrame=true;
     }
 }
 function transportarCorpoAgarradoAPlataformaMovel(suportes,scene){
-    if(modoEditorAtivo)return;
-    for(const suporte of suportes||[]){
-        const p=suporte.p;if(!p?.body||!p._temGarraEmPlataformaMovel)continue;
-        let dx=0,dy=0,cont=0,vx=0,vy=0;
-        for(const obj of suporte.plataformas||[]){
-            const agarrada=(p.leftJointPlataformaMovel===obj||p.leftJointTarget===obj.body||p.rightJointPlataformaMovel===obj||p.rightJointTarget===obj.body);
-            if(!agarrada)continue;
-            dx+=Number(obj.platformDeltaX)||0;dy+=Number(obj.platformDeltaY)||0;
-            vx+=Number(obj.platformVelX)||0;vy+=Number(obj.platformVelY)||0;cont++;
-        }
-        if(!cont)continue;
-        const deslocX=dx/cont,deslocY=dy/cont,velX=vx/cont,velY=vy/cont;
-        // O agarramento transforma a plataforma em referência do RIG inteiro.
-        // Corpo, mãos e todos os elos recebem exatamente o mesmo deslocamento
-        // no fim do input deste frame.
-        for(const corpo of obterCorposFisicosJogador(p)){
-            scene.matter.body.setPosition(corpo,{x:corpo.position.x+deslocX,y:corpo.position.y+deslocY});
-            scene.matter.body.setVelocity(corpo,{x:(corpo.velocity?.x||0)+velX,y:(corpo.velocity?.y||0)+velY});
-        }
-    }
+    // O transporte do RIG agarrado acontece antes do input, em
+    // transportarJogadoresSobrePlataformasMoveis(). Não transportar novamente
+    // aqui evita duplicar o deslocamento da plataforma no mesmo frame.
 }
 function aplicarVelocidadeRelativaPlataformaMovel(suportes,scene){
     if(modoEditorAtivo)return;
@@ -985,35 +990,6 @@ function aplicarVelocidadeRelativaPlataformaMovel(suportes,scene){
         }
     }
 }
-function protegerMaoRecemSoltaDaPlataformaMovel(scene){
-    const agora=performance.now();
-    for(const p of [player1,player2]){
-        if(!p)continue;
-        for(const h of [p.leftHand,p.rightHand]){
-            if(!h||!h._garraPlataformaLiberadaAte)continue;
-            if(agora>=h._garraPlataformaLiberadaAte){
-                h._garraPlataformaLiberadaAte=0;
-                h._garraPlataformaLiberadaBody=null;
-                continue;
-            }
-            const plataforma=h._garraPlataformaLiberadaBody;
-            if(plataforma?.position){
-                // A colisão da plataforma pode transferir sua velocidade para a
-                // mão por alguns frames. Removemos apenas essa parcela, mantendo
-                // o restante da dinâmica da mão (gravidade e movimento próprio).
-                const vx=Number(plataforma.velocity?.x)||0,vy=Number(plataforma.velocity?.y)||0;
-                scene.matter.body.setVelocity(h,{x:(h.velocity?.x||0)-vx,y:(h.velocity?.y||0)-vy});
-                h._garraPlataformaLiberadaX+=h.velocity.x*(1/60);
-                h._garraPlataformaLiberadaY+=h.velocity.y*(1/60);
-                const dx=h.position.x-h._garraPlataformaLiberadaX,dy=h.position.y-h._garraPlataformaLiberadaY;
-                if(Math.abs(dx)>0.5||Math.abs(dy)>0.5){
-                    scene.matter.body.setPosition(h,{x:h.position.x-dx,y:h.position.y-dy});
-                }
-            }
-        }
-    }
-}
-
 function atualizarPlataformasMoveis(scene,dt){
     if(modoEditorAtivo)return;const agora=performance.now();
     for(const obj of listaObjetosEditaveis){if(!obj||obj.shape!=='movingPlatform'||!obj.body)continue;const antesX=obj.body.position.x,antesY=obj.body.position.y;obj.platformDeltaX=0;obj.platformDeltaY=0;
@@ -4082,6 +4058,10 @@ function processarGarra(s, p, h, jKey, grab) {
                 p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
                 p[jKey + 'RotatorPai'] = null; p[jKey + 'PlataformaMovel'] = objPlataformaMovel;
                 p[jKey + '_FoiLiberadaPlataformaMovel'] = false;
+                // Enquanto uma mão estiver presa, a plataforma não colide com
+                // nenhuma parte do jogador. O transporte passa a ser cinemático
+                // e evita que o solver empurre o corpo para longe da mão.
+                definirColisaoPlataformaMovel(objPlataformaMovel, true);
                 p[jKey + 'PontoPivorMundo'] = { x:h.position.x, y:h.position.y };
                 p[jKey] = s.matter.add.worldConstraint(h, 0, rigidezAgarrar, { pointA:{x:h.position.x,y:h.position.y}, pointB:{x:0,y:0}, stiffness:rigidezAgarrar, damping:amortecimentoAgarrar });
             } else if (objGangorra) {
@@ -4147,27 +4127,16 @@ function processarGarra(s, p, h, jKey, grab) {
         }
     } else if (!grab && p[jKey]) {
         const plataformaLiberada=p[jKey+'PlataformaMovel'];
-        // Primeiro removemos completamente a âncora. É importante limpar TODOS os
-        // estados antes de posicionar a mão, pois o bloco final do update só deve
-        // reposicionar mãos que ainda possuem uma garra ativa.
+        // Soltura limpa a constraint e todas as referências da plataforma ANTES
+        // de qualquer outra atualização. A mão conserva a velocidade que tinha
+        // naquele instante; não recebe a velocidade da plataforma e não é
+        // reposicionada artificialmente.
         if (p[jKey]) s.matter.world.remove(p[jKey]);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null; p[jKey + 'PontoPivorMundo'] = null; p[jKey + 'RotatorPai'] = null; p[jKey + 'PlataformaMovel'] = null; p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
-        // Soltura: tira a mão alguns pixels da superfície para impedir que a
-        // colisão mantenha o círculo encostado no mesmo ponto e dá a ela uma
-        // pequena velocidade de separação. Depois disso ela é 100% mão livre.
-        const pvx=Number(plataformaLiberada?.platformVelX)||0, pvy=Number(plataformaLiberada?.platformVelY)||0;
-        let nx=Number(h.position.x)-(Number(plataformaLiberada?.body?.position?.x)||Number(h.position.x));
-        let ny=Number(h.position.y)-(Number(plataformaLiberada?.body?.position?.y)||Number(h.position.y));
-        const nd=Math.hypot(nx,ny);
-        if(nd>0.001){nx/=nd;ny/=nd;}else{nx=0;ny=-1;}
-        const afastamento=3;
-        s.matter.body.setPosition(h,{x:h.position.x+nx*afastamento,y:h.position.y+ny*afastamento});
-        s.matter.body.setVelocity(h,{x:pvx+nx*2,y:pvy+ny*2});
-        s.matter.body.setAngularVelocity(h,0);
-        h._garraPlataformaLiberadaBody=plataformaLiberada?.body||null;
-        h._garraPlataformaLiberadaX=h.position.x;
-        h._garraPlataformaLiberadaY=h.position.y;
-        h._garraPlataformaLiberadaAte=performance.now()+220;
+        h._garraPlataformaLiberadaBody=null;
+        h._garraPlataformaLiberadaAte=0;
+        const outraGarraNaMesmaPlataforma = p.leftJointPlataformaMovel === plataformaLiberada || p.rightJointPlataformaMovel === plataformaLiberada;
+        if(!outraGarraNaMesmaPlataforma) definirColisaoPlataformaMovel(plataformaLiberada, false);
         p[jKey+'_FoiLiberadaPlataformaMovel']=true;
     }
 }
@@ -4624,8 +4593,6 @@ function update(time, delta) {
     processarAreasInvisiveis(this);
     processarGangorrasLancadoras(this, delta);
     if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2);
-    transportarCorpoAgarradoAPlataformaMovel(suportesPlataformasMoveis, this);
-    protegerMaoRecemSoltaDaPlataformaMovel(this);
     aplicarVelocidadeRelativaPlataformaMovel(suportesPlataformasMoveis, this);
     verificarPortaisDaSala(this);
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10); });
