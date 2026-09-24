@@ -2710,6 +2710,23 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
             const noDestino=Math.hypot(x-(Number(obj.triggerDestX)||0),y-(Number(obj.triggerDestY)||0))<=18;
             colidiu=noDestino || (Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh);
         }
+        else if (obj.shape === 'mover') {
+            const px = Number(obj.visualX) || 0, py = Number(obj.visualY) || 0;
+            const ox = Number(obj.moverOrigemX) || px, oy = Number(obj.moverOrigemY) || py;
+            const dx = Number(obj.moverDestinoX) || ox, dy = Number(obj.moverDestinoY) || oy;
+            const distOrigem = Math.hypot(x - ox, y - oy);
+            const distAtual = Math.hypot(x - px, y - py);
+            const distDestino = Math.hypot(x - dx, y - dy);
+            const vx = dx - ox, vy = dy - oy;
+            const len2 = vx * vx + vy * vy;
+            let distLinha = Infinity;
+            if (len2 > 0.0001) {
+                const t = Phaser.Math.Clamp(((x - ox) * vx + (y - oy) * vy) / len2, 0, 1);
+                const qx = ox + vx * t, qy = oy + vy * t;
+                distLinha = Math.hypot(x - qx, y - qy);
+            }
+            colidiu = distOrigem <= 30 || distAtual <= 30 || distDestino <= 26 || distLinha <= 18;
+        }
         else if (obj.shape === 'rotator') {
             const px = Number(obj.visualX) || 0, py = Number(obj.visualY) || 0;
             colidiu = Math.hypot(x - px, y - py) <= 24;
