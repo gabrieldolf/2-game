@@ -908,7 +908,13 @@ function capturarSuportesDasPlataformasMoveis(){
     const suportes=[];if(modoEditorAtivo)return suportes;
     for(const p of [player1,player2]){
         if(!p?.body)continue;const plataformas=[];
-        for(const obj of listaObjetosEditaveis){if(!obj||obj.shape!=='movingPlatform'||!obj.body||obj.platformTransportarJogador===false)continue;if(pontoEstaSobrePlataformaMovel(p,obj))plataformas.push(obj);}
+        for(const obj of listaObjetosEditaveis){
+            if(!obj||obj.shape!=='movingPlatform'||!obj.body||obj.platformTransportarJogador===false)continue;
+            const apoiado=pontoEstaSobrePlataformaMovel(p,obj);
+            const agarrouEsquerda=p.leftJointPlataformaMovel===obj || p.leftJointTarget===obj.body;
+            const agarrouDireita=p.rightJointPlataformaMovel===obj || p.rightJointTarget===obj.body;
+            if(apoiado||agarrouEsquerda||agarrouDireita)plataformas.push(obj);
+        }
         if(plataformas.length)suportes.push({p,plataformas});
     }return suportes;
 }
@@ -935,6 +941,7 @@ function transportarJogadoresSobrePlataformasMoveis(suportes,scene){
         }
         p._apoiadoEmPlataformaMovel=true;
         p._velPlataformaMovel={x:velX,y:velY};
+        p._plataformaMovelTransportadaNoFrame=true;
     }
 }
 function aplicarVelocidadeRelativaPlataformaMovel(suportes,scene){
@@ -4014,6 +4021,7 @@ function processarGarra(s, p, h, jKey, grab) {
             if (objPlataformaMovel) {
                 p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
                 p[jKey + 'RotatorPai'] = null; p[jKey + 'PlataformaMovel'] = objPlataformaMovel;
+                p[jKey + '_FoiLiberadaPlataformaMovel'] = false;
                 p[jKey + 'PontoPivorMundo'] = { x:h.position.x, y:h.position.y };
                 p[jKey] = s.matter.add.worldConstraint(h, 0, rigidezAgarrar, { pointA:{x:h.position.x,y:h.position.y}, pointB:{x:0,y:0}, stiffness:rigidezAgarrar, damping:amortecimentoAgarrar });
             } else if (objGangorra) {
@@ -4078,8 +4086,22 @@ function processarGarra(s, p, h, jKey, grab) {
             s.matter.body.setVelocity(p.body, { x: p.body.velocity.x * 0.1, y: p.body.velocity.y * 0.1 });
         }
     } else if (!grab && p[jKey]) {
+        const plataformaLiberada=p[jKey+'PlataformaMovel'];
         if (p[jKey]) s.matter.world.remove(p[jKey]);
         p[jKey] = null; p[jKey + 'Target'] = null; p[jKey + 'PivotBody'] = null; p[jKey + 'LocalOffset'] = null; p[jKey + 'PontoPivorMundo'] = null; p[jKey + 'RotatorPai'] = null; p[jKey + 'PlataformaMovel'] = null; p[jKey + 'Gangorra'] = null; p[jKey + 'GangorraNormalLocal'] = null;
+        // A mão volta imediatamente ao regime de mão livre. Em especial, não
+        // deixamos a velocidade zero usada pela âncora da plataforma congelá-la.
+        // Ela recebe apenas a velocidade instantânea da plataforma no momento
+        // da soltura, e no próximo frame o controle normal da mão assume.
+        if(plataformaLiberada?.body){
+            const vx=Number(plataformaLiberada.platformVelX)||0, vy=Number(plataformaLiberada.platformVelY)||0;
+            s.matter.body.setVelocity(h,{x:vx,y:vy});
+            s.matter.body.setAngularVelocity(h,0);
+        }else{
+            s.matter.body.setVelocity(h,{x:Number(p.body?.velocity?.x)||0,y:Number(p.body?.velocity?.y)||0});
+            s.matter.body.setAngularVelocity(h,0);
+        }
+        p[jKey+'_FoiLiberadaPlataformaMovel']=true;
     }
 }
 
