@@ -895,7 +895,7 @@ function criarCorpoPlataformaMovel(scene,obj){
     if(!scene||!obj)return null;
     const x=Number(obj.visualX)||Number(obj.platformOrigemX)||0,y=Number(obj.visualY)||Number(obj.platformOrigemY)||0;
     const w=Math.max(30,Number(obj.w)||180),h=Math.max(8,Number(obj.h)||24);
-    const body=scene.matter.add.rectangle(x,y,w,h,{isStatic:true,label:'plataforma_movel',friction:1,frictionStatic:1,restitution:0,ignoreGravity:true,collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER|CAT_AMBIENTE}});
+    const body=scene.matter.add.rectangle(x,y,w,h,{isStatic:true,isSensor:true,label:'plataforma_movel',friction:1,frictionStatic:1,restitution:0,ignoreGravity:true,collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER|CAT_AMBIENTE}});
     // A plataforma é movida manualmente por setPosition(). Ela não deve ser um
     // corpo dinâmico com velocidade própria, pois isso faz o solver do Matter
     // gerar impulsos/fricção enormes quando o jogador tenta subir nela.
@@ -952,56 +952,59 @@ function definirColisaoPlataformaMovel(obj, ignorar){
 
 function transportarJogadoresSobrePlataformasMoveis(suportes,scene){
     if(modoEditorAtivo)return;
+    const agora=performance.now();
     for(const suporte of suportes||[]){
         const p=suporte.p;if(!p?.body)continue;
         const agarrado=!!p._temGarraEmPlataformaMovel;
-        let dx=0,dy=0,velX=0,velY=0,cont=0;
+        let dx=0,dy=0,cont=0;
         for(const obj of suporte.plataformas||[]){
+            if(!obj?.body)continue;
             dx+=Number(obj.platformDeltaX)||0;
             dy+=Number(obj.platformDeltaY)||0;
-            velX+=Number(obj.platformVelX)||0;
-            velY+=Number(obj.platformVelY)||0;
             cont++;
         }
         if(!cont)continue;
-        dx/=cont;dy/=cont;velX/=cont;velY/=cont;
+        dx/=cont;dy/=cont;
 
-        // Quando uma mão está agarrada, a plataforma funciona como um
-        // referencial rígido do RIG. O deslocamento é aplicado uma única vez
-        // em todas as partes físicas do jogador. Não usamos a velocidade da
-        // plataforma como impulso acumulativo: apenas o delta real do frame.
+        // A plataforma móvel é um SENSOR para o Matter. Assim o solver não
+        // consegue transformar o movimento programado da plataforma em um
+        // impulso de colisão que arremesse o jogador. O transporte é feito
+        // explicitamente pelo delta real da plataforma.
         const corpos=obterCorposFisicosJogador(p);
-        if(agarrado){
-            if(Math.abs(dx)>0.00001||Math.abs(dy)>0.00001){
-                for(const corpo of corpos){
-                    scene.matter.body.setPosition(corpo,{
-                        x:corpo.position.x+dx,
-                        y:corpo.position.y+dy
-                    });
+        if(Math.abs(dx)>0.00001||Math.abs(dy)>0.00001){
+            for(const corpo of corpos){
+                scene.matter.body.setPosition(corpo,{x:corpo.position.x+dx,y:corpo.position.y+dy});
+            }
+        }
+
+        if(!agarrado){
+            // Enquanto está apoiado, mantemos o corpo exatamente sobre o topo
+            // da plataforma e anulamos apenas a velocidade vertical causada
+            // pela gravidade. A velocidade horizontal continua sendo a do
+            // controle do jogador.
+            const principal=(suporte.plataformas||[])[0];
+            if(principal?.body){
+                const topo=principal.body.bounds.min.y;
+                const raio=Math.max(1,(p.body.bounds.max.y-p.body.bounds.min.y)*0.5);
+                const centroAcima=p.body.position.y<=principal.body.position.y+6;
+                const pe=p.body.bounds.max.y;
+                if(centroAcima && pe>=topo-18 && pe<=topo+24){
+                    scene.matter.body.setPosition(p.body,{x:p.body.position.x,y:topo-raio});
+                    scene.matter.body.setVelocity(p.body,{x:p.body.velocity?.x||0,y:Number(principal.platformVelY)||0});
+                    p._apoiadoEmPlataformaMovel=true;
                 }
             }
-            for(const corpo of corpos){
-                scene.matter.body.setVelocity(corpo,{
-                    x:corpo.velocity?.x||0,
-                    y:corpo.velocity?.y||0
-                });
-            }
-        }else{
-            // Apoio sem agarrar: a plataforma transfere apenas sua velocidade
-            // de deslocamento, sem alterar a lógica de controle do jogador.
-            p._velPlataformaMovel={x:velX,y:velY};
         }
 
         for(const obj of suporte.plataformas||[]){
-            // Uma plataforma que acabou de ser liberada continua sem colisão
-            // com o jogador até a janela de soltura terminar. Não restaure a
-            // máscara aqui só porque o corpo ainda está apoiado nela.
-            const bloqueada=Number(obj?._plataformaColisaoBloqueadaAte||0)>performance.now();
+            const bloqueada=Number(obj?._plataformaColisaoBloqueadaAte||0)>agora;
+            // A plataforma permanece como sensor durante todo o gameplay;
+            // esta chamada só preserva o estado usado pela lógica de soltura.
             if(bloqueada) definirColisaoPlataformaMovel(obj,true);
-            else definirColisaoPlataformaMovel(obj,agarrado);
+            else if(obj?.body) obj.body.collisionFilter.mask=CAT_PLAYER|CAT_AMBIENTE;
         }
         p._apoiadoEmPlataformaMovel=true;
-        p._velPlataformaMovel={x:velX,y:velY};
+        p._velPlataformaMovel={x:0,y:0};
         p._plataformaMovelTransportadaNoFrame=true;
     }
 }
@@ -1012,15 +1015,11 @@ function transportarCorpoAgarradoAPlataformaMovel(suportes,scene){
     // aqui evita duplicar o deslocamento da plataforma no mesmo frame.
 }
 function aplicarVelocidadeRelativaPlataformaMovel(suportes,scene){
-    if(modoEditorAtivo)return;
-    for(const suporte of suportes||[]){
-        const p=suporte.p;if(!p?.body||!p._apoiadoEmPlataformaMovel||p._temGarraEmPlataformaMovel)continue;
-        const v=p._velPlataformaMovel||{x:0,y:0};
-        for(const corpo of obterCorposFisicosJogador(p)){
-            scene.matter.body.setVelocity(corpo,{x:(corpo.velocity?.x||0)+v.x,y:(corpo.velocity?.y||0)+v.y});
-        }
-    }
+    // O deslocamento da plataforma já foi aplicado diretamente ao rig em
+    // transportarJogadoresSobrePlataformasMoveis(). Somar a velocidade aqui
+    // causaria um segundo transporte e poderia produzir arremessos.
 }
+
 function atualizarPlataformasMoveis(scene,dt){
     if(modoEditorAtivo)return;const agora=performance.now();
     for(const obj of listaObjetosEditaveis){if(!obj||obj.shape!=='movingPlatform'||!obj.body)continue;const antesX=obj.body.position.x,antesY=obj.body.position.y;obj.platformDeltaX=0;obj.platformDeltaY=0;
@@ -4760,11 +4759,11 @@ function update(time, delta) {
     if (launcherSpawnOverlayGraphics) { launcherSpawnOverlayGraphics.clear(); launcherSpawnOverlayGraphics.setVisible(false); }
     atualizarMolduraReferencia16x9();
     const suportesMovers = capturarSuportesDosJogadoresNosMovers();
-    const suportesPlataformasMoveis = capturarSuportesDasPlataformasMoveis();
     const dtFisica = Math.min(50, Math.max(0, Number(delta) || 16.6667)) / 1000;
     atualizarRotadores(this, dtFisica);
     atualizarMovers(this, dtFisica);
     atualizarPlataformasMoveis(this, dtFisica);
+    const suportesPlataformasMoveis = capturarSuportesDasPlataformasMoveis();
     transportarJogadoresSobreMovers(suportesMovers, this);
     transportarJogadoresSobrePlataformasMoveis(suportesPlataformasMoveis, this);
     transportarJogadoresPresosAoMover(this);
