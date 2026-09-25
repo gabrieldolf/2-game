@@ -895,8 +895,11 @@ function criarCorpoPlataformaMovel(scene,obj){
     if(!scene||!obj)return null;
     const x=Number(obj.visualX)||Number(obj.platformOrigemX)||0,y=Number(obj.visualY)||Number(obj.platformOrigemY)||0;
     const w=Math.max(30,Number(obj.w)||180),h=Math.max(8,Number(obj.h)||24);
-    const body=scene.matter.add.rectangle(x,y,w,h,{isStatic:false,label:'plataforma_movel',mass:1000000,friction:1,frictionStatic:1,restitution:0,frictionAir:0.9,ignoreGravity:true,collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER|CAT_AMBIENTE}});
-    scene.matter.body.setInertia(body,Infinity);
+    const body=scene.matter.add.rectangle(x,y,w,h,{isStatic:true,label:'plataforma_movel',friction:1,frictionStatic:1,restitution:0,ignoreGravity:true,collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER|CAT_AMBIENTE}});
+    // A plataforma é movida manualmente por setPosition(). Ela não deve ser um
+    // corpo dinâmico com velocidade própria, pois isso faz o solver do Matter
+    // gerar impulsos/fricção enormes quando o jogador tenta subir nela.
+    // O transporte do jogador é feito explicitamente por platformDelta/Vel.
     body.manuseavel=false;body.naoAgarravel=false;obj.body=body;obj.visualX=x;obj.visualY=y;obj.posicaoTravadaX=x;obj.posicaoTravadaY=y;obj.platformDeltaX=0;obj.platformDeltaY=0;obj.platformVelX=0;obj.platformVelY=0;return body;
 }
 function criarPlataformaMovelAPartirDeDados(scene,dados){
@@ -1026,7 +1029,10 @@ function atualizarPlataformasMoveis(scene,dt){
             else if(obj.platformEsperandoAte){obj.platformEsperandoAte=0;if(voltando){if(obj.platformLoop)obj.platformEstado='indo';else obj.platformAtivo=false;}else{if(obj.platformAoChegar==='teleport'){scene.matter.body.setPosition(obj.body,{x:ox,y:oy});if(obj.platformLoop)obj.platformEstado='indo';else obj.platformAtivo=false;}else if(obj.platformAoChegar==='stop'){obj.platformAtivo=false;}else obj.platformEstado='voltando';}}
             else {const px=antesX,py=antesY,dist=Math.hypot(tx-px,ty-py),passo=Math.max(0,Number(obj.platformVelocidade)||0)*dt;if(dist<=Math.max(.001,passo)){scene.matter.body.setPosition(obj.body,{x:tx,y:ty});const espera=Math.max(0,Number(obj.platformEsperaMs)||0);if(espera>0)obj.platformEsperandoAte=agora+espera;else if(!voltando){if(obj.platformAoChegar==='teleport'){scene.matter.body.setPosition(obj.body,{x:ox,y:oy});if(obj.platformLoop)obj.platformEstado='indo';else obj.platformAtivo=false;}else if(obj.platformAoChegar==='stop'){obj.platformAtivo=false;}else obj.platformEstado='voltando';}else{if(obj.platformLoop)obj.platformEstado='indo';else obj.platformAtivo=false;}}else if(dist>0)scene.matter.body.setPosition(obj.body,{x:px+(tx-px)/dist*passo,y:py+(ty-py)/dist*passo});}
         }
-        obj.visualX=obj.body.position.x;obj.visualY=obj.body.position.y;obj.posicaoTravadaX=obj.visualX;obj.posicaoTravadaY=obj.visualY;obj.platformDeltaX=obj.visualX-antesX;obj.platformDeltaY=obj.visualY-antesY;obj.platformVelX=dt>0?obj.platformDeltaX/dt:0;obj.platformVelY=dt>0?obj.platformDeltaY/dt:0;scene.matter.body.setVelocity(obj.body,{x:obj.platformVelX,y:obj.platformVelY});
+        obj.visualX=obj.body.position.x;obj.visualY=obj.body.position.y;obj.posicaoTravadaX=obj.visualX;obj.posicaoTravadaY=obj.visualY;obj.platformDeltaX=obj.visualX-antesX;obj.platformDeltaY=obj.visualY-antesY;obj.platformVelX=dt>0?obj.platformDeltaX/dt:0;obj.platformVelY=dt>0?obj.platformDeltaY/dt:0;
+        // O corpo da plataforma é estático do ponto de vista do Matter; sua
+        // velocidade é usada apenas pelo sistema explícito de transporte.
+        scene.matter.body.setVelocity(obj.body,{x:0,y:0});
     }
 }
 
