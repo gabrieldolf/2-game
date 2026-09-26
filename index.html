@@ -1009,6 +1009,83 @@ function transportarJogadoresSobrePlataformasMoveis(suportes,scene){
     }
 }
 
+// Impede que uma mão livre atravesse uma plataforma móvel mesmo quando o
+// controle aplica uma velocidade grande em um único frame. O Matter pode
+// perder a colisão discreta nesses casos; aqui fazemos uma verificação de
+// varredura (swept circle -> retângulo) antes do próximo passo da física.
+function impedirMaoAtravessarPlataformasMoveis(scene,p,dt){
+    if(!scene||!p||!Number.isFinite(dt)||dt<=0)return;
+    const plataformas=listaObjetosEditaveis.filter(o=>o&&o.shape==='movingPlatform'&&o.body);
+    if(!plataformas.length)return;
+
+    const tratarMao=(h,jKey)=>{
+        if(!h||h.isStatic)return;
+        // Mão agarrada tem sua posição determinada pela âncora da garra.
+        if(p[jKey] || p[jKey+'PlataformaMovel'])return;
+        if(h._garraPlataformaSoltaNesteFrame)return;
+
+        const raio=Math.max(8,Number(h.circleRadius)||14);
+        let px=Number(h.position.x)||0, py=Number(h.position.y)||0;
+        let vx=Number(h.velocity?.x)||0, vy=Number(h.velocity?.y)||0;
+        const nx=px+vx*dt, ny=py+vy*dt;
+
+        for(const obj of plataformas){
+            const b=obj.body.bounds;
+            const minX=b.min.x-raio, maxX=b.max.x+raio;
+            const minY=b.min.y-raio, maxY=b.max.y+raio;
+
+            // Se a mão já entrou no retângulo expandido, expulsamos pelo lado
+            // mais próximo. Isso também corrige uma penetração residual de um
+            // frame anterior.
+            if(px>=minX&&px<=maxX&&py>=minY&&py<=maxY){
+                const dl=Math.abs(px-minX), dr=Math.abs(maxX-px), dtp=Math.abs(py-minY), db=Math.abs(maxY-py);
+                const menor=Math.min(dl,dr,dtp,db);
+                if(menor===dl){px=minX-0.35;if(vx>0)vx=0;}
+                else if(menor===dr){px=maxX+0.35;if(vx<0)vx=0;}
+                else if(menor===dtp){py=minY-0.35;if(vy>0)vy=0;}
+                else {py=maxY+0.35;if(vy<0)vy=0;}
+                scene.matter.body.setPosition(h,{x:px,y:py});
+                scene.matter.body.setVelocity(h,{x:vx,y:vy});
+                continue;
+            }
+
+            // Interseção segmento -> AABB expandido. Calculamos o primeiro
+            // instante em que o centro da mão alcançaria a superfície da
+            // plataforma e paramos somente a componente da velocidade que
+            // aponta para dentro dela; o movimento tangencial continua livre.
+            const sx=px, sy=py, dx=nx-sx, dy=ny-sy;
+            let tEnter=0,tExit=1,normalX=0,normalY=0,ok=true;
+            if(Math.abs(dx)<1e-9){if(sx<minX||sx>maxX)ok=false;}
+            else {
+                const tx1=(minX-sx)/dx,tx2=(maxX-sx)/dx;
+                const te=Math.min(tx1,tx2),tx=Math.max(tx1,tx2);
+                if(te>tEnter){tEnter=te;normalX=tx1<tx2?-1:1;normalY=0;}
+                tExit=Math.min(tExit,tx);if(tEnter>tExit)ok=false;
+            }
+            if(ok&&Math.abs(dy)<1e-9){if(sy<minY||sy>maxY)ok=false;}
+            else if(ok){
+                const ty1=(minY-sy)/dy,ty2=(maxY-sy)/dy;
+                const te=Math.min(ty1,ty2),ty=Math.max(ty1,ty2);
+                if(te>tEnter){tEnter=te;normalX=0;normalY=ty1<ty2?-1:1;}
+                tExit=Math.min(tExit,ty);if(tEnter>tExit)ok=false;
+            }
+            if(!ok||tEnter<0||tEnter>1)continue;
+
+            const t=Math.max(0,tEnter-0.002);
+            px=sx+dx*t;py=sy+dy*t;
+            // Pequena margem para o centro da mão ficar do lado de fora.
+            px+=normalX*0.5;py+=normalY*0.5;
+            const vn=vx*normalX+vy*normalY;
+            if(vn<0){vx-=normalX*vn;vy-=normalY*vn;}
+            scene.matter.body.setPosition(h,{x:px,y:py});
+            scene.matter.body.setVelocity(h,{x:vx,y:vy});
+            break;
+        }
+    };
+    tratarMao(p.leftHand,'leftJoint');
+    tratarMao(p.rightHand,'rightJoint');
+}
+
 function transportarCorpoAgarradoAPlataformaMovel(suportes,scene){
     // O transporte do RIG agarrado acontece antes do input, em
     // transportarJogadoresSobrePlataformasMoveis(). Não transportar novamente
@@ -4786,6 +4863,8 @@ function update(time, delta) {
     atualizarMaoLiberadaDaPlataformaMovel(this, player1?.rightHand);
     atualizarMaoLiberadaDaPlataformaMovel(this, player2?.leftHand);
     atualizarMaoLiberadaDaPlataformaMovel(this, player2?.rightHand);
+    impedirMaoAtravessarPlataformasMoveis(this, player1, dtFisica);
+    impedirMaoAtravessarPlataformasMoveis(this, player2, dtFisica);
     aplicarVelocidadeRelativaPlataformaMovel(suportesPlataformasMoveis, this);
     verificarPortaisDaSala(this);
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10); });
