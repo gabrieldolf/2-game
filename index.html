@@ -1086,6 +1086,80 @@ function impedirMaoAtravessarPlataformasMoveis(scene,p,dt){
     tratarMao(p.rightHand,'rightJoint');
 }
 
+// Impede que o corpo do jogador atravesse uma plataforma móvel quando o
+// controle aplica uma velocidade grande diretamente em direção a ela. Assim
+// como fazemos com as mãos, usamos uma varredura do deslocamento previsto do
+// corpo contra o retângulo expandido pelo raio do corpo. A plataforma não
+// precisa colidir com CAT_PLAYER no Matter: o bloqueio é resolvido aqui para
+// não reintroduzir os impulsos que existiam antes.
+function impedirCorpoAtravessarPlataformasMoveis(scene,p,dt){
+    if(!scene||!p?.body||!Number.isFinite(dt)||dt<=0)return;
+    const plataformas=listaObjetosEditaveis.filter(o=>o&&o.shape==='movingPlatform'&&o.body);
+    if(!plataformas.length)return;
+
+    const corpo=p.body;
+    const raio=Math.max(8,Number(corpo.circleRadius)||
+        Math.max(corpo.bounds.max.x-corpo.position.x,corpo.bounds.max.y-corpo.position.y));
+    let px=Number(corpo.position.x)||0, py=Number(corpo.position.y)||0;
+    let vx=Number(corpo.velocity?.x)||0, vy=Number(corpo.velocity?.y)||0;
+    const nx=px+vx*dt, ny=py+vy*dt;
+
+    for(const obj of plataformas){
+        const b=obj.body.bounds;
+        const minX=b.min.x-raio, maxX=b.max.x+raio;
+        const minY=b.min.y-raio, maxY=b.max.y+raio;
+
+        // Se o corpo já estiver parcialmente dentro da plataforma, retira-o
+        // pelo lado de menor penetração e remove somente a componente da
+        // velocidade que aponta para dentro dela.
+        if(px>=minX&&px<=maxX&&py>=minY&&py<=maxY){
+            const dl=Math.abs(px-minX), dr=Math.abs(maxX-px), dtp=Math.abs(py-minY), db=Math.abs(maxY-py);
+            const menor=Math.min(dl,dr,dtp,db);
+            if(menor===dl){px=minX-0.5;if(vx>0)vx=0;}
+            else if(menor===dr){px=maxX+0.5;if(vx<0)vx=0;}
+            else if(menor===dtp){py=minY-0.5;if(vy>0)vy=0;}
+            else {py=maxY+0.5;if(vy<0)vy=0;}
+            scene.matter.body.setPosition(corpo,{x:px,y:py});
+            scene.matter.body.setVelocity(corpo,{x:vx,y:vy});
+            continue;
+        }
+
+        // Swept point contra AABB expandido pelo raio do corpo.
+        const sx=px, sy=py, dx=nx-sx, dy=ny-sy;
+        let tEnter=0,tExit=1,normalX=0,normalY=0,ok=true;
+        if(Math.abs(dx)<1e-9){
+            if(sx<minX||sx>maxX)ok=false;
+        }else{
+            const tx1=(minX-sx)/dx,tx2=(maxX-sx)/dx;
+            const te=Math.min(tx1,tx2),tx=Math.max(tx1,tx2);
+            if(te>tEnter){tEnter=te;normalX=tx1<tx2?-1:1;normalY=0;}
+            tExit=Math.min(tExit,tx);
+            if(tEnter>tExit)ok=false;
+        }
+        if(ok&&Math.abs(dy)<1e-9){
+            if(sy<minY||sy>maxY)ok=false;
+        }else if(ok){
+            const ty1=(minY-sy)/dy,ty2=(maxY-sy)/dy;
+            const te=Math.min(ty1,ty2),ty=Math.max(ty1,ty2);
+            if(te>tEnter){tEnter=te;normalX=0;normalY=ty1<ty2?-1:1;}
+            tExit=Math.min(tExit,ty);
+            if(tEnter>tExit)ok=false;
+        }
+        if(!ok||tEnter<0||tEnter>1)continue;
+
+        // Para imediatamente antes da superfície. A pequena margem evita
+        // que o próximo passo considere o corpo ainda sobreposto.
+        const t=Math.max(0,tEnter-0.002);
+        px=sx+dx*t;py=sy+dy*t;
+        px+=normalX*0.6;py+=normalY*0.6;
+        const vn=vx*normalX+vy*normalY;
+        if(vn<0){vx-=normalX*vn;vy-=normalY*vn;}
+        scene.matter.body.setPosition(corpo,{x:px,y:py});
+        scene.matter.body.setVelocity(corpo,{x:vx,y:vy});
+        break;
+    }
+}
+
 function transportarCorpoAgarradoAPlataformaMovel(suportes,scene){
     // O transporte do RIG agarrado acontece antes do input, em
     // transportarJogadoresSobrePlataformasMoveis(). Não transportar novamente
@@ -4865,6 +4939,10 @@ function update(time, delta) {
     atualizarMaoLiberadaDaPlataformaMovel(this, player2?.rightHand);
     impedirMaoAtravessarPlataformasMoveis(this, player1, dtFisica);
     impedirMaoAtravessarPlataformasMoveis(this, player2, dtFisica);
+    // Mesmo sem colisão física CAT_PLAYER<->plataforma, o corpo do jogador
+    // não pode atravessar a plataforma quando o analógico o empurra contra ela.
+    impedirCorpoAtravessarPlataformasMoveis(this, player1, dtFisica);
+    impedirCorpoAtravessarPlataformasMoveis(this, player2, dtFisica);
     aplicarVelocidadeRelativaPlataformaMovel(suportesPlataformasMoveis, this);
     verificarPortaisDaSala(this);
     [player1, player2].forEach(p => { if (!p) return; aplicarLimiteFrame(sAct, p.body, 10); });
