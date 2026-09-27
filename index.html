@@ -2944,8 +2944,25 @@ function create() {
             let pos = { x: p.worldX - clickOffsetX, y: p.worldY - clickOffsetY };
             if (document.getElementById('prop-snap-active').checked && objetoSelecionado.shape !== 'polygon' && objetoSelecionado.shape !== 'rope') pos = calcularAlinhamentoPorProximidade(this, pos.x, pos.y, objetoSelecionado.w, objetoSelecionado.h, objetoSelecionado.shape, objetoSelecionado.body);
             if (objetoSelecionado.body) {
+                const posicaoAnteriorArrastoX = Number(objetoSelecionado.body.position?.x ?? objetoSelecionado.visualX) || 0;
+                const posicaoAnteriorArrastoY = Number(objetoSelecionado.body.position?.y ?? objetoSelecionado.visualY) || 0;
+                const deltaArrastoX = pos.x - posicaoAnteriorArrastoX;
+                const deltaArrastoY = pos.y - posicaoAnteriorArrastoY;
                 this.matter.body.setPosition(objetoSelecionado.body, { x: pos.x, y: pos.y });
                 this.matter.body.setVelocity(objetoSelecionado.body, { x:0, y:0 });
+                if (objetoSelecionado.shape === 'movingPlatform') {
+                    // A origem e o destino fazem parte do mesmo trajeto. Ao mover
+                    // a plataforma no editor, translada os dois pontos pelo mesmo
+                    // deslocamento, preservando exatamente a trajetória configurada.
+                    objetoSelecionado.platformOrigemX = (Number(objetoSelecionado.platformOrigemX) || posicaoAnteriorArrastoX) + deltaArrastoX;
+                    objetoSelecionado.platformOrigemY = (Number(objetoSelecionado.platformOrigemY) || posicaoAnteriorArrastoY) + deltaArrastoY;
+                    objetoSelecionado.platformDestinoX = (Number(objetoSelecionado.platformDestinoX) || posicaoAnteriorArrastoX) + deltaArrastoX;
+                    objetoSelecionado.platformDestinoY = (Number(objetoSelecionado.platformDestinoY) || posicaoAnteriorArrastoY) + deltaArrastoY;
+                    objetoSelecionado.visualX = pos.x;
+                    objetoSelecionado.visualY = pos.y;
+                    objetoSelecionado.posicaoTravadaX = pos.x;
+                    objetoSelecionado.posicaoTravadaY = pos.y;
+                }
                 if (objetoSelecionado.shape === 'seesaw' && objetoSelecionado.seesawConstraint) {
                     const ang = objetoSelecionado.body.angle || 0;
                     const ox = Number(objetoSelecionado.seesawPivotX) || 0, oy = Number(objetoSelecionado.seesawPivotY) || 0;
@@ -2971,7 +2988,6 @@ function create() {
                     document.getElementById('prop-portal-entrada-x').value = objetoSelecionado.portalEntradaX - pos.x;
                     document.getElementById('prop-portal-entrada-y').value = objetoSelecionado.portalEntradaY - pos.y;
                 }
-                if(objetoSelecionado.shape==='movingPlatform'){const dx=pos.x-(Number(objetoSelecionado.visualX)||0),dy=pos.y-(Number(objetoSelecionado.visualY)||0);objetoSelecionado.platformOrigemX+=dx;objetoSelecionado.platformOrigemY+=dy;objetoSelecionado.platformDestinoX+=dx;objetoSelecionado.platformDestinoY+=dy;}
                 if(objetoSelecionado.shape==='mover'){const dx=pos.x-(Number(objetoSelecionado.visualX)||0),dy=pos.y-(Number(objetoSelecionado.visualY)||0);objetoSelecionado.moverOrigemX+=dx;objetoSelecionado.moverOrigemY+=dy;objetoSelecionado.moverDestinoX+=dx;objetoSelecionado.moverDestinoY+=dy;transladarFilhosDoMover(this,objetoSelecionado,dx,dy);}
                 objetoSelecionado.visualX = pos.x; objetoSelecionado.visualY = pos.y; 
                 if (objetoSelecionado.shape === 'rope' && objetoSelecionado.ropeElos) {
