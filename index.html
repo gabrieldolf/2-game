@@ -243,7 +243,7 @@
             <div class="prop-row"><label>Esperar nos extremos (ms):</label><input type="number" id="prop-platform-wait" value="0" min="0" max="60000" step="100" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row"><label>Repetir em loop:</label><input type="checkbox" id="prop-platform-loop" checked onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row"><label>Transportar jogador:</label><input type="checkbox" id="prop-platform-carry" checked onchange="atualizarObjetoExistente()"></div>
-            <p style="font-size:10px;color:#bbf7d0;margin:2px 0 0;">Plataforma sólida e agarrável. A garra acompanha a plataforma sem aplicar força física nela. Quando o jogador está apoiado, ele é transportado pela trajetória da plataforma sem ser arremessado.</p>
+            <p style="font-size:10px;color:#bbf7d0;margin:2px 0 0;">No editor, arraste separadamente o marcador da <b>origem</b>, a <b>plataforma</b> e o marcador do <b>destino</b>. Cada um pode ser posicionado independentemente.</p>
         </div>
         <div id="painel-propriedades-decor" style="display:none; background:#273746; padding:9px; border:2px solid #af7ac5; border-radius:6px; margin-top:7px; flex-direction:column; gap:7px;">
             <h3 style="color:#eadcf2;font-weight:bold;margin:0;">Imagem / Spritesheet Decorativo</h3>
@@ -327,6 +327,7 @@ let modoVincularFilhosRotator = false;
 let modoEscolherAlvoTrigger = false;
 let arrastandoDestinoTrigger = false;
 let arrastandoSpawnLauncher = false;
+let arrastandoPontoPlataformaMovel = null;
 let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 let launcherSpawnOverlayGraphics = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002, CAT_MAO = 0x0004;
@@ -2375,7 +2376,7 @@ function inicializarSistemaDeSalas() {
     atualizarCamposSala();
 }
 
-function desmarcarObjetoDoEditor() { modoVincularFilhosRotator = false; modoVincularFilhosMover = false; modoEscolherAlvoTrigger = false; arrastandoDestinoTrigger = false; arrastandoSpawnLauncher = false; arrastandoObjetoSelecionado = false; objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; atualizarStatusFilhosRotator(); }
+function desmarcarObjetoDoEditor() { modoVincularFilhosRotator = false; modoVincularFilhosMover = false; modoEscolherAlvoTrigger = false; arrastandoDestinoTrigger = false; arrastandoSpawnLauncher = false; arrastandoPontoPlataformaMovel = null; arrastandoObjetoSelecionado = false; objetoSelecionado = null; document.getElementById('btn-delete').style.display = 'none'; clickOffsetX = 0; clickOffsetY = 0; atualizarStatusFilhosRotator(); }
 function setFerramenta(f) {
     modoVincularFilhosRotator = false;
     atualizarStatusFilhosRotator();
@@ -2929,6 +2930,30 @@ function create() {
             return;
         }
         if (modoEditorAtivo && ferramentaAtual === 'select' && arrastandoObjetoSelecionado && objetoSelecionado && p.isDown) {
+            if (objetoSelecionado.shape === 'movingPlatform' && arrastandoPontoPlataformaMovel) {
+                const tipo = arrastandoPontoPlataformaMovel;
+                if (tipo === 'origem') {
+                    objetoSelecionado.platformOrigemX = p.worldX;
+                    objetoSelecionado.platformOrigemY = p.worldY;
+                } else if (tipo === 'destino') {
+                    objetoSelecionado.platformDestinoX = p.worldX;
+                    objetoSelecionado.platformDestinoY = p.worldY;
+                } else if (tipo === 'plataforma') {
+                    const nx = p.worldX - clickOffsetX, ny = p.worldY - clickOffsetY;
+                    if (objetoSelecionado.body) {
+                        this.matter.body.setPosition(objetoSelecionado.body, { x:nx, y:ny });
+                        this.matter.body.setVelocity(objetoSelecionado.body, { x:0, y:0 });
+                    }
+                    objetoSelecionado.visualX = nx; objetoSelecionado.visualY = ny;
+                    objetoSelecionado.posicaoTravadaX = nx; objetoSelecionado.posicaoTravadaY = ny;
+                }
+                const ox = Number(objetoSelecionado.platformOrigemX) || 0;
+                const oy = Number(objetoSelecionado.platformOrigemY) || 0;
+                document.getElementById('prop-platform-dest-x').value = Math.round(((Number(objetoSelecionado.platformDestinoX)||0)-ox)*100)/100;
+                document.getElementById('prop-platform-dest-y').value = Math.round(((Number(objetoSelecionado.platformDestinoY)||0)-oy)*100)/100;
+                marcarSalaComoAlterada();
+                return;
+            }
             if (objetoSelecionado.shape === 'launcherSeesaw' && arrastandoSpawnLauncher) {
                 objetoSelecionado.launcherSpawnX=p.worldX; objetoSelecionado.launcherSpawnY=p.worldY;
                 document.getElementById('prop-launcher-spawn-x').value=Math.round(p.worldX*100)/100;
@@ -3000,8 +3025,8 @@ function create() {
         }
     }, this);
 
-    this.input.on('pointerup', (p) => { if (modoEditorAtivo && ferramentaAtual === 'draw' && ferramentaDesenhoAtual !== 'eraser') finalizarDesenhoEditor(p.worldX, p.worldY); finalizarPincelGrade(); arrastandoObjetoSelecionado = false; arrastandoDestinoTrigger = false; });
-    this.input.on('gameout', () => { if (desenhoEmAndamento) { desenhoEmAndamento=null; if(desenhoPreviewGraphics)desenhoPreviewGraphics.clear(); } finalizarPincelGrade(); arrastandoObjetoSelecionado = false; arrastandoDestinoTrigger = false; });
+    this.input.on('pointerup', (p) => { if (modoEditorAtivo && ferramentaAtual === 'draw' && ferramentaDesenhoAtual !== 'eraser') finalizarDesenhoEditor(p.worldX, p.worldY); finalizarPincelGrade(); arrastandoObjetoSelecionado = false; arrastandoDestinoTrigger = false; arrastandoPontoPlataformaMovel = null; });
+    this.input.on('gameout', () => { if (desenhoEmAndamento) { desenhoEmAndamento=null; if(desenhoPreviewGraphics)desenhoPreviewGraphics.clear(); } finalizarPincelGrade(); arrastandoObjetoSelecionado = false; arrastandoDestinoTrigger = false; arrastandoPontoPlataformaMovel = null; });
 
     this.input.keyboard.on('keydown-F4', () => { alternarModoEditor(this); });
     this.input.keyboard.on('keydown-F3', () => { alternarModoDebug(!modoDebugAtivo); });
@@ -3241,8 +3266,9 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
         }
         else if (obj.shape === 'movingPlatform') {
             const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0,hw=Math.max(20,Number(obj.w)||180)/2,hh=Math.max(8,Number(obj.h)||24)/2;
-            colidiu=Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh;
-            if(!colidiu){const dx=Number(obj.platformDestinoX)||px,dy=Number(obj.platformDestinoY)||py;colidiu=Math.hypot(x-dx,y-dy)<=18;}
+            const ox=Number(obj.platformOrigemX)||px,oy=Number(obj.platformOrigemY)||py;
+            const dx=Number(obj.platformDestinoX)||px,dy=Number(obj.platformDestinoY)||py;
+            colidiu=Math.hypot(x-ox,y-oy)<=20 || Math.hypot(x-dx,y-dy)<=20 || (Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh);
         }
         else if (obj.shape === 'mover') {
             const px = Number(obj.visualX) || 0, py = Number(obj.visualY) || 0;
@@ -3297,6 +3323,16 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
     selecionarObjetoDoEditor(prox);
     arrastandoDestinoTrigger = prox.shape === 'triggerArea' && Math.hypot(x-(Number(prox.triggerDestX)||0),y-(Number(prox.triggerDestY)||0))<=18;
     arrastandoSpawnLauncher = prox.shape === 'launcherSeesaw' && (()=>{const sp=pontoPesoGangorraLancadora(prox);return Math.hypot(x-sp.x,y-sp.y)<=26;})();
+    arrastandoPontoPlataformaMovel = null;
+    if (prox.shape === 'movingPlatform') {
+        const px=Number(prox.visualX)||0, py=Number(prox.visualY)||0;
+        const ox=Number(prox.platformOrigemX)||px, oy=Number(prox.platformOrigemY)||py;
+        const dx=Number(prox.platformDestinoX)||px, dy=Number(prox.platformDestinoY)||py;
+        const dOrigem=Math.hypot(x-ox,y-oy), dDestino=Math.hypot(x-dx,y-dy);
+        if (dOrigem <= 20 && dOrigem <= dDestino) arrastandoPontoPlataformaMovel='origem';
+        else if (dDestino <= 20) arrastandoPontoPlataformaMovel='destino';
+        else arrastandoPontoPlataformaMovel='plataforma';
+    }
     const posX = prox.body ? prox.body.position.x : prox.visualX;
     const posY = prox.body ? prox.body.position.y : prox.visualY;
     clickOffsetX = x - posX;
@@ -3583,9 +3619,12 @@ function desenharObjetoEditor(obj) {
         }
         g.setVisible(true);g.x=0;g.y=0;g.rotation=0;g.clear();
         const sel=obj===objetoSelecionado,cor=sel?0xffea00:0x4ade80,ox=Number(obj.platformOrigemX)||posX,oy=Number(obj.platformOrigemY)||posY,dx=Number(obj.platformDestinoX)||ox,dy=Number(obj.platformDestinoY)||oy;
-        g.lineStyle(3,0x4ade80,.55);g.lineBetween(ox,oy,dx,dy);g.fillStyle(0x4ade80,.16);g.fillCircle(dx,dy,18);
+        g.lineStyle(3,0x4ade80,.55);g.lineBetween(ox,oy,dx,dy);
+        g.fillStyle(0x4ade80,.14);g.fillCircle(ox,oy,20);
+        g.fillStyle(0x4ade80,.16);g.fillCircle(dx,dy,20);
         g.fillStyle(0x4ade80,0.85);g.fillRect(posX-obj.w/2,posY-obj.h/2,obj.w,obj.h);g.lineStyle(sel?4:2,cor,1);g.strokeRect(posX-obj.w/2,posY-obj.h/2,obj.w,obj.h);
-        g.lineStyle(2,0x4ade80,1);g.strokeCircle(dx,dy,11);g.lineBetween(dx-7,dy,dx+7,dy);g.lineBetween(dx,dy-7,dx,dy+7);return;
+        g.lineStyle(2,0x4ade80,1);g.strokeCircle(ox,oy,12);g.lineBetween(ox-7,oy,ox+7,oy);g.lineBetween(ox,oy-7,ox,oy+7);
+        g.strokeCircle(dx,dy,11);g.lineBetween(dx-7,dy,dx+7,dy);g.lineBetween(dx,dy-7,dx,dy+7);return;
     }
 
     if (obj.shape === 'mover') {
