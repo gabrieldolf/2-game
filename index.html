@@ -3252,7 +3252,22 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
     let prox = null, mDist = Infinity;
     listaObjetosEditaveis.forEach(obj => {
         let colidiu = false;
-        if (obj.body) {
+        // A plataforma móvel possui três alvos independentes no editor:
+        // origem, posição atual da plataforma e destino. Como ela também
+        // possui um body físico, esse tratamento precisa acontecer ANTES
+        // do teste genérico do body; caso contrário, um clique na origem
+        // ou no destino fora do retângulo da plataforma nunca selecionaria
+        // o objeto.
+        if (obj.shape === 'movingPlatform') {
+            const px=Number(obj.visualX)||0, py=Number(obj.visualY)||0;
+            const hw=Math.max(20,Number(obj.w)||180)/2, hh=Math.max(8,Number(obj.h)||24)/2;
+            const ox=Number(obj.platformOrigemX ?? px), oy=Number(obj.platformOrigemY ?? py);
+            const dx=Number(obj.platformDestinoX ?? px), dy=Number(obj.platformDestinoY ?? py);
+            const hitOrigem=Math.hypot(x-ox,y-oy)<=24;
+            const hitDestino=Math.hypot(x-dx,y-dy)<=24;
+            const hitPlataforma=Math.abs(x-px)<=hw && Math.abs(y-py)<=hh;
+            colidiu=hitOrigem || hitDestino || hitPlataforma;
+        } else if (obj.body) {
             if (obj.shape === 'launcherSeesaw') { const sp=pontoPesoGangorraLancadora(obj); if(Math.hypot(x-sp.x,y-sp.y)<=26) colidiu=true; }
             if (!colidiu && obj.shape === 'polygon') colidiu = maoPodeAgarrarPoligonoCustomizado(obj, x, y, 0);
             else if (!colidiu && (obj.shape === 'seesaw' || obj.shape === 'launcherSeesaw')) colidiu = maoPodeAgarrarGangorra(obj, x, y, 0);
@@ -3263,12 +3278,6 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
             const px=Number(obj.visualX)||0, py=Number(obj.visualY)||0, hw=Math.max(20,Number(obj.triggerW)||160)/2, hh=Math.max(20,Number(obj.triggerH)||120)/2;
             const noDestino=Math.hypot(x-(Number(obj.triggerDestX)||0),y-(Number(obj.triggerDestY)||0))<=18;
             colidiu=noDestino || (Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh);
-        }
-        else if (obj.shape === 'movingPlatform') {
-            const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0,hw=Math.max(20,Number(obj.w)||180)/2,hh=Math.max(8,Number(obj.h)||24)/2;
-            const ox=Number(obj.platformOrigemX)||px,oy=Number(obj.platformOrigemY)||py;
-            const dx=Number(obj.platformDestinoX)||px,dy=Number(obj.platformDestinoY)||py;
-            colidiu=Math.hypot(x-ox,y-oy)<=20 || Math.hypot(x-dx,y-dy)<=20 || (Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh);
         }
         else if (obj.shape === 'mover') {
             const px = Number(obj.visualX) || 0, py = Number(obj.visualY) || 0;
