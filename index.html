@@ -1025,6 +1025,11 @@ function criarSegmentosEsteira(scene,obj){
 
 function reconstruirEsteiraPlataformas(scene,obj){
     if(!scene||!obj)return;
+    // Sempre que as configurações da esteira forem alteradas no Editor,
+    // reinicia o ciclo para que todas as plataformas sejam recalculadas
+    // a partir da posição de origem, em vez de permanecerem na posição
+    // que ocupavam antes da alteração.
+    obj.conveyorPhase=0;
     criarSegmentosEsteira(scene,obj);
 }
 
