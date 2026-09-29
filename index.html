@@ -105,7 +105,7 @@
     </div>
     <div class="section">
         <h3 id="status-modo" style="color:#55ff55;">Criando novos objetos</h3>
-        <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option><option value="rope">Corda / Corrente</option><option value="seesaw">Gangorra</option><option value="launcherSeesaw">Gangorra Lançadora</option><option value="rotator">Pai Giratório / Eixo</option><option value="decorImage">Imagem Decorativa</option><option value="decorSprite">Spritesheet Decorativo</option><option value="npc">NPC / Evento</option><option value="coin">Moeda</option><option value="triggerArea">Área Invisível / Evento</option><option value="taskArea">Área de Tarefas</option><option value="mover">Pai Movedor / Trajeto</option><option value="movingPlatform">Plataforma Móvel</option><option value="portal">Portal / Conexão</option><option value="respawn1">Respawn Jogador 1</option><option value="respawn2">Respawn Jogador 2</option></select></div>
+        <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option><option value="rope">Corda / Corrente</option><option value="seesaw">Gangorra</option><option value="launcherSeesaw">Gangorra Lançadora</option><option value="rotator">Pai Giratório / Eixo</option><option value="decorImage">Imagem Decorativa</option><option value="decorSprite">Spritesheet Decorativo</option><option value="npc">NPC / Evento</option><option value="coin">Moeda</option><option value="triggerArea">Área Invisível / Evento</option><option value="taskArea">Área de Tarefas</option><option value="mover">Pai Movedor / Trajeto</option><option value="movingPlatform">Plataforma Móvel</option><option value="conveyor">Esteira de Plataformas</option><option value="portal">Portal / Conexão</option><option value="respawn1">Respawn Jogador 1</option><option value="respawn2">Respawn Jogador 2</option></select></div>
         <div id="painel-propriedades-comuns">
             <div class="prop-row" style="background:#27ae60; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Objeto Manuseável:</label><input type="checkbox" id="prop-manuseavel" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" style="background:#e74c3c; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Trava Agarrar (Não Agarrável):</label><input type="checkbox" id="prop-lock-grab" onchange="atualizarObjetoExistente()"></div>
@@ -245,6 +245,18 @@
             <div class="prop-row"><label>Transportar jogador:</label><input type="checkbox" id="prop-platform-carry" checked onchange="atualizarObjetoExistente()"></div>
             <p style="font-size:10px;color:#bbf7d0;margin:2px 0 0;">No editor, arraste separadamente o marcador da <b>origem</b>, a <b>plataforma</b> e o marcador do <b>destino</b>. Cada um pode ser posicionado independentemente.</p>
         </div>
+        <div id="painel-propriedades-conveyor" style="display:none; background:#164e63; padding:9px; border:2px solid #22d3ee; border-radius:6px; margin-top:7px; flex-direction:column; gap:7px;">
+            <h3 style="color:#cffafe;font-weight:bold;margin:0;">Esteira de Plataformas</h3>
+            <div style="font-size:10px;color:#cffafe;line-height:1.35;">Cria uma sequência de plataformas que percorre o trajeto e, ao chegar ao destino, teleporta para a origem e continua o loop.</div>
+            <div class="prop-row"><label>Largura de cada plataforma:</label><input type="number" id="prop-conveyor-w" value="100" min="20" max="1000" step="10" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Altura de cada plataforma:</label><input type="number" id="prop-conveyor-h" value="24" min="8" max="200" step="2" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Quantidade:</label><input type="number" id="prop-conveyor-count" value="6" min="1" max="100" step="1" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Espaçamento entre centros:</label><input type="number" id="prop-conveyor-spacing" value="100" min="1" max="2000" step="5" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Velocidade (px/s):</label><input type="number" id="prop-conveyor-speed" value="120" min="1" max="3000" step="5" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Movimento ativo:</label><input type="checkbox" id="prop-conveyor-active" checked onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Transportar jogador:</label><input type="checkbox" id="prop-conveyor-carry" checked onchange="atualizarObjetoExistente()"></div>
+            <p style="font-size:10px;color:#a5f3fc;margin:2px 0 0;">No editor, arraste separadamente os marcadores de origem e destino. A posição das plataformas da esteira é calculada automaticamente.</p>
+        </div>
         <div id="painel-propriedades-decor" style="display:none; background:#273746; padding:9px; border:2px solid #af7ac5; border-radius:6px; margin-top:7px; flex-direction:column; gap:7px;">
             <h3 style="color:#eadcf2;font-weight:bold;margin:0;">Imagem / Spritesheet Decorativo</h3>
             <div class="prop-row"><label>Arquivo / URL:</label><input type="text" id="prop-decor-url" value="" placeholder="assets/decoracao.png" onchange="atualizarObjetoExistente()"></div>
@@ -335,7 +347,7 @@ let modoVincularFilhosRotator = false;
 let modoEscolherAlvoTrigger = false;
 let arrastandoDestinoTrigger = false;
 let arrastandoSpawnLauncher = false;
-let arrastandoPontoPlataformaMovel = null;
+let arrastandoPontoPlataformaMovel = null; let arrastandoPontoEsteira = null;
 let verticesCriacaoAtiva = [], previewGraphicsPoligono = null;
 let launcherSpawnOverlayGraphics = null;
 const CAT_AMBIENTE = 0x0001, CAT_PLAYER = 0x0002, CAT_MAO = 0x0004;
@@ -543,7 +555,7 @@ function obterDadosSalaAtual() {
 }
 
 function serializarObjetoDaSala(obj) {
-    if (!obj) return null;
+    if (!obj || obj.conveyorSegment) return null;
     const base = {
         idObjeto: garantirIdObjetoCena(obj),
         shape: obj.shape,
@@ -582,6 +594,17 @@ function serializarObjetoDaSala(obj) {
         base.taskW = Math.max(20, Number(obj.taskW) || 160);
         base.taskH = Math.max(20, Number(obj.taskH) || 120);
         base.taskAction = obj.taskAction || 'releaseHands';
+        return base;
+    }
+
+    if (obj.shape === 'conveyor') {
+        base.x=Number(obj.visualX)||0;base.y=Number(obj.visualY)||0;
+        base.conveyorW=Math.max(20,Number(obj.conveyorW)||100);base.conveyorH=Math.max(8,Number(obj.conveyorH)||24);
+        base.conveyorCount=Math.max(1,Math.min(100,Math.round(Number(obj.conveyorCount)||6)));
+        base.conveyorSpacing=Math.max(1,Number(obj.conveyorSpacing)||100);
+        base.conveyorOrigemX=Number(obj.conveyorOrigemX??obj.visualX)||0;base.conveyorOrigemY=Number(obj.conveyorOrigemY??obj.visualY)||0;
+        base.conveyorDestinoX=Number(obj.conveyorDestinoX??obj.visualX)||0;base.conveyorDestinoY=Number(obj.conveyorDestinoY??obj.visualY)||0;
+        base.conveyorVelocidade=Math.max(1,Number(obj.conveyorVelocidade)||120);base.conveyorAtivo=obj.conveyorAtivo!==false;base.conveyorTransportarJogador=obj.conveyorTransportarJogador!==false;
         return base;
     }
 
@@ -945,6 +968,90 @@ function transportarJogadoresSobreMovers(suportes, scene){
     }
 }
 
+function destruirSegmentosEsteira(scene,obj){
+    if(!obj||!Array.isArray(obj.conveyorPlatforms))return;
+    for(const seg of obj.conveyorPlatforms){
+        if(!seg)continue;
+        if(seg.body)scene.matter.world.remove(seg.body);
+        if(seg.gfx)seg.gfx.destroy();
+    }
+    listaObjetosEditaveis = listaObjetosEditaveis.filter(o => !o || !obj.conveyorPlatforms.includes(o));
+    obj.conveyorPlatforms=[];
+}
+
+function criarSegmentosEsteira(scene,obj){
+    if(!scene||!obj)return;
+    destruirSegmentosEsteira(scene,obj);
+    const count=Math.max(1,Math.min(100,Math.round(Number(obj.conveyorCount)||6)));
+    obj.conveyorPlatforms=[];
+    for(let i=0;i<count;i++){
+        const seg={
+            idObjeto:obj.idObjeto+'_segmento_'+i, conveyorParentId:obj.idObjeto, conveyorSegment:true,
+            body:null,gfx:scene.add.graphics().setDepth(3),shape:'movingPlatform',
+            w:Math.max(20,Number(obj.conveyorW)||100),h:Math.max(8,Number(obj.conveyorH)||24),
+            visualX:Number(obj.conveyorOrigemX)||0,visualY:Number(obj.conveyorOrigemY)||0,
+            posicaoTravadaX:Number(obj.conveyorOrigemX)||0,posicaoTravadaY:Number(obj.conveyorOrigemY)||0,
+            gravity:false,lockPos:false,lockRot:true,mass:1000000,air:0,bounce:0,maxVel:0,maxRot:0,
+            manuseavel:false,naoAgarravel:false,isStatic:true,persistirSessao:false,idPersistente:null,
+            platformOrigemX:Number(obj.conveyorOrigemX)||0,platformOrigemY:Number(obj.conveyorOrigemY)||0,
+            platformDestinoX:Number(obj.conveyorDestinoX)||0,platformDestinoY:Number(obj.conveyorDestinoY)||0,
+            platformAtivo:true,platformVelocidade:Number(obj.conveyorVelocidade)||120,platformAoChegar:'teleport',
+            platformEsperaMs:0,platformLoop:true,platformTransportarJogador:obj.conveyorTransportarJogador!==false,
+            platformEstado:'indo',platformDeltaX:0,platformDeltaY:0,platformVelX:0,platformVelY:0,conveyorIndex:i
+        };
+        criarCorpoPlataformaMovel(scene,seg);
+        listaObjetosEditaveis.push(seg);
+        obj.conveyorPlatforms.push(seg);
+    }
+    atualizarEsteiraPlataformas(scene,obj,0,true);
+}
+
+function reconstruirEsteiraPlataformas(scene,obj){
+    if(!scene||!obj)return;
+    criarSegmentosEsteira(scene,obj);
+}
+
+function atualizarEsteiraPlataformas(scene,obj,dt,forcar=false){
+    if(!scene||!obj||obj.shape!=='conveyor')return;
+    const ox=Number(obj.conveyorOrigemX)||0,oy=Number(obj.conveyorOrigemY)||0;
+    const dx=Number(obj.conveyorDestinoX)||ox,dy=Number(obj.conveyorDestinoY)||oy;
+    const vx=dx-ox,vy=dy-oy,dist=Math.hypot(vx,vy);
+    if(!obj.conveyorPlatforms?.length)criarSegmentosEsteira(scene,obj);
+    if(!obj.conveyorPlatforms?.length)return;
+    if(forcar)obj.conveyorPhase=Number(obj.conveyorPhase)||0;
+    const antesPhase=Number(obj.conveyorPhase)||0;
+    if(!modoEditorAtivo&&obj.conveyorAtivo!==false&&dt>0&&dist>0.001){
+        obj.conveyorPhase=(antesPhase+Math.max(0,Number(obj.conveyorVelocidade)||120)*dt)%dist;
+    }
+    const fase=Number(obj.conveyorPhase)||0;
+    const ux=vx/dist,uy=vy/dist;
+    const count=obj.conveyorPlatforms.length;
+    for(let i=0;i<count;i++){
+        const seg=obj.conveyorPlatforms[i];
+        if(!seg?.body)continue;
+        const oldX=seg.body.position.x,oldY=seg.body.position.y;
+        const offset=((fase+i*Math.max(1,Number(obj.conveyorSpacing)||100))%dist+dist)%dist;
+        const nx=ox+ux*offset,ny=oy+uy*offset;
+        seg.platformDeltaX=nx-oldX;seg.platformDeltaY=ny-oldY;
+        const step=Math.hypot(seg.platformDeltaX,seg.platformDeltaY);
+        seg.platformVelX=dt>0?seg.platformDeltaX/dt:0;seg.platformVelY=dt>0?seg.platformDeltaY/dt:0;
+        scene.matter.body.setPosition(seg.body,{x:nx,y:ny});
+        scene.matter.body.setVelocity(seg.body,{x:0,y:0});
+        seg.visualX=nx;seg.visualY=ny;seg.posicaoTravadaX=nx;seg.posicaoTravadaY=ny;
+        // A troca de posição no fim do ciclo é deliberadamente instantânea:
+        // a plataforma reaparece na origem, como uma esteira contínua.
+        if(step>dist*0.5){seg.platformVelX=0;seg.platformVelY=0;}
+    }
+}
+
+function atualizarEsteirasPlataformas(scene,dt){
+    if(modoEditorAtivo)return;
+    for(const obj of listaObjetosEditaveis){
+        if(!obj||obj.shape!=='conveyor')continue;
+        atualizarEsteiraPlataformas(scene,obj,dt,false);
+    }
+}
+
 function criarCorpoPlataformaMovel(scene,obj){
     if(!scene||!obj)return null;
     const x=Number(obj.visualX)||Number(obj.platformOrigemX)||0,y=Number(obj.visualY)||Number(obj.platformOrigemY)||0;
@@ -956,6 +1063,12 @@ function criarCorpoPlataformaMovel(scene,obj){
     // O transporte do jogador é feito explicitamente por platformDelta/Vel.
     body.manuseavel=false;body.naoAgarravel=false;obj.body=body;obj.visualX=x;obj.visualY=y;obj.posicaoTravadaX=x;obj.posicaoTravadaY=y;obj.platformDeltaX=0;obj.platformDeltaY=0;obj.platformVelX=0;obj.platformVelY=0;return body;
 }
+function criarEsteiraPlataformasAPartirDeDados(scene,dados){
+    const x=Number(dados.x)||Number(dados.conveyorOrigemX)||0,y=Number(dados.y)||Number(dados.conveyorOrigemY)||0;
+    const obj={idObjeto:dados.idObjeto||gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(7),shape:'conveyor',w:Math.max(20,Number(dados.conveyorW)||100),h:Math.max(8,Number(dados.conveyorH)||24),visualX:x,visualY:y,posicaoTravadaX:x,posicaoTravadaY:y,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,idPersistente:dados.idPersistente||null,persistirSessao:false,conveyorW:Math.max(20,Number(dados.conveyorW)||100),conveyorH:Math.max(8,Number(dados.conveyorH)||24),conveyorCount:Math.max(1,Math.min(100,Math.round(Number(dados.conveyorCount)||6))),conveyorSpacing:Math.max(1,Number(dados.conveyorSpacing)||100),conveyorOrigemX:Number(dados.conveyorOrigemX??x)||0,conveyorOrigemY:Number(dados.conveyorOrigemY??y)||0,conveyorDestinoX:Number(dados.conveyorDestinoX??x)||0,conveyorDestinoY:Number(dados.conveyorDestinoY??y)||0,conveyorVelocidade:Math.max(1,Number(dados.conveyorVelocidade)||120),conveyorAtivo:dados.conveyorAtivo!==false,conveyorTransportarJogador:dados.conveyorTransportarJogador!==false,conveyorPhase:Number(dados.conveyorPhase)||0,conveyorPlatforms:[]};
+    listaObjetosEditaveis.push(obj);criarSegmentosEsteira(scene,obj);return obj;
+}
+
 function criarPlataformaMovelAPartirDeDados(scene,dados){
     const x=Number(dados.x)||0,y=Number(dados.y)||0;
     const obj={idObjeto:dados.idObjeto||gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(3),shape:'movingPlatform',w:Math.max(30,Number(dados.platformW??dados.w)||180),h:Math.max(8,Number(dados.platformH??dados.h)||24),visualX:x,visualY:y,posicaoTravadaX:x,posicaoTravadaY:y,gravity:false,lockPos:false,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:false,isStatic:false,idPersistente:dados.idPersistente||null,persistirSessao:false,platformOrigemX:Number(dados.platformOrigemX??x)||0,platformOrigemY:Number(dados.platformOrigemY??y)||0,platformDestinoX:Number(dados.platformDestinoX??x)||0,platformDestinoY:Number(dados.platformDestinoY??y)||0,platformAtivo:dados.platformAtivo!==false,platformVelocidade:Math.max(1,Number(dados.platformVelocidade)||120),platformAoChegar:['return','teleport','stop'].includes(dados.platformAoChegar)?dados.platformAoChegar:'return',platformEsperaMs:Math.max(0,Number(dados.platformEsperaMs)||0),platformEsperandoAte:0,platformLoop:dados.platformLoop!==false,platformTransportarJogador:dados.platformTransportarJogador!==false,platformEstado:dados.platformEstado||'indo',platformDeltaX:0,platformDeltaY:0,platformVelX:0,platformVelY:0};
@@ -1227,7 +1340,7 @@ function aplicarVelocidadeRelativaPlataformaMovel(suportes,scene){
 
 function atualizarPlataformasMoveis(scene,dt){
     if(modoEditorAtivo)return;const agora=performance.now();
-    for(const obj of listaObjetosEditaveis){if(!obj||obj.shape!=='movingPlatform'||!obj.body)continue;const antesX=obj.body.position.x,antesY=obj.body.position.y;obj.platformDeltaX=0;obj.platformDeltaY=0;
+    for(const obj of listaObjetosEditaveis){if(!obj||obj.shape!=='movingPlatform'||obj.conveyorSegment||!obj.body)continue;const antesX=obj.body.position.x,antesY=obj.body.position.y;obj.platformDeltaX=0;obj.platformDeltaY=0;
         if(obj.platformAtivo!==false){const ox=Number(obj.platformOrigemX)||antesX,oy=Number(obj.platformOrigemY)||antesY,dx=Number(obj.platformDestinoX)||ox,dy=Number(obj.platformDestinoY)||oy,voltando=obj.platformEstado==='voltando',tx=voltando?ox:dx,ty=voltando?oy:dy;
             if(obj.platformEsperandoAte&&agora<obj.platformEsperandoAte){}
             else if(obj.platformEsperandoAte){obj.platformEsperandoAte=0;if(voltando){if(obj.platformLoop)obj.platformEstado='indo';else obj.platformAtivo=false;}else{if(obj.platformAoChegar==='teleport'){scene.matter.body.setPosition(obj.body,{x:ox,y:oy});if(obj.platformLoop)obj.platformEstado='indo';else obj.platformAtivo=false;}else if(obj.platformAoChegar==='stop'){obj.platformAtivo=false;}else obj.platformEstado='voltando';}}
@@ -2167,6 +2280,11 @@ function adicionarObjetoSerializado(scene, dados) {
         return;
     }
 
+    if (dados.shape === 'conveyor') {
+        criarEsteiraPlataformasAPartirDeDados(scene,dados);
+        return;
+    }
+
     if (dados.shape === 'mover') {
         const x=Number(dados.x)||0,y=Number(dados.y)||0;
         listaObjetosEditaveis.push({idObjeto:dados.idObjeto||gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(7),shape:'mover',w:44,h:44,visualX:x,visualY:y,posicaoTravadaX:x,posicaoTravadaY:y,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,idPersistente:dados.idPersistente||null,persistirSessao:false,moverOrigemX:Number(dados.moverOrigemX??x)||0,moverOrigemY:Number(dados.moverOrigemY??y)||0,moverDestinoX:Number(dados.moverDestinoX??x)||0,moverDestinoY:Number(dados.moverDestinoY??y)||0,moverAtivo:dados.moverAtivo!==false,moverVelocidade:Math.max(0,Number(dados.moverVelocidade)||120),moverAoChegar:dados.moverAoChegar==='return'?'return':'teleport',moverEsperaDestinoMs:Math.max(0,Number(dados.moverEsperaDestinoMs)||0),moverSoltarJogadorNoDestino:dados.moverSoltarJogadorNoDestino===true,moverEsperandoAte:0,moverLoop:dados.moverLoop!==false,moverEstado:dados.moverEstado||'indo',filhosIds:Array.isArray(dados.filhosIds)?[...new Set(dados.filhosIds.filter(Boolean))]:[],vinculosFilhos:dados.vinculosFilhos&&typeof dados.vinculosFilhos==='object'?JSON.parse(JSON.stringify(dados.vinculosFilhos)):{} });return;
@@ -2996,6 +3114,12 @@ function create() {
             return;
         }
         if (modoEditorAtivo && ferramentaAtual === 'select' && arrastandoObjetoSelecionado && objetoSelecionado && p.isDown) {
+            if (objetoSelecionado.shape === 'conveyor' && arrastandoPontoEsteira) {
+                if(arrastandoPontoEsteira==='origem'){objetoSelecionado.conveyorOrigemX=p.worldX;objetoSelecionado.conveyorOrigemY=p.worldY;}
+                else if(arrastandoPontoEsteira==='destino'){objetoSelecionado.conveyorDestinoX=p.worldX;objetoSelecionado.conveyorDestinoY=p.worldY;}
+                else {const dx=p.worldX-(Number(objetoSelecionado.visualX)||0),dy=p.worldY-(Number(objetoSelecionado.visualY)||0);objetoSelecionado.visualX=p.worldX;objetoSelecionado.visualY=p.worldY;objetoSelecionado.conveyorOrigemX+=dx;objetoSelecionado.conveyorOrigemY+=dy;objetoSelecionado.conveyorDestinoX+=dx;objetoSelecionado.conveyorDestinoY+=dy;}
+                atualizarEsteiraPlataformas(this,objetoSelecionado,0,true);marcarSalaComoAlterada();return;
+            }
             if (objetoSelecionado.shape === 'movingPlatform' && arrastandoPontoPlataformaMovel) {
                 const tipo = arrastandoPontoPlataformaMovel;
                 if (tipo === 'origem') {
@@ -3091,8 +3215,8 @@ function create() {
         }
     }, this);
 
-    this.input.on('pointerup', (p) => { if (modoEditorAtivo && ferramentaAtual === 'draw' && ferramentaDesenhoAtual !== 'eraser') finalizarDesenhoEditor(p.worldX, p.worldY); finalizarPincelGrade(); arrastandoObjetoSelecionado = false; arrastandoDestinoTrigger = false; arrastandoPontoPlataformaMovel = null; });
-    this.input.on('gameout', () => { if (desenhoEmAndamento) { desenhoEmAndamento=null; if(desenhoPreviewGraphics)desenhoPreviewGraphics.clear(); } finalizarPincelGrade(); arrastandoObjetoSelecionado = false; arrastandoDestinoTrigger = false; arrastandoPontoPlataformaMovel = null; });
+    this.input.on('pointerup', (p) => { if (modoEditorAtivo && ferramentaAtual === 'draw' && ferramentaDesenhoAtual !== 'eraser') finalizarDesenhoEditor(p.worldX, p.worldY); finalizarPincelGrade(); arrastandoObjetoSelecionado = false; arrastandoDestinoTrigger = false; arrastandoPontoPlataformaMovel = null; arrastandoPontoEsteira = null; });
+    this.input.on('gameout', () => { if (desenhoEmAndamento) { desenhoEmAndamento=null; if(desenhoPreviewGraphics)desenhoPreviewGraphics.clear(); } finalizarPincelGrade(); arrastandoObjetoSelecionado = false; arrastandoDestinoTrigger = false; arrastandoPontoPlataformaMovel = null; arrastandoPontoEsteira = null; });
 
     this.input.keyboard.on('keydown-F4', () => { alternarModoEditor(this); });
     this.input.keyboard.on('keydown-F3', () => { alternarModoDebug(!modoDebugAtivo); });
@@ -3114,8 +3238,9 @@ function atualizarInterfaceForma() {
     const rotator = s === 'rotator';
     const mover = s === 'mover';
     const plataformaMovel = s === 'movingPlatform';
+    const conveyor = s === 'conveyor';
     const npc = s === 'npc', moeda = s === 'coin', triggerArea = s === 'triggerArea', taskArea = s === 'taskArea';
-    const fisico = !especial && s !== 'rope' && !rotator && !npc && !moeda && !triggerArea && !taskArea && !mover && !plataformaMovel;
+    const fisico = !especial && s !== 'rope' && !rotator && !npc && !moeda && !triggerArea && !taskArea && !mover && !plataformaMovel && !conveyor;
     document.getElementById('painel-propriedades-comuns').style.display = fisico ? 'block' : 'none';
     document.getElementById('painel-propriedades-corda').style.display = (s === 'rope') ? 'flex' : 'none';
     document.getElementById('painel-propriedades-gangorra').style.display = gangorra ? 'flex' : 'none';
@@ -3123,14 +3248,15 @@ function atualizarInterfaceForma() {
     document.getElementById('painel-propriedades-rotator').style.display = rotator ? 'flex' : 'none';
     document.getElementById('painel-propriedades-mover').style.display = mover ? 'flex' : 'none';
     document.getElementById('painel-propriedades-plataforma-movel').style.display = plataformaMovel ? 'flex' : 'none';
+    document.getElementById('painel-propriedades-conveyor').style.display = conveyor ? 'flex' : 'none';
     const decor = s === 'decorImage' || s === 'decorSprite'; document.getElementById('painel-propriedades-decor').style.display = decor ? 'flex' : 'none'; document.getElementById('painel-decor-sprite').style.display = s === 'decorSprite' ? 'flex' : 'none';
     document.getElementById('painel-propriedades-npc').style.display = npc ? 'flex' : 'none';
     document.getElementById('painel-propriedades-moeda').style.display = moeda ? 'flex' : 'none';
     document.getElementById('painel-propriedades-trigger').style.display = triggerArea ? 'flex' : 'none';
     document.getElementById('painel-propriedades-release-hands').style.display = taskArea ? 'flex' : 'none';
     document.getElementById('painel-propriedades-especiais').style.display = especial ? 'flex' : 'none';
-    document.getElementById('row-h').style.display = (s === 'circle' || s === 'polygon' || s === 'rope' || especial || rotator || npc || moeda || triggerArea || taskArea || mover || plataformaMovel) ? 'none' : 'flex';
-    document.getElementById('row-w').style.display = (s === 'polygon' || s === 'rope' || especial || rotator || npc || moeda || taskArea || mover || plataformaMovel) ? 'none' : 'flex';
+    document.getElementById('row-h').style.display = (s === 'circle' || s === 'polygon' || s === 'rope' || especial || rotator || npc || moeda || triggerArea || taskArea || mover || plataformaMovel || conveyor) ? 'none' : 'flex';
+    document.getElementById('row-w').style.display = (s === 'polygon' || s === 'rope' || especial || rotator || npc || moeda || taskArea || mover || plataformaMovel || conveyor) ? 'none' : 'flex';
     document.getElementById('row-is-static')?.style && (document.getElementById('row-is-static').style.display = gangorra ? 'none' : 'flex');
     document.getElementById('row-id-persistente').style.display = (especial || document.getElementById('prop-persistir-sessao').checked) ? 'flex' : 'none';
     document.getElementById('row-portal-destino').style.display = s === 'portal' ? 'flex' : 'none';
@@ -3184,6 +3310,7 @@ function extrairCamposPainel() {
         rotatorEventoAtivar:(document.getElementById('prop-rotator-event-on')?.value||'').trim(), rotatorEventoDesativar:(document.getElementById('prop-rotator-event-off')?.value||'').trim(),
         moverAtivo: !!document.getElementById('prop-mover-active')?.checked, moverDestinoX: parseFloat(document.getElementById('prop-mover-dest-x')?.value)||300, moverDestinoY: parseFloat(document.getElementById('prop-mover-dest-y')?.value)||0, moverVelocidade: Math.max(0,parseFloat(document.getElementById('prop-mover-speed')?.value)||120), moverAoChegar: document.getElementById('prop-mover-arrival')?.value==='return'?'return':'teleport', moverEsperaDestinoMs: Math.max(0,parseFloat(document.getElementById('prop-mover-wait')?.value)||0), moverSoltarJogadorNoDestino: !!document.getElementById('prop-mover-release')?.checked, moverLoop: !!document.getElementById('prop-mover-loop')?.checked,
         platformW: Math.max(30,parseFloat(document.getElementById('prop-platform-w')?.value)||180), platformH: Math.max(8,parseFloat(document.getElementById('prop-platform-h')?.value)||24), platformAtivo: !!document.getElementById('prop-platform-active')?.checked, platformDestinoX: parseFloat(document.getElementById('prop-platform-dest-x')?.value)||300, platformDestinoY: parseFloat(document.getElementById('prop-platform-dest-y')?.value)||0, platformVelocidade: Math.max(1,parseFloat(document.getElementById('prop-platform-speed')?.value)||120), platformAoChegar: ['return','teleport','stop'].includes(document.getElementById('prop-platform-arrival')?.value) ? document.getElementById('prop-platform-arrival').value : 'return', platformEsperaMs: Math.max(0,parseFloat(document.getElementById('prop-platform-wait')?.value)||0), platformLoop: !!document.getElementById('prop-platform-loop')?.checked, platformTransportarJogador: !!document.getElementById('prop-platform-carry')?.checked,
+        conveyorW: Math.max(20,parseFloat(document.getElementById('prop-conveyor-w')?.value)||100), conveyorH: Math.max(8,parseFloat(document.getElementById('prop-conveyor-h')?.value)||24), conveyorCount: Math.max(1,Math.min(100,parseInt(document.getElementById('prop-conveyor-count')?.value)||6)), conveyorSpacing: Math.max(1,parseFloat(document.getElementById('prop-conveyor-spacing')?.value)||100), conveyorVelocidade: Math.max(1,parseFloat(document.getElementById('prop-conveyor-speed')?.value)||120), conveyorAtivo: !!document.getElementById('prop-conveyor-active')?.checked, conveyorTransportarJogador: !!document.getElementById('prop-conveyor-carry')?.checked,
         decorUrl:(document.getElementById('prop-decor-url')?.value||'').trim(),decorScale:Math.max(.01,parseFloat(document.getElementById('prop-decor-scale')?.value)||1),decorLayer:datosLayer(document.getElementById('prop-decor-layer')?.value),decorFrameW:Math.max(1,parseInt(document.getElementById('prop-decor-frame-w')?.value)||64),decorFrameH:Math.max(1,parseInt(document.getElementById('prop-decor-frame-h')?.value)||64),decorStart:Math.max(0,parseInt(document.getElementById('prop-decor-start')?.value)||0),decorEnd:Math.max(0,parseInt(document.getElementById('prop-decor-end')?.value)||0),decorFps:Math.max(1,parseFloat(document.getElementById('prop-decor-fps')?.value)||8),
         npcId:(document.getElementById('prop-npc-id')?.value||'npc').trim(),npcNome:(document.getElementById('prop-npc-name')?.value||'NPC').trim(),npcSpritesheetUrl:(document.getElementById('prop-npc-sheet-url')?.value||'').trim(),npcFrameW:Math.max(1,parseInt(document.getElementById('prop-npc-frame-w')?.value)||64),npcFrameH:Math.max(1,parseInt(document.getElementById('prop-npc-frame-h')?.value)||64),npcEscala:Math.max(.1,parseFloat(document.getElementById('prop-npc-scale')?.value)||1),npcRaioDialogo:Math.max(20,parseFloat(document.getElementById('prop-npc-radius')?.value)||180),npcEstadoInicial:(document.getElementById('prop-npc-initial-state')?.value||'inicial').trim(),npcEstados:parsearEstadosNPCDoPainel(),coinValue:Math.max(1,parseInt(document.getElementById('prop-coin-value')?.value)||1),coinId:(document.getElementById('prop-coin-id')?.value||'').trim(),triggerW:Math.max(20,parseFloat(document.getElementById('prop-trigger-w')?.value)||160),triggerH:Math.max(20,parseFloat(document.getElementById('prop-trigger-h')?.value)||120),triggerTargetId:(document.getElementById('prop-trigger-target')?.value||'').trim(),triggerDestX:parseFloat(document.getElementById('prop-trigger-dest-x')?.value)||0,triggerDestY:parseFloat(document.getElementById('prop-trigger-dest-y')?.value)||0,taskW:Math.max(20,parseFloat(document.getElementById('prop-release-w')?.value)||160),taskH:Math.max(20,parseFloat(document.getElementById('prop-release-h')?.value)||120)
     };
@@ -3198,6 +3325,10 @@ function executarCriacaoObjeto(scene, x, y) {
     }
     if(c.shape==='triggerArea'){const obj={idObjeto:gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(7),shape:'triggerArea',w:c.triggerW,h:c.triggerH,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,triggerW:c.triggerW,triggerH:c.triggerH,triggerTargetId:'',triggerDestX:ax+220,triggerDestY:ay,triggerPlayersInside:{}};listaObjetosEditaveis.push(obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
     if(c.shape==='npc'){const obj={idObjeto:gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(8),shape:'npc',w:c.npcFrameW,h:c.npcFrameH,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,npcId:c.npcId||('npc_'+Date.now()),npcNome:c.npcNome||'NPC',npcSpritesheetUrl:c.npcSpritesheetUrl,npcFrameW:c.npcFrameW,npcFrameH:c.npcFrameH,npcEscala:c.npcEscala,npcRaioDialogo:c.npcRaioDialogo,npcEstadoInicial:c.npcEstadoInicial||'inicial',npcEstados:c.npcEstados,npcSprite:null};listaObjetosEditaveis.push(obj);prepararSpriteNPC(scene,obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
+    if(c.shape==='conveyor'){
+        const obj=criarEsteiraPlataformasAPartirDeDados(scene,{shape:'conveyor',x:ax,y:ay,conveyorW:c.conveyorW,conveyorH:c.conveyorH,conveyorCount:c.conveyorCount,conveyorSpacing:c.conveyorSpacing,conveyorOrigemX:ax,conveyorOrigemY:ay,conveyorDestinoX:ax+Math.max(300,c.conveyorSpacing*Math.max(1,c.conveyorCount-1)),conveyorDestinoY:ay,conveyorVelocidade:c.conveyorVelocidade,conveyorAtivo:c.conveyorAtivo,conveyorTransportarJogador:c.conveyorTransportarJogador});
+        if(obj)selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;
+    }
     if(c.shape==='movingPlatform'){
         const obj=criarPlataformaMovelAPartirDeDados(scene,{shape:'movingPlatform',x:ax,y:ay,w:c.platformW,h:c.platformH,platformAtivo:c.platformAtivo,platformDestinoX:ax+c.platformDestinoX,platformDestinoY:ay+c.platformDestinoY,platformVelocidade:c.platformVelocidade,platformAoChegar:c.platformAoChegar,platformEsperaMs:c.platformEsperaMs,platformLoop:c.platformLoop,platformTransportarJogador:c.platformTransportarJogador});
         if(obj)selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;
@@ -3322,6 +3453,7 @@ function finalizarCriacaoPoligono(scene) {
 function executarSelecaoObjeto(scene, x, y, pointer) {
     let prox = null, mDist = Infinity;
     listaObjetosEditaveis.forEach(obj => {
+        if (obj?.conveyorParentId) return;
         let colidiu = false;
         // A plataforma móvel possui três alvos independentes no editor:
         // origem, posição atual da plataforma e destino. Como ela também
@@ -3329,7 +3461,10 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
         // do teste genérico do body; caso contrário, um clique na origem
         // ou no destino fora do retângulo da plataforma nunca selecionaria
         // o objeto.
-        if (obj.shape === 'movingPlatform') {
+        if (obj.shape === 'conveyor') {
+            const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0,ox=Number(obj.conveyorOrigemX)||px,oy=Number(obj.conveyorOrigemY)||py,dx=Number(obj.conveyorDestinoX)||px,dy=Number(obj.conveyorDestinoY)||py;
+            colidiu=Math.hypot(x-ox,y-oy)<=24||Math.hypot(x-dx,y-dy)<=24||Math.hypot(x-px,y-py)<=30;
+        } else if (obj.shape === 'movingPlatform') {
             const px=Number(obj.visualX)||0, py=Number(obj.visualY)||0;
             const hw=Math.max(20,Number(obj.w)||180)/2, hh=Math.max(8,Number(obj.h)||24)/2;
             const ox=Number(obj.platformOrigemX ?? px), oy=Number(obj.platformOrigemY ?? py);
@@ -3407,8 +3542,11 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
     selecionarObjetoDoEditor(prox);
     arrastandoDestinoTrigger = prox.shape === 'triggerArea' && Math.hypot(x-(Number(prox.triggerDestX)||0),y-(Number(prox.triggerDestY)||0))<=18;
     arrastandoSpawnLauncher = prox.shape === 'launcherSeesaw' && (()=>{const sp=pontoPesoGangorraLancadora(prox);return Math.hypot(x-sp.x,y-sp.y)<=26;})();
-    arrastandoPontoPlataformaMovel = null;
-    if (prox.shape === 'movingPlatform') {
+    arrastandoPontoPlataformaMovel = null; arrastandoPontoEsteira = null;
+    if (prox.shape === 'conveyor') {
+        const px=Number(prox.visualX)||0,py=Number(prox.visualY)||0,ox=Number(prox.conveyorOrigemX)||px,oy=Number(prox.conveyorOrigemY)||py,dx=Number(prox.conveyorDestinoX)||px,dy=Number(prox.conveyorDestinoY)||py;
+        const dO=Math.hypot(x-ox,y-oy),dD=Math.hypot(x-dx,y-dy); arrastandoPontoEsteira=dO<=20&&dO<=dD?'origem':(dD<=20?'destino':'esteira');
+    } else if (prox.shape === 'movingPlatform') {
         const px=Number(prox.visualX)||0, py=Number(prox.visualY)||0;
         const ox=Number(prox.platformOrigemX)||px, oy=Number(prox.platformOrigemY)||py;
         const dx=Number(prox.platformDestinoX)||px, dy=Number(prox.platformDestinoY)||py;
@@ -3445,6 +3583,15 @@ function selecionarObjetoDoEditor(obj) {
     else if(obj.shape==='coin'){document.getElementById('prop-coin-value').value=obj.coinValue||1;document.getElementById('prop-coin-id').value=obj.coinId||'';}
     else if(obj.shape==='triggerArea'){document.getElementById('prop-trigger-w').value=Math.max(20,Number(obj.triggerW)||160);document.getElementById('prop-trigger-h').value=Math.max(20,Number(obj.triggerH)||120);document.getElementById('prop-trigger-target').value=obj.triggerTargetId||'';document.getElementById('prop-trigger-dest-x').value=Number(obj.triggerDestX)||0;document.getElementById('prop-trigger-dest-y').value=Number(obj.triggerDestY)||0;atualizarStatusTrigger();}
     else if(obj.shape==='taskArea'){document.getElementById('prop-release-w').value=Math.max(20,Number(obj.taskW)||160);document.getElementById('prop-release-h').value=Math.max(20,Number(obj.taskH)||120);document.getElementById('prop-task-action').value=obj.taskAction||'releaseHands';}
+    if (obj.shape === 'conveyor') {
+        document.getElementById('prop-conveyor-w').value=Math.max(20,Number(obj.conveyorW)||100);
+        document.getElementById('prop-conveyor-h').value=Math.max(8,Number(obj.conveyorH)||24);
+        document.getElementById('prop-conveyor-count').value=Math.max(1,Number(obj.conveyorCount)||6);
+        document.getElementById('prop-conveyor-spacing').value=Math.max(1,Number(obj.conveyorSpacing)||100);
+        document.getElementById('prop-conveyor-speed').value=Math.max(1,Number(obj.conveyorVelocidade)||120);
+        document.getElementById('prop-conveyor-active').checked=obj.conveyorAtivo!==false;
+        document.getElementById('prop-conveyor-carry').checked=obj.conveyorTransportarJogador!==false;
+    }
     if (obj.shape === 'mover') {
         document.getElementById('prop-mover-active').checked=obj.moverAtivo!==false;document.getElementById('prop-mover-dest-x').value=(Number(obj.moverDestinoX)||0)-(Number(obj.moverOrigemX)||0);document.getElementById('prop-mover-dest-y').value=(Number(obj.moverDestinoY)||0)-(Number(obj.moverOrigemY)||0);document.getElementById('prop-mover-speed').value=Math.max(0,Number(obj.moverVelocidade)||120);document.getElementById('prop-mover-arrival').value=obj.moverAoChegar==='return'?'return':'teleport';document.getElementById('prop-mover-wait').value=Math.max(0,Number(obj.moverEsperaDestinoMs)||0);document.getElementById('prop-mover-release').checked=obj.moverSoltarJogadorNoDestino===true;document.getElementById('prop-mover-loop').checked=obj.moverLoop!==false;atualizarStatusFilhosMover();
     } else if (obj.shape === 'movingPlatform') {
@@ -3496,6 +3643,7 @@ function atualizarObjetoExistente() {
     let obj = objetoSelecionado, scene = game.scene.getScene('default'), c = extrairCamposPainel();
     let px = obj.body ? obj.body.position.x : obj.visualX; let py = obj.body ? obj.body.position.y : obj.visualY;
     let anguloSalvo = obj.body ? obj.body.angle : 0;
+    if(obj.shape==='conveyor'&&c.shape!=='conveyor'){destruirSegmentosEsteira(scene,obj);obj.conveyorPlatforms=[];}
     if(obj.shape==='movingPlatform'&&c.shape!=='movingPlatform'){obj.platformEsperandoAte=0;obj.platformDeltaX=0;obj.platformDeltaY=0;obj.platformVelX=0;obj.platformVelY=0;}
     if((obj.shape==='decorImage'||obj.shape==='decorSprite')&&c.shape===obj.shape){const reload=String(obj.decorUrl||'')!==String(c.decorUrl||'')||Number(obj.decorFrameW)!==Number(c.decorFrameW)||Number(obj.decorFrameH)!==Number(c.decorFrameH);obj.decorUrl=c.decorUrl;obj.decorScale=c.decorScale;obj.decorLayer=c.decorLayer;obj.decorFrameW=c.decorFrameW;obj.decorFrameH=c.decorFrameH;obj.decorStart=c.decorStart;obj.decorEnd=c.decorEnd;obj.decorFps=c.decorFps;obj.w=c.decorFrameW;obj.h=c.decorFrameH;if(reload)prepararDecorativo(scene,obj,true);else if(obj.decorSprite){obj.decorSprite.setScale(obj.decorScale).setDepth(profundidadeDecor(obj));if(obj.shape==='decorSprite')prepararDecorativo(scene,obj,true);}marcarSalaComoAlterada();return;}
     if(obj.shape==='npc'&&c.shape==='npc'){
@@ -3535,6 +3683,15 @@ function atualizarObjetoExistente() {
     }
     if(c.shape==='triggerArea'&&obj.shape!=='triggerArea'){if(obj.seesawConstraint){scene.matter.world.remove(obj.seesawConstraint);obj.seesawConstraint=null;}if(obj.shape==='rope'){obj.ropeConstraints?.forEach(co=>scene.matter.world.remove(co));obj.ropeElos?.forEach(el=>scene.matter.world.remove(el));}else if(obj.body){scene.matter.world.remove(obj.body);}if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}Object.assign(obj,{shape:'triggerArea',body:null,w:c.triggerW,h:c.triggerH,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,triggerW:c.triggerW,triggerH:c.triggerH,triggerTargetId:c.triggerTargetId||'',triggerDestX:Number.isFinite(c.triggerDestX)?c.triggerDestX:px+220,triggerDestY:Number.isFinite(c.triggerDestY)?c.triggerDestY:py,triggerPlayersInside:{}});garantirIdObjetoCena(obj);marcarSalaComoAlterada();atualizarStatusTrigger();return;}
     if(c.shape==='mover'&&obj.shape!=='mover'){if(obj.body)scene.matter.world.remove(obj.body);Object.assign(obj,{shape:'mover',body:null,w:44,h:44,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,manuseavel:false,naoAgarravel:true,isStatic:true,idPersistente:null,persistirSessao:false,moverOrigemX:px,moverOrigemY:py,moverDestinoX:px+(Number(c.moverDestinoX)||300),moverDestinoY:py+(Number(c.moverDestinoY)||0),moverAtivo:c.moverAtivo,moverVelocidade:c.moverVelocidade,moverAoChegar:c.moverAoChegar,moverEsperaDestinoMs:c.moverEsperaDestinoMs,moverSoltarJogadorNoDestino:c.moverSoltarJogadorNoDestino,moverEsperandoAte:0,moverLoop:c.moverLoop,moverEstado:'indo',filhosIds:[],vinculosFilhos:{}});marcarSalaComoAlterada();return;}
+    if(obj.shape==='conveyor'&&c.shape==='conveyor'){
+        obj.conveyorW=c.conveyorW;obj.conveyorH=c.conveyorH;obj.conveyorCount=c.conveyorCount;obj.conveyorSpacing=c.conveyorSpacing;obj.conveyorVelocidade=c.conveyorVelocidade;obj.conveyorAtivo=c.conveyorAtivo;obj.conveyorTransportarJogador=c.conveyorTransportarJogador;
+        reconstruirEsteiraPlataformas(scene,obj);marcarSalaComoAlterada();return;
+    }
+    if(c.shape==='conveyor'&&obj.shape!=='conveyor'){
+        if(obj.seesawConstraint){scene.matter.world.remove(obj.seesawConstraint);obj.seesawConstraint=null;}if(obj.body)scene.matter.world.remove(obj.body);if(obj.ropeConstraints)obj.ropeConstraints.forEach(co=>scene.matter.world.remove(co));if(obj.ropeElos)obj.ropeElos.forEach(el=>scene.matter.world.remove(el));
+        Object.assign(obj,{shape:'conveyor',body:null,w:c.conveyorW,h:c.conveyorH,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,conveyorW:c.conveyorW,conveyorH:c.conveyorH,conveyorCount:c.conveyorCount,conveyorSpacing:c.conveyorSpacing,conveyorOrigemX:px,conveyorOrigemY:py,conveyorDestinoX:px+Math.max(300,c.conveyorSpacing*Math.max(1,c.conveyorCount-1)),conveyorDestinoY:py,conveyorVelocidade:c.conveyorVelocidade,conveyorAtivo:c.conveyorAtivo,conveyorTransportarJogador:c.conveyorTransportarJogador,conveyorPhase:0,conveyorPlatforms:[]});
+        criarSegmentosEsteira(scene,obj);garantirIdObjetoCena(obj);marcarSalaComoAlterada();return;
+    }
     if(obj.shape==='movingPlatform'&&c.shape==='movingPlatform'){
         const ox=Number(obj.platformOrigemX)||px,oy=Number(obj.platformOrigemY)||py;
         obj.w=c.platformW;obj.h=c.platformH;obj.platformOrigemX=ox;obj.platformOrigemY=oy;obj.platformDestinoX=ox+(Number(c.platformDestinoX)||0);obj.platformDestinoY=oy+(Number(c.platformDestinoY)||0);obj.platformAtivo=c.platformAtivo;obj.platformVelocidade=c.platformVelocidade;obj.platformAoChegar=c.platformAoChegar;obj.platformEsperaMs=c.platformEsperaMs;obj.platformEsperandoAte=0;obj.platformLoop=c.platformLoop;obj.platformTransportarJogador=c.platformTransportarJogador;obj.naoAgarravel=false;obj.isStatic=false;
@@ -3669,6 +3826,7 @@ function deletarObjetoSelecionado() {
         if (o.vinculosFilhos && typeof o.vinculosFilhos === 'object') delete o.vinculosFilhos[idRemovido];
     });
     if (objetoSelecionado.seesawConstraint) { scene.matter.world.remove(objetoSelecionado.seesawConstraint); objetoSelecionado.seesawConstraint = null; }
+    if (objetoSelecionado.shape === 'conveyor') { destruirSegmentosEsteira(scene,objetoSelecionado); }
     if (objetoSelecionado.shape === 'rope') {
         if (objetoSelecionado.ropeConstraints) objetoSelecionado.ropeConstraints.forEach(co => scene.matter.world.remove(co));
         if (objetoSelecionado.ropeElos) objetoSelecionado.ropeElos.forEach(el => scene.matter.world.remove(el));
@@ -3707,6 +3865,23 @@ function desenharObjetoEditor(obj) {
     if(obj.shape==='npc'){const sel=obj===objetoSelecionado;g.setVisible(true);g.x=0;g.y=0;g.rotation=0;if(obj.npcSprite){obj.npcSprite.setVisible(true);obj.npcSprite.setPosition(posX,posY);obj.npcSprite.setScale(Math.max(.1,Number(obj.npcEscala)||1));}if(modoEditorAtivo){g.lineStyle(sel?4:2,sel?0xffea00:0x5dade2,1);g.strokeRect(posX-obj.npcFrameW*obj.npcEscala/2,posY-obj.npcFrameH*obj.npcEscala/2,obj.npcFrameW*obj.npcEscala,obj.npcFrameH*obj.npcEscala);g.lineStyle(2,0x5dade2,.35);g.strokeCircle(posX,posY,Math.max(20,Number(obj.npcRaioDialogo)||180));}else if(!obj.npcSprite){g.fillStyle(0x5dade2,1);g.fillCircle(posX,posY,24);g.fillStyle(0xffffff,1);g.fillCircle(posX-8,posY-4,3);g.fillCircle(posX+8,posY-4,3);}return;}
     if(obj.shape==='coin'){if(obj.coinColetada&&!modoEditorAtivo){g.setVisible(false);return;}g.setVisible(true);g.x=0;g.y=0;g.rotation=0;const sel=obj===objetoSelecionado;g.fillStyle(0xf9ca24,1);g.fillCircle(posX,posY,14);g.lineStyle(sel?4:2,sel?0xffffff:0xb7950b,1);g.strokeCircle(posX,posY,14);g.fillStyle(0xfff3a0,1);g.fillRect(posX-2,posY-9,4,18);return;}
 
+    if (obj.shape === 'conveyor') {
+        if(!modoEditorAtivo){g.setVisible(false);return;}
+        g.setVisible(true);g.x=0;g.y=0;g.rotation=0;g.clear();
+        const sel=obj===objetoSelecionado,cor=sel?0xffea00:0x22d3ee;
+        const ox=Number(obj.conveyorOrigemX)||posX,oy=Number(obj.conveyorOrigemY)||posY,dx=Number(obj.conveyorDestinoX)||ox,dy=Number(obj.conveyorDestinoY)||oy;
+        g.lineStyle(3,0x22d3ee,.65);g.lineBetween(ox,oy,dx,dy);
+        g.fillStyle(0x22d3ee,.12);g.fillCircle(ox,oy,22);g.fillCircle(dx,dy,22);
+        g.lineStyle(sel?4:2,cor,1);g.strokeCircle(ox,oy,12);g.strokeCircle(dx,dy,12);
+        g.lineBetween(ox-7,oy,ox+7,oy);g.lineBetween(ox,oy-7,ox,oy+7);g.lineBetween(dx-7,dy,dx+7,dy);g.lineBetween(dx,dy-7,dx,dy+7);
+        const count=Math.max(1,Math.round(Number(obj.conveyorCount)||6)),spacing=Math.max(1,Number(obj.conveyorSpacing)||100),w=Math.max(20,Number(obj.conveyorW)||100),h=Math.max(8,Number(obj.conveyorH)||24);
+        g.fillStyle(0x22d3ee,.16);g.lineStyle(1,0x22d3ee,.35);
+        const dist=Math.hypot(dx-ox,dy-oy),ux=dist>0?(dx-ox)/dist:1,uy=dist>0?(dy-oy)/dist:0;
+        for(let i=0;i<count;i++){const d=Math.min(dist,Math.max(0,i*spacing));const sx=ox+ux*d,sy=oy+uy*d;g.fillRect(sx-w/2,sy-h/2,w,h);g.strokeRect(sx-w/2,sy-h/2,w,h);}
+        return;
+    }
+
+    if (obj.conveyorSegment && modoEditorAtivo) { g.setVisible(false); return; }
     if (obj.shape === 'movingPlatform') {
         if(!modoEditorAtivo){
             g.setVisible(true);g.x=0;g.y=0;g.rotation=0;g.fillStyle(0x4ade80,1);g.fillRect(posX-obj.w/2,posY-obj.h/2,obj.w,obj.h);g.lineStyle(2,0x166534,1);g.strokeRect(posX-obj.w/2,posY-obj.h/2,obj.w,obj.h);return;
@@ -5053,7 +5228,7 @@ function update(time, delta) {
         previewGraphicsPoligono.clear();
         desenharGradeConstrucao();
         listaObjetosEditaveis.forEach(obj => {
-            if (obj && obj.body && obj.lockPos && obj.shape !== 'movingPlatform') {
+            if (obj && obj.body && obj.lockPos && obj.shape !== 'movingPlatform' && !obj.conveyorSegment) {
                 if (obj.body.position.x !== obj.posicaoTravadaX || obj.body.position.y !== obj.posicaoTravadaY) {
                     game.scene.getScene('default').matter.body.setPosition(obj.body, { x: obj.posicaoTravadaX, y: obj.posicaoTravadaY });
                     game.scene.getScene('default').matter.body.setVelocity(obj.body, { x: 0, y: 0 });
@@ -5072,6 +5247,7 @@ function update(time, delta) {
     atualizarRotadores(this, dtFisica);
     atualizarMovers(this, dtFisica);
     atualizarPlataformasMoveis(this, dtFisica);
+    atualizarEsteirasPlataformas(this, dtFisica);
     const suportesPlataformasMoveis = capturarSuportesDasPlataformasMoveis();
     transportarJogadoresSobreMovers(suportesMovers, this);
     transportarJogadoresSobrePlataformasMoveis(suportesPlataformasMoveis, this);
