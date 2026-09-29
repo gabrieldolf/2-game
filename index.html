@@ -3483,7 +3483,7 @@ function finalizarCriacaoPoligono(scene) {
 }
 
 function executarSelecaoObjeto(scene, x, y, pointer) {
-    let prox = null, mDist = Infinity;
+    let prox = null, mDist = Infinity, mProfundidade = -Infinity, mIndice = -1;
     listaObjetosEditaveis.forEach(obj => {
         if (obj?.conveyorParentId) return;
         let colidiu = false;
@@ -3560,7 +3560,21 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
             const posX = obj.body ? obj.body.position.x : obj.visualX;
             const posY = obj.body ? obj.body.position.y : obj.visualY;
             const dist = Math.hypot(posX - x, posY - y);
-            if (dist < mDist) { mDist = dist; prox = obj; }
+            const profundidade = profundidadeObjetoParaSelecao(obj);
+            const indice = listaObjetosEditaveis.indexOf(obj);
+            // A seleção deve respeitar exatamente a mesma lógica de camadas
+            // usada para desenhar os objetos: entre vários objetos que ocupam
+            // o ponto clicado, o que estiver mais à frente é selecionado.
+            // Em caso de empate de profundidade, mantém-se a ordem de criação
+            // e, só então, a distância do centro como critério de desempate.
+            if (profundidade > mProfundidade ||
+                (Math.abs(profundidade - mProfundidade) < 0.000001 && indice > mIndice) ||
+                (Math.abs(profundidade - mProfundidade) < 0.000001 && indice === mIndice && dist < mDist)) {
+                mProfundidade = profundidade;
+                mIndice = indice;
+                mDist = dist;
+                prox = obj;
+            }
         }
     });
 
@@ -5137,7 +5151,7 @@ function camadaRenderObjeto(obj){
     }
     return Math.max(-100, Math.min(100, Math.round(Number(obj.camadaRender) || 0)));
 }
-function profundidadeObjeto(obj){
+function profundidadeObjetoParaSelecao(obj){
     const camada = camadaRenderObjeto(obj);
     let base = 3;
     if (obj?.shape === 'coin') base = 5;
@@ -5146,10 +5160,14 @@ function profundidadeObjeto(obj){
     else if (obj?.shape === 'conveyor') base = 7;
     else if (obj?.shape === 'movingPlatform') base = 3;
     else if (obj?.shape === 'decorImage' || obj?.shape === 'decorSprite') base = obj?.decorLayer === 'front' ? 40 : -10;
+    return camada * 100 + base;
+}
+function profundidadeObjeto(obj){
+    const base = profundidadeObjetoParaSelecao(obj);
     const indice = Math.max(0, listaObjetosEditaveis.indexOf(obj));
     const desempate = indice * 0.001;
     const destaqueEditor = modoEditorAtivo && obj === objetoSelecionado ? 50000 : 0;
-    return camada * 100 + base + desempate + destaqueEditor;
+    return base + desempate + destaqueEditor;
 }
 function profundidadeDecor(obj){return profundidadeObjeto(obj);}
 function aplicarCamadaSelecionado(atual){
