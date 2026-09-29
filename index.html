@@ -105,7 +105,7 @@
     </div>
     <div class="section">
         <h3 id="status-modo" style="color:#55ff55;">Criando novos objetos</h3>
-        <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option><option value="rope">Corda / Corrente</option><option value="seesaw">Gangorra</option><option value="launcherSeesaw">Gangorra Lançadora</option><option value="rotator">Pai Giratório / Eixo</option><option value="decorImage">Imagem Decorativa</option><option value="decorSprite">Spritesheet Decorativo</option><option value="npc">NPC / Evento</option><option value="coin">Moeda</option><option value="triggerArea">Área Invisível / Evento</option><option value="mover">Pai Movedor / Trajeto</option><option value="movingPlatform">Plataforma Móvel</option><option value="portal">Portal / Conexão</option><option value="respawn1">Respawn Jogador 1</option><option value="respawn2">Respawn Jogador 2</option></select></div>
+        <div class="prop-row"><label>Forma:</label><select id="prop-shape" onchange="atualizarInterfaceForma(); atualizarObjetoExistente();"><option value="box">Retângulo</option><option value="circle">Esfera</option><option value="polygon">Polígono Customizado</option><option value="rope">Corda / Corrente</option><option value="seesaw">Gangorra</option><option value="launcherSeesaw">Gangorra Lançadora</option><option value="rotator">Pai Giratório / Eixo</option><option value="decorImage">Imagem Decorativa</option><option value="decorSprite">Spritesheet Decorativo</option><option value="npc">NPC / Evento</option><option value="coin">Moeda</option><option value="triggerArea">Área Invisível / Evento</option><option value="taskArea">Área de Tarefas</option><option value="mover">Pai Movedor / Trajeto</option><option value="movingPlatform">Plataforma Móvel</option><option value="portal">Portal / Conexão</option><option value="respawn1">Respawn Jogador 1</option><option value="respawn2">Respawn Jogador 2</option></select></div>
         <div id="painel-propriedades-comuns">
             <div class="prop-row" style="background:#27ae60; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Objeto Manuseável:</label><input type="checkbox" id="prop-manuseavel" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row" style="background:#e74c3c; padding:6px; border-radius:4px;"><label style="color:#fff; font-weight:bold;">Trava Agarrar (Não Agarrável):</label><input type="checkbox" id="prop-lock-grab" onchange="atualizarObjetoExistente()"></div>
@@ -272,6 +272,14 @@
             <div class="prop-row"><label>Destino X:</label><input type="number" id="prop-trigger-dest-x" value="0" step="10" onchange="atualizarObjetoExistente()"></div>
             <div class="prop-row"><label>Destino Y:</label><input type="number" id="prop-trigger-dest-y" value="0" step="10" onchange="atualizarObjetoExistente()"></div>
             <p style="font-size:10px;color:#ddd6fe;margin:2px 0 0;">No modo “Selecionar e Mover”, arraste o retângulo para posicionar a área de ativação e arraste o marcador em forma de alvo para definir a posição de destino.</p>
+        </div>
+        <div id="painel-propriedades-release-hands" style="display:none; background:#3b2f63; padding:9px; border:2px solid #f59e0b; border-radius:6px; margin-top:7px; flex-direction:column; gap:7px;">
+            <h3 style="color:#fde68a;font-weight:bold;margin:0;">Área de Tarefas</h3>
+            <div style="font-size:10px;color:#fde68a;line-height:1.35;">Durante a gameplay esta área é invisível. Quando um jogador entrar nela, a tarefa configurada será executada sobre esse jogador.</div>
+            <div class="prop-row"><label>Tarefa ao entrar:</label><select id="prop-task-action" onchange="atualizarObjetoExistente()"><option value="releaseHands">Soltar / desagarrar as mãos</option></select></div>
+            <div class="prop-row"><label>Largura da área:</label><input type="number" id="prop-release-w" value="160" min="20" step="10" onchange="atualizarObjetoExistente()"></div>
+            <div class="prop-row"><label>Altura da área:</label><input type="number" id="prop-release-h" value="120" min="20" step="10" onchange="atualizarObjetoExistente()"></div>
+            <div style="font-size:10px;color:#fde68a;line-height:1.35;">Novas tarefas poderão ser adicionadas a este objeto futuramente.</div>
         </div>
         <button id="btn-delete" style="background:#ff4757; display:none; margin-top:10px;" onclick="deletarObjetoSelecionado()">Deletar Objeto</button>
     </div>
@@ -569,6 +577,14 @@ function serializarObjetoDaSala(obj) {
         return base;
     }
 
+    if (obj.shape === 'taskArea') {
+        base.x = Number(obj.visualX) || 0; base.y = Number(obj.visualY) || 0;
+        base.taskW = Math.max(20, Number(obj.taskW) || 160);
+        base.taskH = Math.max(20, Number(obj.taskH) || 120);
+        base.taskAction = obj.taskAction || 'releaseHands';
+        return base;
+    }
+
     if (obj.shape === 'mover') {
         base.x=Number(obj.visualX)||0;base.y=Number(obj.visualY)||0;base.moverOrigemX=Number(obj.moverOrigemX??obj.visualX)||0;base.moverOrigemY=Number(obj.moverOrigemY??obj.visualY)||0;base.moverDestinoX=Number(obj.moverDestinoX??obj.visualX)||0;base.moverDestinoY=Number(obj.moverDestinoY??obj.visualY)||0;base.moverAtivo=obj.moverAtivo!==false;base.moverVelocidade=Math.max(0,Number(obj.moverVelocidade)||120);base.moverAoChegar=obj.moverAoChegar==='return'?'return':'teleport';base.moverEsperaDestinoMs=Math.max(0,Number(obj.moverEsperaDestinoMs)||0);base.moverSoltarJogadorNoDestino=obj.moverSoltarJogadorNoDestino===true;base.moverEsperandoAte=0;base.moverLoop=obj.moverLoop!==false;base.moverEstado=obj.moverEstado||'indo';base.filhosIds=Array.isArray(obj.filhosIds)?[...new Set(obj.filhosIds.filter(Boolean))]:[];base.vinculosFilhos=obj.vinculosFilhos&&typeof obj.vinculosFilhos==='object'?JSON.parse(JSON.stringify(obj.vinculosFilhos)):{};return base;
     }
@@ -782,6 +798,43 @@ function moverObjetoCenaPara(scene, obj, x, y) {
     obj.visualX=x; obj.visualY=y; obj.posicaoTravadaX=x; obj.posicaoTravadaY=y;
     atualizarVinculosRotatorAposMoverObjeto(obj);
 }
+function desagarrarCompletamenteAsMaosDoJogador(scene,p){
+    if(!scene||!p)return false;
+    let liberou=false;
+    for(const [jKey,h] of [['leftJoint',p.leftHand],['rightJoint',p.rightHand]]){
+        const constraint=p[jKey];
+        if(constraint){
+            if(p[jKey+'PlataformaMovel']) liberarGarraPlataformaMovel(scene,p,h,jKey);
+            else {
+                removerConstraintDeGarraFisica(scene,constraint);
+                p[jKey]=null;p[jKey+'Target']=null;p[jKey+'PivotBody']=null;p[jKey+'LocalOffset']=null;p[jKey+'PontoPivorMundo']=null;p[jKey+'RotatorPai']=null;p[jKey+'PlataformaMovel']=null;p[jKey+'Gangorra']=null;p[jKey+'GangorraNormalLocal']=null;
+                if(h){try{Phaser.Physics.Matter.Matter.Sleeping.set(h,false);}catch(e){} h.isSleeping=false;h.sleepCounter=0;if(h.force){h.force.x=0;h.force.y=0;}h.torque=0;h.corpoTocadoAgora=null;h.pontoDeContatoGlobal=null;}
+            }
+            liberou=true;
+        }
+        // Mesmo que a constraint já tenha desaparecido, limpa referências residuais.
+        p[jKey+'Target']=null;p[jKey+'PivotBody']=null;p[jKey+'LocalOffset']=null;p[jKey+'PontoPivorMundo']=null;p[jKey+'RotatorPai']=null;p[jKey+'PlataformaMovel']=null;p[jKey+'Gangorra']=null;p[jKey+'GangorraNormalLocal']=null;
+    }
+    return liberou;
+}
+
+function processarAreasSoltarMaos(scene){
+    if(modoEditorAtivo)return;
+    const jogadores=[player1,player2].filter(p=>p?.body);
+    for(const area of listaObjetosEditaveis){
+        if(!area||area.shape!=='taskArea')continue;
+        area.taskPlayersInside ||= {};
+        const hw=Math.max(20,Number(area.taskW)||160)/2,hh=Math.max(20,Number(area.taskH)||120)/2,cx=Number(area.visualX)||0,cy=Number(area.visualY)||0;
+        for(const p of jogadores){
+            const dentro=Math.abs(p.body.position.x-cx)<=hw && Math.abs(p.body.position.y-cy)<=hh;
+            const chaveJogador=p===player1?'player1':'player2';
+            const estava=!!area.taskPlayersInside[chaveJogador];
+            if(dentro&&!estava && (area.taskAction||'releaseHands')==='releaseHands') desagarrarCompletamenteAsMaosDoJogador(scene,p);
+            area.taskPlayersInside[chaveJogador]=dentro;
+        }
+    }
+}
+
 function processarAreasInvisiveis(scene) {
     if (modoEditorAtivo) return;
     const jogadores=[player1,player2].filter(p=>p?.body);
@@ -2096,6 +2149,19 @@ function adicionarObjetoSerializado(scene, dados) {
         return;
     }
 
+    if (dados.shape === 'taskArea') {
+        const x = Number(dados.x) || 0, y = Number(dados.y) || 0;
+        listaObjetosEditaveis.push({
+            idObjeto: dados.idObjeto || gerarIdObjetoCena(), body:null, gfx:scene.add.graphics().setDepth(7), shape:'taskArea',
+            w:Math.max(20, Number(dados.taskW) || 160), h:Math.max(20, Number(dados.taskH) || 120),
+            visualX:x, visualY:y, posicaoTravadaX:x, posicaoTravadaY:y, gravity:false, lockPos:true, lockRot:true,
+            mass:0, air:0, bounce:0, maxVel:0, maxRot:0, manuseavel:false, naoAgarravel:true, isStatic:true,
+            idPersistente:null, persistirSessao:false, taskW:Math.max(20, Number(dados.taskW) || 160),
+            taskH:Math.max(20, Number(dados.taskH) || 120), taskAction:String(dados.taskAction || 'releaseHands'), taskPlayersInside:{}
+        });
+        return;
+    }
+
     if (dados.shape === 'movingPlatform') {
         criarPlataformaMovelAPartirDeDados(scene,dados);
         return;
@@ -3048,8 +3114,8 @@ function atualizarInterfaceForma() {
     const rotator = s === 'rotator';
     const mover = s === 'mover';
     const plataformaMovel = s === 'movingPlatform';
-    const npc = s === 'npc', moeda = s === 'coin', triggerArea = s === 'triggerArea';
-    const fisico = !especial && s !== 'rope' && !rotator && !npc && !moeda && !triggerArea && !mover && !plataformaMovel;
+    const npc = s === 'npc', moeda = s === 'coin', triggerArea = s === 'triggerArea', taskArea = s === 'taskArea';
+    const fisico = !especial && s !== 'rope' && !rotator && !npc && !moeda && !triggerArea && !taskArea && !mover && !plataformaMovel;
     document.getElementById('painel-propriedades-comuns').style.display = fisico ? 'block' : 'none';
     document.getElementById('painel-propriedades-corda').style.display = (s === 'rope') ? 'flex' : 'none';
     document.getElementById('painel-propriedades-gangorra').style.display = gangorra ? 'flex' : 'none';
@@ -3061,9 +3127,10 @@ function atualizarInterfaceForma() {
     document.getElementById('painel-propriedades-npc').style.display = npc ? 'flex' : 'none';
     document.getElementById('painel-propriedades-moeda').style.display = moeda ? 'flex' : 'none';
     document.getElementById('painel-propriedades-trigger').style.display = triggerArea ? 'flex' : 'none';
+    document.getElementById('painel-propriedades-release-hands').style.display = taskArea ? 'flex' : 'none';
     document.getElementById('painel-propriedades-especiais').style.display = especial ? 'flex' : 'none';
-    document.getElementById('row-h').style.display = (s === 'circle' || s === 'polygon' || s === 'rope' || especial || rotator || npc || moeda || triggerArea || mover || plataformaMovel) ? 'none' : 'flex';
-    document.getElementById('row-w').style.display = (s === 'polygon' || s === 'rope' || especial || rotator || npc || moeda || mover || plataformaMovel) ? 'none' : 'flex';
+    document.getElementById('row-h').style.display = (s === 'circle' || s === 'polygon' || s === 'rope' || especial || rotator || npc || moeda || triggerArea || taskArea || mover || plataformaMovel) ? 'none' : 'flex';
+    document.getElementById('row-w').style.display = (s === 'polygon' || s === 'rope' || especial || rotator || npc || moeda || taskArea || mover || plataformaMovel) ? 'none' : 'flex';
     document.getElementById('row-is-static')?.style && (document.getElementById('row-is-static').style.display = gangorra ? 'none' : 'flex');
     document.getElementById('row-id-persistente').style.display = (especial || document.getElementById('prop-persistir-sessao').checked) ? 'flex' : 'none';
     document.getElementById('row-portal-destino').style.display = s === 'portal' ? 'flex' : 'none';
@@ -3118,13 +3185,17 @@ function extrairCamposPainel() {
         moverAtivo: !!document.getElementById('prop-mover-active')?.checked, moverDestinoX: parseFloat(document.getElementById('prop-mover-dest-x')?.value)||300, moverDestinoY: parseFloat(document.getElementById('prop-mover-dest-y')?.value)||0, moverVelocidade: Math.max(0,parseFloat(document.getElementById('prop-mover-speed')?.value)||120), moverAoChegar: document.getElementById('prop-mover-arrival')?.value==='return'?'return':'teleport', moverEsperaDestinoMs: Math.max(0,parseFloat(document.getElementById('prop-mover-wait')?.value)||0), moverSoltarJogadorNoDestino: !!document.getElementById('prop-mover-release')?.checked, moverLoop: !!document.getElementById('prop-mover-loop')?.checked,
         platformW: Math.max(30,parseFloat(document.getElementById('prop-platform-w')?.value)||180), platformH: Math.max(8,parseFloat(document.getElementById('prop-platform-h')?.value)||24), platformAtivo: !!document.getElementById('prop-platform-active')?.checked, platformDestinoX: parseFloat(document.getElementById('prop-platform-dest-x')?.value)||300, platformDestinoY: parseFloat(document.getElementById('prop-platform-dest-y')?.value)||0, platformVelocidade: Math.max(1,parseFloat(document.getElementById('prop-platform-speed')?.value)||120), platformAoChegar: ['return','teleport','stop'].includes(document.getElementById('prop-platform-arrival')?.value) ? document.getElementById('prop-platform-arrival').value : 'return', platformEsperaMs: Math.max(0,parseFloat(document.getElementById('prop-platform-wait')?.value)||0), platformLoop: !!document.getElementById('prop-platform-loop')?.checked, platformTransportarJogador: !!document.getElementById('prop-platform-carry')?.checked,
         decorUrl:(document.getElementById('prop-decor-url')?.value||'').trim(),decorScale:Math.max(.01,parseFloat(document.getElementById('prop-decor-scale')?.value)||1),decorLayer:datosLayer(document.getElementById('prop-decor-layer')?.value),decorFrameW:Math.max(1,parseInt(document.getElementById('prop-decor-frame-w')?.value)||64),decorFrameH:Math.max(1,parseInt(document.getElementById('prop-decor-frame-h')?.value)||64),decorStart:Math.max(0,parseInt(document.getElementById('prop-decor-start')?.value)||0),decorEnd:Math.max(0,parseInt(document.getElementById('prop-decor-end')?.value)||0),decorFps:Math.max(1,parseFloat(document.getElementById('prop-decor-fps')?.value)||8),
-        npcId:(document.getElementById('prop-npc-id')?.value||'npc').trim(),npcNome:(document.getElementById('prop-npc-name')?.value||'NPC').trim(),npcSpritesheetUrl:(document.getElementById('prop-npc-sheet-url')?.value||'').trim(),npcFrameW:Math.max(1,parseInt(document.getElementById('prop-npc-frame-w')?.value)||64),npcFrameH:Math.max(1,parseInt(document.getElementById('prop-npc-frame-h')?.value)||64),npcEscala:Math.max(.1,parseFloat(document.getElementById('prop-npc-scale')?.value)||1),npcRaioDialogo:Math.max(20,parseFloat(document.getElementById('prop-npc-radius')?.value)||180),npcEstadoInicial:(document.getElementById('prop-npc-initial-state')?.value||'inicial').trim(),npcEstados:parsearEstadosNPCDoPainel(),coinValue:Math.max(1,parseInt(document.getElementById('prop-coin-value')?.value)||1),coinId:(document.getElementById('prop-coin-id')?.value||'').trim(),triggerW:Math.max(20,parseFloat(document.getElementById('prop-trigger-w')?.value)||160),triggerH:Math.max(20,parseFloat(document.getElementById('prop-trigger-h')?.value)||120),triggerTargetId:(document.getElementById('prop-trigger-target')?.value||'').trim(),triggerDestX:parseFloat(document.getElementById('prop-trigger-dest-x')?.value)||0,triggerDestY:parseFloat(document.getElementById('prop-trigger-dest-y')?.value)||0
+        npcId:(document.getElementById('prop-npc-id')?.value||'npc').trim(),npcNome:(document.getElementById('prop-npc-name')?.value||'NPC').trim(),npcSpritesheetUrl:(document.getElementById('prop-npc-sheet-url')?.value||'').trim(),npcFrameW:Math.max(1,parseInt(document.getElementById('prop-npc-frame-w')?.value)||64),npcFrameH:Math.max(1,parseInt(document.getElementById('prop-npc-frame-h')?.value)||64),npcEscala:Math.max(.1,parseFloat(document.getElementById('prop-npc-scale')?.value)||1),npcRaioDialogo:Math.max(20,parseFloat(document.getElementById('prop-npc-radius')?.value)||180),npcEstadoInicial:(document.getElementById('prop-npc-initial-state')?.value||'inicial').trim(),npcEstados:parsearEstadosNPCDoPainel(),coinValue:Math.max(1,parseInt(document.getElementById('prop-coin-value')?.value)||1),coinId:(document.getElementById('prop-coin-id')?.value||'').trim(),triggerW:Math.max(20,parseFloat(document.getElementById('prop-trigger-w')?.value)||160),triggerH:Math.max(20,parseFloat(document.getElementById('prop-trigger-h')?.value)||120),triggerTargetId:(document.getElementById('prop-trigger-target')?.value||'').trim(),triggerDestX:parseFloat(document.getElementById('prop-trigger-dest-x')?.value)||0,triggerDestY:parseFloat(document.getElementById('prop-trigger-dest-y')?.value)||0,taskW:Math.max(20,parseFloat(document.getElementById('prop-release-w')?.value)||160),taskH:Math.max(20,parseFloat(document.getElementById('prop-release-h')?.value)||120)
     };
 }
 
 function executarCriacaoObjeto(scene, x, y) {
     let ax = x, ay = y; const c = extrairCamposPainel();
     if(c.shape==='decorImage'||c.shape==='decorSprite'){const obj={idObjeto:gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(7),shape:c.shape,w:c.decorFrameW,h:c.decorFrameH,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,decorUrl:c.decorUrl,decorScale:c.decorScale,decorLayer:c.decorLayer,decorFrameW:c.decorFrameW,decorFrameH:c.decorFrameH,decorStart:c.decorStart,decorEnd:c.decorEnd,decorFps:c.decorFps,decorSprite:null};listaObjetosEditaveis.push(obj);prepararDecorativo(scene,obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
+    if(c.shape==='taskArea'){
+        const obj={idObjeto:gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(7),shape:'taskArea',w:c.taskW,h:c.taskH,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,taskW:c.taskW,taskH:c.taskH,taskAction:c.taskAction||'releaseHands',taskPlayersInside:{}};
+        listaObjetosEditaveis.push(obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;
+    }
     if(c.shape==='triggerArea'){const obj={idObjeto:gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(7),shape:'triggerArea',w:c.triggerW,h:c.triggerH,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,triggerW:c.triggerW,triggerH:c.triggerH,triggerTargetId:'',triggerDestX:ax+220,triggerDestY:ay,triggerPlayersInside:{}};listaObjetosEditaveis.push(obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
     if(c.shape==='npc'){const obj={idObjeto:gerarIdObjetoCena(),body:null,gfx:scene.add.graphics().setDepth(8),shape:'npc',w:c.npcFrameW,h:c.npcFrameH,visualX:ax,visualY:ay,posicaoTravadaX:ax,posicaoTravadaY:ay,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,npcId:c.npcId||('npc_'+Date.now()),npcNome:c.npcNome||'NPC',npcSpritesheetUrl:c.npcSpritesheetUrl,npcFrameW:c.npcFrameW,npcFrameH:c.npcFrameH,npcEscala:c.npcEscala,npcRaioDialogo:c.npcRaioDialogo,npcEstadoInicial:c.npcEstadoInicial||'inicial',npcEstados:c.npcEstados,npcSprite:null};listaObjetosEditaveis.push(obj);prepararSpriteNPC(scene,obj);selecionarObjetoDoEditor(obj);marcarSalaComoAlterada();return;}
     if(c.shape==='movingPlatform'){
@@ -3274,6 +3345,10 @@ function executarSelecaoObjeto(scene, x, y, pointer) {
             else colidiu = Phaser.Physics.Matter.Matter.Vertices.contains(obj.body.vertices, { x: x, y: y });
         }
         else if(obj.shape==='npc'){const px=Number(obj.visualX)||0,py=Number(obj.visualY)||0,hw=Math.max(20,(Number(obj.npcFrameW)||64)*(Number(obj.npcEscala)||1)/2),hh=Math.max(20,(Number(obj.npcFrameH)||64)*(Number(obj.npcEscala)||1)/2);colidiu=Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh;}
+        else if (obj.shape === 'taskArea') {
+            const px=Number(obj.visualX)||0, py=Number(obj.visualY)||0, hw=Math.max(20,Number(obj.taskW)||160)/2, hh=Math.max(20,Number(obj.taskH)||120)/2;
+            colidiu=Math.abs(x-px)<=hw&&Math.abs(y-py)<=hh;
+        }
         else if (obj.shape === 'triggerArea') {
             const px=Number(obj.visualX)||0, py=Number(obj.visualY)||0, hw=Math.max(20,Number(obj.triggerW)||160)/2, hh=Math.max(20,Number(obj.triggerH)||120)/2;
             const noDestino=Math.hypot(x-(Number(obj.triggerDestX)||0),y-(Number(obj.triggerDestY)||0))<=18;
@@ -3369,6 +3444,7 @@ function selecionarObjetoDoEditor(obj) {
     else if(obj.shape==='npc'){document.getElementById('prop-npc-id').value=obj.npcId||'';document.getElementById('prop-npc-name').value=obj.npcNome||'NPC';document.getElementById('prop-npc-sheet-url').value=obj.npcSpritesheetUrl||'';document.getElementById('prop-npc-frame-w').value=obj.npcFrameW||64;document.getElementById('prop-npc-frame-h').value=obj.npcFrameH||64;document.getElementById('prop-npc-scale').value=obj.npcEscala||1;document.getElementById('prop-npc-radius').value=obj.npcRaioDialogo||180;document.getElementById('prop-npc-initial-state').value=obj.npcEstadoInicial||'inicial';document.getElementById('prop-npc-states').value=JSON.stringify(obj.npcEstados||[],null,2);}
     else if(obj.shape==='coin'){document.getElementById('prop-coin-value').value=obj.coinValue||1;document.getElementById('prop-coin-id').value=obj.coinId||'';}
     else if(obj.shape==='triggerArea'){document.getElementById('prop-trigger-w').value=Math.max(20,Number(obj.triggerW)||160);document.getElementById('prop-trigger-h').value=Math.max(20,Number(obj.triggerH)||120);document.getElementById('prop-trigger-target').value=obj.triggerTargetId||'';document.getElementById('prop-trigger-dest-x').value=Number(obj.triggerDestX)||0;document.getElementById('prop-trigger-dest-y').value=Number(obj.triggerDestY)||0;atualizarStatusTrigger();}
+    else if(obj.shape==='taskArea'){document.getElementById('prop-release-w').value=Math.max(20,Number(obj.taskW)||160);document.getElementById('prop-release-h').value=Math.max(20,Number(obj.taskH)||120);document.getElementById('prop-task-action').value=obj.taskAction||'releaseHands';}
     if (obj.shape === 'mover') {
         document.getElementById('prop-mover-active').checked=obj.moverAtivo!==false;document.getElementById('prop-mover-dest-x').value=(Number(obj.moverDestinoX)||0)-(Number(obj.moverOrigemX)||0);document.getElementById('prop-mover-dest-y').value=(Number(obj.moverDestinoY)||0)-(Number(obj.moverOrigemY)||0);document.getElementById('prop-mover-speed').value=Math.max(0,Number(obj.moverVelocidade)||120);document.getElementById('prop-mover-arrival').value=obj.moverAoChegar==='return'?'return':'teleport';document.getElementById('prop-mover-wait').value=Math.max(0,Number(obj.moverEsperaDestinoMs)||0);document.getElementById('prop-mover-release').checked=obj.moverSoltarJogadorNoDestino===true;document.getElementById('prop-mover-loop').checked=obj.moverLoop!==false;atualizarStatusFilhosMover();
     } else if (obj.shape === 'movingPlatform') {
@@ -3443,11 +3519,20 @@ function atualizarObjetoExistente() {
         marcarSalaComoAlterada();return;
     }
     if(obj.shape==='coin'&&c.shape==='coin'){obj.coinValue=c.coinValue;obj.coinId=c.coinId||obj.coinId||garantirIdObjetoCena(obj);marcarSalaComoAlterada();return;}
+    if(obj.shape==='taskArea'&&c.shape==='taskArea'){obj.taskW=c.taskW;obj.taskH=c.taskH;obj.taskAction=c.taskAction||obj.taskAction||'releaseHands';obj.w=c.taskW;obj.h=c.taskH;marcarSalaComoAlterada();return;}
     if(obj.shape==='triggerArea'&&c.shape==='triggerArea'){obj.triggerW=c.triggerW;obj.triggerH=c.triggerH;obj.w=c.triggerW;obj.h=c.triggerH;obj.triggerTargetId=c.triggerTargetId||obj.triggerTargetId||'';obj.triggerDestX=c.triggerDestX;obj.triggerDestY=c.triggerDestY;marcarSalaComoAlterada();atualizarStatusTrigger();return;}
-    if((obj.shape==='npc'||obj.shape==='coin'||obj.shape==='triggerArea'||obj.shape==='decorImage'||obj.shape==='decorSprite')&&c.shape!==obj.shape){if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}if(obj.decorSprite){obj.decorSprite.destroy();obj.decorSprite=null;}if(obj.body){scene.matter.world.remove(obj.body);obj.body=null;}}
+    if((obj.shape==='npc'||obj.shape==='coin'||obj.shape==='triggerArea'||obj.shape==='taskArea'||obj.shape==='decorImage'||obj.shape==='decorSprite')&&c.shape!==obj.shape){if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}if(obj.decorSprite){obj.decorSprite.destroy();obj.decorSprite=null;}if(obj.body){scene.matter.world.remove(obj.body);obj.body=null;}}
     if((c.shape==='decorImage'||c.shape==='decorSprite')&&obj.shape!==c.shape){if(obj.body){scene.matter.world.remove(obj.body);obj.body=null;}Object.assign(obj,{shape:c.shape,body:null,w:c.decorFrameW,h:c.decorFrameH,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,decorUrl:c.decorUrl,decorScale:c.decorScale,decorLayer:c.decorLayer,decorFrameW:c.decorFrameW,decorFrameH:c.decorFrameH,decorStart:c.decorStart,decorEnd:c.decorEnd,decorFps:c.decorFps,decorSprite:null});prepararDecorativo(scene,obj,true);marcarSalaComoAlterada();return;}
     if(c.shape==='npc'&&obj.shape!=='npc'){Object.assign(obj,{shape:'npc',body:null,w:c.npcFrameW,h:c.npcFrameH,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,npcId:c.npcId||('npc_'+Date.now()),npcNome:c.npcNome,npcSpritesheetUrl:c.npcSpritesheetUrl,npcFrameW:c.npcFrameW,npcFrameH:c.npcFrameH,npcEscala:c.npcEscala,npcRaioDialogo:c.npcRaioDialogo,npcEstadoInicial:c.npcEstadoInicial,npcEstados:c.npcEstados,npcSprite:null});prepararSpriteNPC(scene,obj,true);marcarSalaComoAlterada();return;}
     if(c.shape==='coin'&&obj.shape!=='coin'){const body=scene.matter.add.circle(px,py,16,{isStatic:true,isSensor:true,label:'moeda',collisionFilter:{category:CAT_AMBIENTE,mask:CAT_PLAYER}});body.naoAgarravel=true;Object.assign(obj,{shape:'coin',body,w:16,h:32,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,coinValue:c.coinValue,coinId:c.coinId||('moeda_'+Date.now()),coinColetada:false});body.objetoEditavelRef=obj;marcarSalaComoAlterada();return;}
+    if(c.shape==='taskArea'&&obj.shape!=='taskArea'){
+        if(obj.seesawConstraint){scene.matter.world.remove(obj.seesawConstraint);obj.seesawConstraint=null;}
+        if(obj.shape==='rope'){obj.ropeConstraints?.forEach(co=>scene.matter.world.remove(co));obj.ropeElos?.forEach(el=>scene.matter.world.remove(el));}
+        else if(obj.body){scene.matter.world.remove(obj.body);}
+        if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;} if(obj.decorSprite){obj.decorSprite.destroy();obj.decorSprite=null;}
+        Object.assign(obj,{shape:'taskArea',body:null,w:c.taskW,h:c.taskH,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,taskW:c.taskW,taskH:c.taskH,taskAction:c.taskAction||'releaseHands',taskPlayersInside:{}});
+        garantirIdObjetoCena(obj);marcarSalaComoAlterada();return;
+    }
     if(c.shape==='triggerArea'&&obj.shape!=='triggerArea'){if(obj.seesawConstraint){scene.matter.world.remove(obj.seesawConstraint);obj.seesawConstraint=null;}if(obj.shape==='rope'){obj.ropeConstraints?.forEach(co=>scene.matter.world.remove(co));obj.ropeElos?.forEach(el=>scene.matter.world.remove(el));}else if(obj.body){scene.matter.world.remove(obj.body);}if(obj.npcSprite){obj.npcSprite.destroy();obj.npcSprite=null;}Object.assign(obj,{shape:'triggerArea',body:null,w:c.triggerW,h:c.triggerH,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,manuseavel:false,naoAgarravel:true,isStatic:true,persistirSessao:false,idPersistente:null,triggerW:c.triggerW,triggerH:c.triggerH,triggerTargetId:c.triggerTargetId||'',triggerDestX:Number.isFinite(c.triggerDestX)?c.triggerDestX:px+220,triggerDestY:Number.isFinite(c.triggerDestY)?c.triggerDestY:py,triggerPlayersInside:{}});garantirIdObjetoCena(obj);marcarSalaComoAlterada();atualizarStatusTrigger();return;}
     if(c.shape==='mover'&&obj.shape!=='mover'){if(obj.body)scene.matter.world.remove(obj.body);Object.assign(obj,{shape:'mover',body:null,w:44,h:44,gravity:false,lockPos:true,lockRot:true,mass:0,air:0,bounce:0,maxVel:0,maxRot:0,visualX:px,visualY:py,posicaoTravadaX:px,posicaoTravadaY:py,manuseavel:false,naoAgarravel:true,isStatic:true,idPersistente:null,persistirSessao:false,moverOrigemX:px,moverOrigemY:py,moverDestinoX:px+(Number(c.moverDestinoX)||300),moverDestinoY:py+(Number(c.moverDestinoY)||0),moverAtivo:c.moverAtivo,moverVelocidade:c.moverVelocidade,moverAoChegar:c.moverAoChegar,moverEsperaDestinoMs:c.moverEsperaDestinoMs,moverSoltarJogadorNoDestino:c.moverSoltarJogadorNoDestino,moverEsperandoAte:0,moverLoop:c.moverLoop,moverEstado:'indo',filhosIds:[],vinculosFilhos:{}});marcarSalaComoAlterada();return;}
     if(obj.shape==='movingPlatform'&&c.shape==='movingPlatform'){
@@ -3641,6 +3726,14 @@ function desenharObjetoEditor(obj) {
         g.setVisible(true);g.x=0;g.y=0;g.rotation=0;g.clear();
         const sel=obj===objetoSelecionado,cor=sel?0xffea00:0x57e3ff,ox=Number(obj.moverOrigemX)||posX,oy=Number(obj.moverOrigemY)||posY,dx=Number(obj.moverDestinoX)||ox,dy=Number(obj.moverDestinoY)||oy;
         g.lineStyle(3,0x57e3ff,.55);g.lineBetween(ox,oy,dx,dy);g.fillStyle(0x57e3ff,.15);g.fillCircle(dx,dy,20);g.lineStyle(sel?4:3,cor,1);g.strokeCircle(posX,posY,18);g.lineBetween(posX-24,posY,posX+24,posY);g.lineBetween(posX,posY-24,posX,posY+24);g.fillStyle(cor,1);g.fillCircle(posX,posY,5);g.lineStyle(3,0x57e3ff,1);g.strokeCircle(dx,dy,12);g.lineBetween(dx-8,dy,dx+8,dy);g.lineBetween(dx,dy-8,dx,dy+8);return;
+    }
+
+    if (obj.shape === 'taskArea') {
+        if (!modoEditorAtivo) { g.setVisible(false); return; }
+        g.setVisible(true); g.x=0; g.y=0; g.rotation=0; g.clear();
+        const sel=obj===objetoSelecionado,c=sel?0xffea00:0xf59e0b,w=Math.max(20,Number(obj.taskW)||160),h=Math.max(20,Number(obj.taskH)||120);
+        g.fillStyle(0xf59e0b,0.12);g.fillRect(posX-w/2,posY-h/2,w,h);g.lineStyle(sel?4:2,c,1);g.strokeRect(posX-w/2,posY-h/2,w,h);
+        g.fillStyle(c,1);g.fillCircle(posX,posY,5);return;
     }
 
     if (obj.shape === 'triggerArea') {
@@ -4985,6 +5078,7 @@ function update(time, delta) {
     transportarJogadoresPresosAoMover(this);
     processarNPCsEMoedas(this);
     processarAreasInvisiveis(this);
+    processarAreasSoltarMaos(this);
     processarGangorrasLancadoras(this, delta);
     if (player1) handlePlayerInput(this, player1); if (player2) handlePlayerInput(this, player2);
     // Segurança extra: se o botão já foi solto, uma garra de plataforma não
