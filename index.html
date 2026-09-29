@@ -1058,11 +1058,19 @@ function atualizarEsteiraPlataformas(scene,obj,dt,forcar=false){
     }
     const ux=vx/dist,uy=vy/dist;
     const count=obj.conveyorPlatforms.length;
+    // Uma esteira é um ciclo fechado: para que o espaçamento também seja
+    // uniforme entre a última e a primeira plataforma, a distância entre
+    // centros deve ser a circunferência do ciclo dividida pela quantidade
+    // de plataformas. O campo de espaçamento continua sendo usado para
+    // definir a configuração inicial da esteira, mas, uma vez definidos
+    // trajeto e quantidade, o ciclo é distribuído matematicamente de forma
+    // uniforme e não sobra um intervalo diferente no ponto de retorno.
+    const passoUniforme=dist/count;
     for(let i=0;i<count;i++){
         const seg=obj.conveyorPlatforms[i];
         if(!seg?.body)continue;
         const oldX=seg.body.position.x,oldY=seg.body.position.y;
-        const offset=((fase+i*Math.max(1,Number(obj.conveyorSpacing)||100))%dist+dist)%dist;
+        const offset=(fase+i*passoUniforme)%dist;
         const nx=ox+ux*offset,ny=oy+uy*offset;
         seg.platformDeltaX=nx-oldX;seg.platformDeltaY=ny-oldY;
         const step=Math.hypot(seg.platformDeltaX,seg.platformDeltaY);
