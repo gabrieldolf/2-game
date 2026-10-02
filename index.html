@@ -874,6 +874,14 @@ function desagarrarCompletamenteAsMaosDoJogador(scene,p){
 function processarAreasSoltarMaos(scene){
     if(modoEditorAtivo)return;
     const jogadores=[player1,player2].filter(p=>p?.body);
+    // A área não apenas solta a mão: enquanto ela estiver dentro da área,
+    // essa mão fica temporariamente proibida de iniciar qualquer nova garra.
+    // O estado é recalculado a cada frame para funcionar também quando a mão
+    // entra, sai e volta para a mesma área.
+    for(const p of jogadores){
+        if(p.leftHand) p.leftHand._dentroAreaSoltarMao=false;
+        if(p.rightHand) p.rightHand._dentroAreaSoltarMao=false;
+    }
     for(const area of listaObjetosEditaveis){
         if(!area||area.shape!=='releaseHandArea')continue;
         area.releaseHandPlayersInside ||= {};
@@ -884,8 +892,13 @@ function processarAreasSoltarMaos(scene){
                 if(!h?.position)continue;
                 const dentro=Math.abs(h.position.x-cx)<=hw && Math.abs(h.position.y-cy)<=hh;
                 const chave=chaveJogador+'_'+(jKey==='leftJoint'?'left':'right');
-                const estava=!!area.releaseHandPlayersInside[chave];
-                if(dentro&&!estava) desagarrarMaoDoJogador(scene,p,jKey);
+                if(dentro){
+                    h._dentroAreaSoltarMao=true;
+                    // Solta imediatamente se a mão já estiver agarrada. Como o
+                    // bloqueio permanece ativo durante toda a permanência na área,
+                    // manter o botão pressionado não consegue reagarrar.
+                    if(p[jKey]) desagarrarMaoDoJogador(scene,p,jKey);
+                }
                 area.releaseHandPlayersInside[chave]=dentro;
             }
         }
@@ -5090,7 +5103,10 @@ function handlePlayerInput(s, p) {
         if (movendoDireito && !p.rightJoint) { let a = Math.atan2(analogoDireito.y, analogoDireito.x); let posXAlvo = p.body.position.x + Math.cos(a)*RAIO_ORBITA_BRACO; let posYAlvo = p.body.position.y + Math.sin(a)*RAIO_ORBITA_BRACO; s.matter.body.setVelocity(p.rightHand, { x: (posXAlvo - p.rightHand.position.x)*0.22, y: (posYAlvo - p.rightHand.position.y)*0.22 }); }
     }
     estabilizarBracosSemEntrada(s, p, movendoEsquerdo, movendoDireito);
-    processarGarra(s, p, p.leftHand, 'leftJoint', lL); processarGarra(s, p, p.rightHand, 'rightJoint', rR);
+    // Mãos dentro de uma Área de Soltar / Desagarrar não podem iniciar nem
+    // tentar iniciar uma nova garra enquanto permanecerem dentro da área.
+    if(!p.leftHand?._dentroAreaSoltarMao) processarGarra(s, p, p.leftHand, 'leftJoint', lL);
+    if(!p.rightHand?._dentroAreaSoltarMao) processarGarra(s, p, p.rightHand, 'rightJoint', rR);
 }
 
 function executarRespawnIndividual(scene, pNum) {
